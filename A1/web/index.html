@@ -35,6 +35,20 @@
 
  <section class="card" id="autoCard" style="grid-area:auto"></section>
 
+ <section class="card stack" id="filterCard" style="grid-area:filter" hidden>
+  <div class="card-head"><h2 data-i18n="filter.title"></h2><span class="badge" id="filterBadge"></span></div>
+  <div class="row between"><b class="stat num" id="filterRemaining">—</b><span class="help" id="filterUsage"></span></div>
+  <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" data-i18n-aria="filter.title" id="filterProgress"><i id="filterBar"></i></div>
+  <p class="help" data-i18n="filter.hint"></p>
+  <details class="more"><summary data-i18n="filter.settings"></summary>
+   <form id="filterForm" class="stack">
+    <label class="field"><span data-i18n="filter.lifetime"></span><input id="filterLifetime" type="number" min="1" max="20000" step="1" required></label>
+    <div class="form-actions"><button type="submit" class="btn" id="filterSave" data-i18n="common.save"></button></div>
+   </form>
+  </details>
+  <div class="form-actions"><button class="btn" type="button" id="filterReset" data-i18n="filter.reset"></button></div>
+ </section>
+
  <section class="card" style="grid-area:light">
   <div class="card-head"><div><h2 data-i18n="a1.ring"></h2><p class="help" id="effectNote"></p></div><span id="lightSave" class="help"></span></div>
   <div class="light-layout">

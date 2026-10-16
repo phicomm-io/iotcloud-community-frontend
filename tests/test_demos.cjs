@@ -8,8 +8,19 @@ const server=http.createServer((req,res)=>{let file=path.resolve(root,'.'+new UR
   const page=await browser.newPage(),errors=[],external=[];
   page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(!r.url().startsWith(base+'/'))external.push(r.url());});
   await page.goto(base+'/demos/'+model+'/');
+  if(model==='a1'){
+   await page.locator('#filterCard').waitFor({state:'visible'});
+   assert.equal(await page.locator('#filterRemaining').textContent(),'95%');
+   await page.locator('#filterCard summary').click();await page.locator('#filterLifetime').fill('6000');await page.locator('#filterSave').click();
+   await page.waitForFunction(()=>UI.state.filter.lifetime_hours===6000);
+   await page.locator('#filterReset').click();await page.getByRole('dialog').getByRole('button',{name:/Cancel|取消/}).click();
+   assert.equal(await page.evaluate(()=>UI.state.filter.used_seconds),864000);
+   await page.locator('#filterReset').click();await page.getByRole('dialog').getByRole('button',{name:/Reset after replacing|更换滤芯后重置/}).click();
+   await page.waitForFunction(()=>UI.state.filter.used_seconds===0);
+   assert.equal(await page.locator('#filterRemaining').textContent(),'100%');
+  }
   if(model==='platform'){await page.waitForSelector('.device-select');assert.equal(await page.locator('.device-select').count(),3);for(const b of await page.locator('.device-select').all())await b.click();}
-  else{await page.evaluate(()=>{location.hash='settings/firmware';});await page.locator('#otaSource').selectOption('global');await page.getByRole('button',{name:/检查更新|Check for updates/}).click();await page.getByText(/当前已是最新版本|Already up to date/).waitFor();}
+  else{await page.evaluate(()=>{location.hash='settings/firmware';});await page.locator('[data-source="global"]').click();await page.getByText(/当前已是最新版本|Already up to date/).waitFor();}
   await page.waitForTimeout(100);assert.deepEqual(errors,[],model+' page errors');assert.deepEqual(external,[],model+' external requests');
   await page.setViewportSize({width:390,height:844});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),model+' mobile overflow');await page.close();console.log(model+' demo passed');
  }
