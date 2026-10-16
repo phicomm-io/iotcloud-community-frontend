@@ -5,7 +5,7 @@ test('legacy credentials, automatic MQTT, persisted disconnect and logout cleanu
  test.skip(!file,'private review credentials required');test.setTimeout(90000);
  const credentials=JSON.parse(fs.readFileSync(file,'utf8'));
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
- await page.goto('/login');
+ await page.goto('/#/login');
  const legacy={host:'wss://mqtt.fjrcn.cn/mqtt',username:credentials.mqtt_username,password:credentials.mqtt_password,clientId:'legacy-browser-client'};
  await page.evaluate(value=>{localStorage.clear();localStorage.setItem('mqtt_config',JSON.stringify(value));},legacy);
  await page.reload();
@@ -17,8 +17,8 @@ test('legacy credentials, automatic MQTT, persisted disconnect and logout cleanu
  await expect(page.getByText('MQTT 已连接',{exact:true})).toBeVisible({timeout:15000});
  await page.reload();await expect(page.getByText('MQTT 已连接',{exact:true})).toBeVisible({timeout:15000});
  await page.screenshot({path:testInfo.outputPath('02-auto-connected.png'),fullPage:true});
- // A new tab restores the HTTP session and MQTT without another password entry.
- const tab=await context.newPage();await tab.goto(baseURL+'/');await expect(tab.getByText('MQTT 已连接',{exact:true})).toBeVisible({timeout:15000});await tab.close();
+ // A new tab restores the HTTP cookie session; MQTT credentials stay in the original tab.
+ const tab=await context.newPage();await tab.goto(baseURL+'/');await expect(tab.getByText('MQTT 未连接',{exact:true})).toBeVisible({timeout:15000});await tab.close();
  await page.getByRole('button',{name:'设置',exact:true}).click();
  await page.screenshot({path:testInfo.outputPath('03-connection-settings.png'),fullPage:true});
  await page.getByRole('button',{name:'断开连接',exact:true}).click();
@@ -38,7 +38,7 @@ test('legacy credentials, automatic MQTT, persisted disconnect and logout cleanu
  expect(await page.evaluate(()=>localStorage.getItem('phicomm.mqtt-login'))).toBeNull();expect(errors).toEqual([]);
 });
 test('malformed legacy storage does not break login or prefill bogus credentials',async({page})=>{
- await page.goto('/login');await page.evaluate(()=>localStorage.setItem('mqtt_config','{broken'));await page.reload();
+ await page.goto('/#/login');await page.evaluate(()=>localStorage.setItem('mqtt_config','{broken'));await page.reload();
  await expect(page.getByLabel('用户名',{exact:true})).toHaveValue('');await expect(page.getByLabel('密码',{exact:true})).toHaveValue('');
  await expect(page.locator('.migration-notice')).toHaveCount(0);
 });

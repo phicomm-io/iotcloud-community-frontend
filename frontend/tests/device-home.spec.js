@@ -1,8 +1,8 @@
 import {test,expect} from '@playwright/test';
 test('product home components share platform design without device navigation',async({page})=>{
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
- await page.addInitScript(()=>localStorage.setItem('phicomm_devices',JSON.stringify(['tc1','m1','a1'].map((model,i)=>({model,mac:'aabbccddee0'+i,version:'v2'})))));
- await page.goto('/guest');
+ await page.addInitScript(()=>localStorage.setItem('iotcloud.devices.'+encodeURIComponent(`${location.protocol==='https:'?'wss':'ws'}://${location.host}/mqtt`)+'/',JSON.stringify(['tc1','m1','a1'].map((model,i)=>({model,mac:'aabbccddee0'+i,version:'v2'})))));
+ await page.goto('/#/guest');
  for(const model of ['TC1','M1','A1']){
   await page.locator('.device-select').filter({hasText:model}).click();
   const home=page.frameLocator('iframe');
@@ -25,8 +25,8 @@ test('product home components share platform design without device navigation',a
  expect(errors).toEqual([]);
 });
 test('daily list hides protocol details and legacy names can be changed and restored',async({page})=>{
- await page.addInitScript(()=>{if(!localStorage.getItem('phicomm_devices'))localStorage.setItem('phicomm_devices',JSON.stringify([{model:'tc1',mac:'aabbccddee01',version:'v1'}]));});
- await page.goto('/guest');
+ await page.addInitScript(()=>{if(!localStorage.getItem('iotcloud.devices.'+encodeURIComponent(`${location.protocol==='https:'?'wss':'ws'}://${location.host}/mqtt`)+'/'))localStorage.setItem('iotcloud.devices.'+encodeURIComponent(`${location.protocol==='https:'?'wss':'ws'}://${location.host}/mqtt`)+'/',JSON.stringify([{model:'tc1',mac:'aabbccddee01',version:'v1'}]));});
+ await page.goto('/#/guest');
  await expect(page.locator('.device-list')).not.toContainText(/Legacy|TMCP|aabbccddee01/);
  await page.getByRole('button',{name:/修改.*的名称/}).click();
  await page.getByLabel('设备名称',{exact:true}).fill('书房插排');

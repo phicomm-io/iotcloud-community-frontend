@@ -6,7 +6,7 @@ test('real tracking is aggregated only for administrators with responsive charts
  const credentials=JSON.parse(fs.readFileSync(file,'utf8')),payloads=[],errors=[];
  page.on('pageerror',e=>errors.push(e.message));page.on('request',request=>{if(request.url().endsWith('/api/analytics/event'))payloads.push(request.postDataJSON());});
  const event=page.waitForResponse(r=>r.url().endsWith('/api/analytics/event')&&r.status()===204);
- await page.goto('/login');await event;
+ await page.goto('/#/login');await event;
  await page.getByLabel('用户名',{exact:true}).fill(credentials.mqtt_username);await page.getByLabel('密码',{exact:true}).fill(credentials.mqtt_password);await page.getByRole('button',{name:'登录',exact:true}).click();
  await expect(page.getByText('MQTT 已连接',{exact:true})).toBeVisible({timeout:15000});
  const deviceEvent=page.waitForResponse(r=>r.url().endsWith('/api/analytics/event')&&r.request().postDataJSON()?.event==='device_view'&&r.request().postDataJSON()?.model==='tc1'&&r.status()===204);
@@ -16,8 +16,8 @@ test('real tracking is aggregated only for administrators with responsive charts
  for(const p of payloads){expect(Object.keys(p).sort()).toEqual(['event','model','page','referrer','screen','session','visitor']);expect(JSON.stringify(p)).not.toContain(credentials.mqtt_password);expect(JSON.stringify(p)).not.toContain('D0BAE463E12C');}
  const adminContext=await browser.newContext();const admin=await adminContext.newPage();admin.on('pageerror',e=>errors.push(e.message));
  try{
-  await admin.goto(baseURL+'/login');await admin.getByLabel('用户名',{exact:true}).fill(credentials.admin_username);await admin.getByLabel('密码',{exact:true}).fill(credentials.admin_password);await admin.getByRole('button',{name:'登录',exact:true}).click();
-  await expect(admin).toHaveURL(baseURL+'/');await admin.getByRole('link',{name:'平台管理',exact:true}).click();await expect(admin).toHaveURL(baseURL+'/admin');
+  await admin.goto(baseURL+'/#/login');await admin.getByLabel('用户名',{exact:true}).fill(credentials.admin_username);await admin.getByLabel('密码',{exact:true}).fill(credentials.admin_password);await admin.getByRole('button',{name:'登录',exact:true}).click();
+  await expect(admin).toHaveURL(baseURL+'/#/');await admin.getByRole('link',{name:'平台管理',exact:true}).click();await expect(admin).toHaveURL(baseURL+'/#/admin');
   const stats=admin.getByRole('region',{name:'访问统计'});
   await expect(stats.locator('.analytics-metrics')).toBeVisible();
   await expect(stats).toContainText('设备型号访问');await expect(stats).toContainText('TC1');
