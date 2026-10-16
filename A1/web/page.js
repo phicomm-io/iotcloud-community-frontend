@@ -34,6 +34,33 @@ function renderFan(s){
  for(const id of ['childLock','childLockDevice'])$(id).checked=s.child_lock;
 }
 
+/* Filter usage is owned by the device, including across browser sessions. */
+let filterBusy=false,filterDirty=false;
+function renderFilter(s){
+ const f=s.filter,card=$('filterCard');card.hidden=!f||!Number.isFinite(f.remaining_percent);
+ if(card.hidden)return;
+ const remaining=Math.max(0,Math.min(100,f.remaining_percent));
+ $('filterRemaining').textContent=remaining+'%';
+ $('filterUsage').textContent=t('filter.usage',{used:(f.used_seconds/3600).toFixed(1),total:f.lifetime_hours});
+ $('filterBar').style.width=remaining+'%';$('filterProgress').setAttribute('aria-valuenow',String(remaining));
+ const badge=$('filterBadge');badge.className='badge '+(f.replacement_due?'warn':'ok');
+ badge.textContent=t(remaining===0?'filter.expired':f.replacement_due?'filter.due':'filter.normal');
+ if(!filterDirty&&document.activeElement!==$('filterLifetime'))$('filterLifetime').value=f.lifetime_hours;
+ const locked=filterBusy||s.ota_active||s.reboot_pending||s.wifi_trial_active;
+ for(const id of ['filterSave','filterReset','filterLifetime'])$(id).disabled=!!locked;
+}
+$('filterLifetime').oninput=()=>{filterDirty=true;};
+async function changeFilter(action,params){
+ if(filterBusy)return;filterBusy=true;if(UI.state)renderFilter(UI.state);
+ try{const saved=await command(action,params);filterDirty=false;UI.state.filter=saved;renderFilter(UI.state);await refresh();}
+ finally{filterBusy=false;if(UI.state)renderFilter(UI.state);}
+}
+onSubmit($('filterForm'),()=>changeFilter('filter.set',{lifetime_hours:Number($('filterLifetime').value)}));
+$('filterReset').onclick=()=>run(null,async()=>{
+ if(!await confirm({title:t('filter.reset'),body:t('filter.confirm'),ok:t('filter.reset'),danger:true}))return;
+ await changeFilter('filter.reset',{});toast(t('filter.reset_done'));
+},null);
+
 /* ---------- Home: automatic control summary ---------- */
 function renderAuto(){
  const c=$('autoCard'),st=bindingStatus.linkage_status,peers=bindingStatus.peers||[];
@@ -325,7 +352,7 @@ UI.start({
   ['diag.c_fan',s.fan_ready&&!s.hardware_errors?'ok':'bad',s.hardware_errors?t('diag.errors',{n:s.hardware_errors}):t('state.ok')],
   ['diag.c_storage',s.save_error?'bad':'ok',s.save_error||t('state.ok')]],
  chips:s=>s.child_lock?[h('span',{class:'chip'},icon('lock'),h('b',{},t('a1.child_lock')))]:[],
- onStatus:s=>{renderFan(s);renderLight(s);}
+ onStatus:s=>{renderFan(s);renderLight(s);renderFilter(s);}
 });
 I18N.onChange(()=>{if(UI.state){renderAuto();for(const key of ['device','light','binding','linkage'])if(!document.querySelector('[data-settings-page="'+key+'"]').hidden&&UI.pages[key].show)UI.pages[key].show();}});
 // Keep the automatic-control summary fresh even while the home page is idle.

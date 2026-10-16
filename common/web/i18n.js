@@ -4,6 +4,14 @@
 (()=>{
 'use strict';
 const D={
+'filter.title':['Estimated filter life','滤芯寿命预估'],
+'filter.hint':['Counts fan running time only. Default: 4320 h (180 days continuously). Adjust to your filter specification; air quality and filter condition also affect replacement.','仅累计风机开启时间，默认 4320 小时（连续运行 180 天）。可按滤芯规格调整；更换时间还需结合空气质量和滤芯状态。'],
+'filter.usage':['Used {used} / {total} h','已用 {used} / {total} 小时'],
+'filter.normal':['In service','使用中'],'filter.due':['Replace filter soon','建议更换滤芯'],'filter.expired':['Replacement due','请更换滤芯'],
+'filter.settings':['Adjust rated lifetime','调整额定寿命'],'filter.lifetime':['Rated lifetime (hours, 1–20000)','额定寿命（小时，1–20000）'],
+'filter.reset':['Reset after replacing filter','更换滤芯后重置'],
+'filter.confirm':['Reset accumulated usage to zero? Only reset after installing a new filter.','将累计使用时间清零并恢复至 100%？请在更换新滤芯后执行。'],
+'filter.reset_done':['Filter usage reset','滤芯使用时间已重置'],
 'import.platform':['Open IotCloud','打开 IotCloud'],
 'import.title':['Import MQTT configuration','导入 MQTT 配置'],
 'import.preview':['Broker: {host}:{port} · Username: {user}','Broker：{host}:{port} · 用户名：{user}'],

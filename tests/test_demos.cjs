@@ -17,7 +17,26 @@ const server=http.createServer((req,res)=>{let file=path.resolve(root,'.'+new UR
    assert.equal(await page.locator('#side a[href="#settings/device"]').getAttribute('aria-current'),'page');
    await page.locator('[data-tab="home"]').click();
   }
-  if(model==='platform'){await page.waitForSelector('.device-select');assert.equal(await page.locator('.device-select').count(),3);for(const b of await page.locator('.device-select').all())await b.click();}
+  if(model==='a1'){
+   await page.locator('#filterCard').waitFor({state:'visible'});
+   assert.equal(await page.locator('#filterRemaining').textContent(),'95%');
+   await page.locator('#filterCard summary').click();await page.locator('#filterLifetime').fill('6000');await page.locator('#filterSave').click();
+   await page.waitForFunction(()=>UI.state.filter.lifetime_hours===6000);
+   await page.locator('#filterReset').click();await page.getByRole('dialog').getByRole('button',{name:/Cancel|取消/}).click();
+   assert.equal(await page.evaluate(()=>UI.state.filter.used_seconds),864000);
+   await page.locator('#filterReset').click();await page.getByRole('dialog').getByRole('button',{name:/Reset after replacing|更换滤芯后重置/}).click();
+   await page.waitForFunction(()=>UI.state.filter.used_seconds===0);
+   assert.equal(await page.locator('#filterRemaining').textContent(),'100%');
+  }
+  if(model==='platform'){
+   await page.waitForSelector('.device-select');assert.equal(await page.locator('.device-select').count(),3);for(const b of await page.locator('.device-select').all())await b.click();
+   const frame=page.frameLocator('iframe.device-home');
+   await frame.locator('#filterCard').waitFor({state:'visible'});
+   await frame.locator('#filterCard summary').click();await frame.locator('#filterLifetime').fill('6000');await frame.locator('#filterSave').click();
+   await frame.locator('body').evaluate(()=>new Promise((resolve,reject)=>{let n=0;const check=()=>{if(UI.state.filter.lifetime_hours===6000)resolve();else if(++n>100)reject(Error('platform filter form did not submit'));else setTimeout(check,50);};check();}));
+   await frame.locator('#filterReset').click();await frame.getByRole('dialog').getByRole('button',{name:'更换滤芯后重置'}).click();
+   await frame.locator('body').evaluate(()=>new Promise((resolve,reject)=>{let n=0;const check=()=>{if(UI.state.filter.used_seconds===0)resolve();else if(++n>100)reject(Error('platform filter reset failed'));else setTimeout(check,50);};check();}));
+  }
   else{await page.evaluate(()=>{location.hash='settings/firmware';});for(const source of ['github','cn','global']){await page.locator(`#otaSources [data-source="${source}"]`).click();await page.waitForFunction(()=>[...document.querySelectorAll('#otaSources button')].every(b=>!b.disabled));await page.getByText(/当前已是最新版本|Already up to date/).waitFor();}}
   await page.waitForTimeout(100);assert.deepEqual(errors,[],model+' page errors');assert.deepEqual(external,[],model+' external requests');
   await page.setViewportSize({width:390,height:844});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),model+' mobile overflow');await page.close();console.log(model+' demo passed');

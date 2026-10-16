@@ -16,7 +16,7 @@ defineExpose({refresh:()=>frame.value?.contentWindow?.UI?.reload()});
 onMounted(()=>window.addEventListener('message',receive));
 onBeforeUnmount(()=>window.removeEventListener('message',receive));
 </script>
-<template><iframe ref="frame" class="device-home" :style="{height:height+'px'}" :srcdoc="pages[props.device.model]" :title="`${props.device.model.toUpperCase()} 首页`" sandbox="allow-scripts allow-same-origin allow-modals" /></template>
+<template><iframe ref="frame" class="device-home" :style="{height:height+'px'}" :srcdoc="pages[props.device.model]" :title="`${props.device.model.toUpperCase()} 首页`" sandbox="allow-scripts allow-same-origin allow-modals allow-forms" /></template>
 <style scoped>
 .device-home{display:block;width:100%;border:0;border-radius:0;background:var(--bg);}
 </style>

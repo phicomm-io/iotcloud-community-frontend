@@ -27,6 +27,8 @@ python3 tools/build_release.py
 
 前端改动先在本仓库测试、提交并等待 Release；之后在固件或后端仓库单独更新锁文件。固件不需要 Node 或前端源码 checkout；设备页面由 Release 中的确定性 gzip 打包进固件。平台镜像只消费预构建 `platform/`，文档站复制同一 Release 的 `demos/`。
 
+A1 首页的滤芯寿命卡片显示设备累计运行小时和剩余百分比，支持调整额定寿命及更换后确认重置。数据来自 `status.get.filter`，写入使用 `filter.set` / `filter.reset`；旧固件没有该字段时隐藏卡片。设备本地页面和平台共用此页面，演示使用模拟数据。回归：`NODE_PATH=frontend/node_modules node tests/test_a1_filter.cjs`。
+
 设备模拟器：`node scripts/device-simulator.mjs`。平台开发：`npm --prefix frontend run dev`，API / MQTT 代理可用 `API_TARGET`、`MQTT_TARGET` 配置。浏览器集成测试通过 `PHICOMM_WEB_URL`、`PHICOMM_MQTT_WS` 指向独立测试后端，不在公开 CI 使用生产凭据。
 
 初始设备前端来自固件 commit `86eaf97`，平台前端来自 MQTT 平台 commit `056c56c`。保留源文件中的上游版权与许可声明；此迁移不改变原文件授权。
