@@ -1,4 +1,4 @@
-/* Public provisioning contract. No credential is ever encoded into a URL. */
+/* Public provisioning contract. Passwords and session tokens are never encoded into a URL. */
 (()=>{
 'use strict';
 const VERSION=1,TTL=120000;

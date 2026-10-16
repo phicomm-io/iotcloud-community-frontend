@@ -40,6 +40,7 @@ const ICONS={
  trash:'<path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/>',
  plus:'<path d="M12 5v14M5 12h14"/>',
  link:'<path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/>',
+ external:'<path d="M14 3h7v7M10 14 21 3M21 14v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h6"/>',
  copy:'<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
  info:'<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>',
  alert:'<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01"/>',
@@ -274,7 +275,7 @@ function mqttImportPanel(dev,fields){
  const receive=e=>{
   if(!waiting||done||!IotProvision.packet(e,{source,origin:ticket.origin,id:ticket.id,expires:ticket.expires},'iotcloud.provision.config'))return;
   let data;
-  try{data=IotProvision.config(e.data.config);if(data.expires!==ticket.expires||data.host!==ticket.host||data.port!==ticket.port||data.user!==ticket.user)throw Error();}catch{finish();status.textContent=t('import.invalid');return;}
+  try{if(Object.keys(e.data).sort().join(',')!=='id,password,type')throw Error();data=IotProvision.config({v:1,host:ticket.host,port:ticket.port,user:ticket.user,password:e.data.password,protocol:'tmcp',expires:ticket.expires});}catch{finish();status.textContent=t('import.invalid');return;}
   // Only front-end fields are touched. config.set remains the normal save flow.
   fields.host.value=data.host;fields.port.value=String(data.port);fields.user.value=data.user;fields.pass.value=data.password;
   if(fields.protocol)fields.protocol.value='tmcp';fields.clear.checked=data.password==='';
@@ -318,7 +319,10 @@ function mqttPage(dev){
   const enc=new TextEncoder();if(enc.encode(user.value).length>63||enc.encode(pass.value).length>256)throw Error(t('mqtt.too_long'));
   return api('/mqtt/config',{host:host.value.trim(),port:Number(port.value),user:user.value,password:pass.value,clear_password:clear.querySelector('input').checked,...(protocol?{protocol:protocol.value}:{})}).then(result=>{pass.value='';imported.saved?.();return result;});
  });
- return {el:h('div',{class:'stack'},pageHead('nav.mqtt','mqtt.lead'),sum,imported,card('mqtt.broker',null,h('p',{class:'help'},h('a',{href:'https://phicomm-io.github.io/iotcloud/#/',target:'_blank',rel:'noopener noreferrer'},t('import.platform'))),form)),
+ const broker=card('mqtt.broker',null,form);
+ const heading=broker.querySelector('.card-head');heading.classList.add('broker-card-head');
+ heading.append(h('a',{class:'btn broker-platform-link',href:'https://phicomm-io.github.io/iotcloud/#/',target:'_blank',rel:'noopener noreferrer'},h('span',{i18n:'import.platform'}),icon('external')));
+ return {el:h('div',{class:'stack'},pageHead('nav.mqtt','mqtt.lead'),sum,imported,broker),
   status(s){sum.replaceChildren(summary([['mqtt.status',!s.mqtt_host?t('state.off'):s.mqtt_connected?t('state.ready'):t('s.'+(s.mqtt_status||'connecting')),!s.mqtt_host?'':s.mqtt_connected?'ok':'warn'],
    ['mqtt.host',s.mqtt_host?s.mqtt_host+':'+s.mqtt_port:'—'],['mqtt.mode',t(s.mqtt_topic_mode==='legacy'?'mqtt.mode_legacy':'mqtt.mode_tmcp')],['mqtt.user',s.mqtt_user||'—']]));},
   init(s){if(protocol)protocol.value=s.mqtt_protocol||s.mqtt_topic_mode||'tmcp';host.value=s.mqtt_host||'';port.value=s.mqtt_port||1883;user.value=s.mqtt_user||'';imported.activate?.();}};

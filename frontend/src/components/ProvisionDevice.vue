@@ -17,7 +17,7 @@ function open(){
  if(!trusted.value){error.value='请先确认设备地址和局域网可信。';return;}
  const id=P.nonce(),expires=values.expires;
  target.hash=new URLSearchParams({'iotcloud-import':id,origin:location.origin,expires:String(expires),host:values.host,port:String(values.port),user:values.user}).toString();
- // The new tab first stays on this origin; navigation never contains credentials.
+ // Only public configuration enters the fragment; the password waits for consent.
  const popup=window.open('about:blank','_blank');
  if(!popup){error.value='浏览器阻止了新窗口，请允许后重试。';return;}
  pending.value=true;state.value=`已打开 ${target.origin}。请在设备窗口确认来源并点击“接收并预填”。两分钟内有效。`;
@@ -26,7 +26,7 @@ function open(){
  const abort=()=>{cleanup();state.value='传递已取消，请重新发起。';};
  const receive=e=>{
   if(P.packet(e,{source:popup,origin:target.origin,id,expires},'iotcloud.provision.ready')&&!sent){
-   sent=true;popup.postMessage({type:'iotcloud.provision.config',id,config:values},target.origin);values=null;
+   sent=true;popup.postMessage({type:'iotcloud.provision.config',id,password:values.password},target.origin);values=null;
    state.value='已发送到指定设备窗口，等待设备前端确认接收。';
   }else if(sent&&P.packet(e,{source:popup,origin:target.origin,id,expires},'iotcloud.provision.received')){
    cleanup();stop=null;state.value='设备前端已预填。请在设备窗口检查并保存；此处不代表设备已保存或联网。';

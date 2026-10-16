@@ -48,10 +48,12 @@ try{
   assert.equal(await popup.locator('#mqttHost').inputValue(),original.mqtt_host);assert.equal(writes.length,0);
   await popup.evaluate(()=>window.dispatchEvent(new MessageEvent('message',{origin:'https://evil.example',source:window.opener,data:{type:'iotcloud.provision.config',id:'wrong',config:{password:'attacker'}}})));
   assert.equal(await popup.locator('#mqttPassword').inputValue(),'');
+  await popup.evaluate(()=>window.addEventListener('message',e=>{if(e.data?.type==='iotcloud.provision.config')window.receivedPasswordKeys=Object.keys(e.data).sort();}));
   await popup.getByRole('button',{name:'接收并预填',exact:true}).click();await popup.getByText('配置已预填。',{exact:false}).waitFor();
   for(const [id,value] of [['mqttHost','broker.example.test'],['mqttPort','1883'],['mqttUser',username],['mqttPassword',secret]])assert.equal(await popup.locator('#'+id).inputValue(),value);
   if(model==='tc1')assert.equal(await popup.locator('#mqttMode').inputValue(),'tmcp');
   const link=popup.getByRole('link',{name:'打开 IotCloud',exact:true});assert.equal(await link.getAttribute('href'),'https://phicomm-io.github.io/iotcloud/#/');assert.equal(await link.getAttribute('rel'),'noopener noreferrer');
+  assert.deepEqual(await popup.evaluate(()=>window.receivedPasswordKeys),['id','password','type'],'handshake transfers only the password, not broker configuration');
   assert.equal(await popup.evaluate(()=>window.opener),null);assert.equal(writes.length,0,'receive must not save');
   await popup.evaluate(()=>window.dispatchEvent(new MessageEvent('message',{origin:'https://evil.example',source:null,data:{type:'iotcloud.provision.config',id:'wrong',config:{host:'attacker'}}})));
   assert.equal(await popup.locator('#mqttHost').inputValue(),'broker.example.test','replay is ignored');
