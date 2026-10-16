@@ -22,7 +22,7 @@ const ACTIONS={M1:['schedules.get','schedules.put','schedules.delete','schedules
   ota_progress:0,ota_state:'idle',socket_names:['one','two','three','four','five','six'],socket_states:[1,1,1,1,1,1],report_seconds:2,powerCoefficientX100:1710,free_memory:30000};
  const buttonItems=Array.from({length:30},(_,i)=>({key:0,clicks:i+1,seconds:0,action:model==='A1'?'fan.set':'outlet.set',params:{toggle:true}}));
  if(model!=='TC1')Object.assign(state,{reset_reason:'watchdog',reset_reason_raw:32,watchdog_enabled:true,watchdog_state:'healthy',watchdog_fault:''});
- const actions=['status.get','capabilities.get','config.get','config.set','logs.get','ota.start',...ACTIONS[model]];
+ const actions=['status.get','capabilities.get','config.get','config.set','logs.get','ota.start',...ACTIONS[model],...(process.env.WEB_TEST_OTA?['ota.sources.get','ota.check','ota.check.get','ota.notes','ota.notes.get','ota.install','ota.cancel']:[])];
  const fixtures={'status.get':state,'capabilities.get':{model:model.toLowerCase(),actions},
   'schedules.get':{items:[],capacity:model==='TC1'?128:8,count:0,next:8},'buttons.get':{items:[]},'time.get':{timezone_minutes:480},
   'night.get':{windows:[],revision:1},'logs.get':{records:[{sequence:1,event:'boot'},...(model==='TC1'?[]:[{sequence:2,module:'system',event:'watchdog'}])],next:model==='TC1'?1:2,latest:model==='TC1'?1:2},
@@ -30,7 +30,7 @@ const ACTIONS={M1:['schedules.get','schedules.put','schedules.delete','schedules
   'binding.status.get':{average:{valid:true,sample_count:2,configured_count:2,temperature:25,humidity:50,pm25:20,formaldehyde:0.1},peers:[{mac:'112233445566',fresh:true,transport:'mqtt'}],members:[],linkage_status:'disabled',clock_valid:true,available:0,automatic_on:false,automatic_speed:0},
   'linkage.get':{enabled:0,mode:0,metrics:1,on_metrics:1,off_metrics:1,statistic:0,on_enabled:0,off_enabled:0,on_all:0,off_all:1,fixed_speed:60,min_speed:20,max_speed:100,debounce_seconds:15,min_switch_seconds:60,on_pm:50,off_pm:35,on_hcho:.1,off_hcho:.08,target_pm:35,target_hcho:.08,low_pm:35,high_pm:150,low_hcho:.08,high_hcho:.3,kp:20,ki:.02,kd:0,revision:1},
   'light_effect.get':{effect:0,segments:1,follow_fan:0,quality_pm:35,quality_hcho:.08,segment:[{source:0,display:2,minimum:-10,maximum:50,suitable_low:18,suitable_high:26,colors:[[0,0,255],[0,255,0],[255,0,0]]}],revision:1},
-  'wifi.scan.get':{scanning:false,networks:[]}};
+  'ota.sources.get':{sources:['github','cn','global']},'ota.check.get':{state:'up_to_date',version:'test',busy:false},'wifi.scan.get':{scanning:false,networks:[]}};
  let holdOutlet;
  w.fetch=async(url,o={})=>{assert.equal(url,'/api/v1/command');const req=JSON.parse(o.body);calls.push(req);
   if(req.action==='buttons.get'){const {offset=0,limit=8}=req.params;fixtures['buttons.get']={items:buttonItems.slice(offset,offset+limit),next:offset+limit};}
@@ -81,7 +81,21 @@ const ACTIONS={M1:['schedules.get','schedules.put','schedules.delete','schedules
   assert(calls.some(r=>r.action==='fan.set'&&r.params.speed===72),'preview speed control sends the real fan speed command');
   assert.equal(previewRing.dataset.feedbackSource,'pwm','release restores current PWM feedback');
  }
- assert.equal(d.querySelector('#otaSource'),null,'built-in update controls are absent when no source capability is advertised');
+ if(process.env.WEB_TEST_OTA){
+  assert.deepEqual([...d.querySelectorAll('#otaSources button')].map(b=>b.dataset.source),['github','cn','global']);
+  for(const source of ['github','cn','global']){
+   const timers=[];w.setTimeout=(fn,ms)=>{if(ms===500)timers.push(fn);return 0;};
+   d.querySelector('[data-source="'+source+'"]').click();await flush();await flush();
+   assert(calls.some(r=>r.action==='ota.check'&&r.params.source===source));
+   for(const fn of timers)fn();for(let i=0;i<4;i++)await flush();
+  }
+  const original=state.socket_states.slice();Object.assign(fixtures['status.get'],{ota_active:true,ota_mode:'transfer',ota_progress:42});
+  await w.UI.reload();
+  const cancel=d.querySelector('[data-i18n="fw.cancel"]');assert.equal(cancel.hidden,false);cancel.click();await flush();
+  assert(calls.some(r=>r.action==='ota.cancel'));
+  assert.deepEqual(state.socket_states,original,'minimal OTA status must not replace cached controls');
+  Object.assign(fixtures['status.get'],{ota_active:false,ota_mode:'idle'});await w.UI.reload();assert.equal(cancel.hidden,true);
+ }else assert.equal(d.querySelector('#otaSources'),null,'update sources require capability');
  // Navigation keeps unsaved input, and each page is reachable by hash.
  d.querySelector('#mqttUser').value='unsaved';
  for(const page of PAGES[model]){

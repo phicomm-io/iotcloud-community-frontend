@@ -330,30 +330,49 @@ function mqttPage(dev){
 function firmwarePage(dev){
  const online=h('section',{class:'card stack',hidden:!UI.caps?.actions?.includes('ota.sources.get')});
  if(!online.hidden){
-  const source=h('select',{id:'otaSource'}),latest=h('p',{class:'help'}),notes=h('a',{target:'_blank',rel:'noopener',hidden:true},t('fw.notes'));
+  const sources=h('div',{class:'row',id:'otaSources'}),latest=h('p',{class:'help'});
+  const notes=h('button',{class:'btn',type:'button',hidden:true},t('fw.notes'));
+  const notesText=h('pre',{class:'help',hidden:true,style:'white-space:pre-wrap;max-height:24rem;overflow:auto'});
   const install=h('button',{class:'btn primary',type:'button',hidden:true},t('fw.install_online'));
-  const check=h('button',{class:'btn',type:'button'},t('fw.check'));
   let timer=null,last=null;
-  function translate(){check.textContent=t('fw.check');install.textContent=t('fw.install_online');notes.textContent=t('fw.notes');for(const option of source.options)option.textContent=t('fw.source_'+option.value);if(last)latest.textContent=t('fw.check_'+last.state)+(last.version?' · '+last.version:'');}
+  const buttons=[];
+  function busy(value){for(const button of buttons)button.disabled=value;}
+  function translate(){install.textContent=t('fw.install_online');notes.textContent=t('fw.notes');for(const button of buttons)button.textContent=t('fw.source_'+button.dataset.source);if(last)latest.textContent=t('fw.check_'+last.state)+(last.version?' · '+last.version:'');}
   I18N.onChange(translate);
   async function poll(){
    const data=await command('ota.check.get');last=data;
-   latest.textContent=t('fw.check_'+data.state)+(data.version?' · '+data.version:'');
-   install.hidden=!data.available;notes.hidden=!data.release_log;
-   if(data.release_log)notes.href=data.release_log;
-   if(data.state==='checking')timer=setTimeout(()=>poll().catch(e=>{latest.textContent=e.message;check.disabled=false;}),1000);
-   else check.disabled=false;
+   latest.textContent=t('fw.check_'+data.state)+(data.version?' · '+data.version:'')+(data.error?' · '+data.error:'');
+   install.hidden=!data.version||data.state==='failed';notes.hidden=!data.release_log;
+   if(data.busy||data.state==='checking')timer=setTimeout(()=>poll().catch(e=>{latest.textContent=e.message;busy(false);}),1000);
+   else busy(false);
   }
-  check.onclick=()=>run(check,async()=>{if(timer)clearTimeout(timer);install.hidden=true;notes.hidden=true;await command('ota.check',{source:source.value});latest.textContent=t('fw.check_checking');check.disabled=true;timer=setTimeout(()=>poll().catch(e=>{latest.textContent=e.message;check.disabled=false;}),500);});
-  source.onchange=()=>{if(timer)clearTimeout(timer);install.hidden=true;notes.hidden=true;latest.textContent='';check.disabled=false;};
+  async function check(source){
+   if(timer)clearTimeout(timer);busy(true);install.hidden=notes.hidden=notesText.hidden=true;
+   try{await command('ota.check',{source});latest.textContent=t('fw.check_checking');timer=setTimeout(()=>poll().catch(e=>{latest.textContent=e.message;busy(false);}),500);}
+   catch(e){busy(false);throw e;}
+  }
+  notes.onclick=()=>run(notes,async()=>{
+   let offset=0,text='';notesText.hidden=false;
+   do{
+    await command('ota.notes',{offset});
+    let data;
+    do{await new Promise(resolve=>setTimeout(resolve,500));data=await command('ota.notes.get');}while(data.busy);
+    if(data.state!=='ready')throw Error(data.error||t('fw.check_failed'));
+    text+=data.text;notesText.textContent=text;
+    if(data.next<=offset&&data.next<data.total)throw Error(t('fw.check_failed'));
+    offset=data.next;if(offset>=data.total)break;
+   }while(offset<16384);
+  });
   install.onclick=()=>run(install,async()=>{if(!window.confirm(t('fw.confirm_online')))return;await command('ota.install');toast(t('fw.url_started'));});
-  command('ota.sources.get').then(data=>{for(const id of data.sources)source.append(h('option',{value:id},t('fw.source_'+id)));}).catch(()=>{online.hidden=true;});
-  online.append(h('h2',{i18n:'fw.online'}),source,h('div',{class:'row'},check,install),latest,notes);
+  command('ota.sources.get').then(data=>{for(const id of data.sources){const button=h('button',{class:'btn',type:'button','data-source':id},t('fw.source_'+id));button.onclick=()=>run(button,()=>check(id));buttons.push(button);sources.append(button);}}).catch(()=>{online.hidden=true;});
+  online.append(h('h2',{i18n:'fw.online'}),h('p',{class:'help',i18n:'fw.sources_help'}),sources,latest,h('div',{class:'row'},install,notes),notesText);
  }
+ const cancel=h('button',{class:'btn',type:'button',hidden:true,i18n:'fw.cancel'});
+ cancel.onclick=()=>run(cancel,async()=>{await command('ota.cancel');toast(t('fw.cancelling'));});
  const sum=h('div'),prog=h('progress',{max:100,value:0}),state=h('p',{class:'help'});
  const file=h('input',{id:'firmware',type:'file',accept:'.bin,.raw,.signed',required:true});
  const unsigned=switchRow('unsignedRescue','fw.unsigned','fw.unsigned_desc');
- const url=h('input',{id:'otaUrl',type:'url',maxLength:499,required:true,placeholder:'http://…/'+dev.otaName});
+ const url=h('input',{id:'otaUrl',type:'url',maxLength:499,required:true,placeholder:'https://…/'+dev.otaName});
  const fileForm=h('form',{id:'fileForm',class:'stack'},h('label',{class:'field'},h('span',{},t('fw.file',{m:dev.model})),file),
   h('details',{class:'more'},h('summary',{i18n:'common.advanced'}),unsigned),
   h('div',{class:'form-actions'},h('button',{class:'btn primary',type:'submit'},h('span',{i18n:'fw.upload'}))));
@@ -379,8 +398,9 @@ function firmwarePage(dev){
  onSubmit(urlForm,()=>api('/ota',{url:url.value}),'fw.url_started');
  const fileLabel=fileForm.querySelector('.field>span');I18N.onChange(()=>{fileLabel.textContent=t('fw.file',{m:dev.model});});
  return {el:h('div',{class:'stack'},pageHead('nav.firmware','fw.lead'),sum,online,
-  card('fw.install',null,picker,h('div',{style:'margin-top:16px'},fileForm,urlForm),h('div',{class:'stack',style:'margin-top:20px'},prog,state),info(dev.otaHintKey))),
+  card('fw.install',null,picker,h('div',{style:'margin-top:16px'},fileForm,urlForm),h('div',{class:'stack',style:'margin-top:20px'},prog,state,cancel),info(dev.otaHintKey))),
   status(s){sum.replaceChildren(summary([['fw.version',h('span',{class:'num'},s.version||'—')],['fw.state',t('s.'+(s.ota_state||'idle'))],s.ota_error?['fw.error',h('span',{class:'badge bad'},s.ota_error)]:null]));
+   cancel.hidden=!s.ota_active||s.ota_mode==='committing';
    if(s.ota_active){prog.value=s.ota_progress;state.textContent=t('fw.progress',{p:s.ota_progress});}}};
 }
 function diagValue(k,v){
@@ -492,7 +512,9 @@ function clockCard({load,save,status}){
 let initialized=false,failures=0,lastSuccess=0,loading=null;
 async function load(){
  try{
-  const raw=await command('status.get');failures=0;lastSuccess=Date.now();const s=UI.acceptStatus(raw);
+  const raw=await command('status.get');failures=0;lastSuccess=Date.now();
+  if(raw.ota_active&&raw.ota_mode){UI.pages.firmware?.status(raw);return raw;}
+  const s=UI.acceptStatus(raw);
   $('title').textContent=UI.device.model+' '+(s.name||'');
   renderChips(s);renderBanners(s,false);
   if(!initialized){for(const p of Object.values(UI.pages))if(p.init)p.init(s);initialized=true;}
