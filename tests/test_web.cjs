@@ -8,7 +8,7 @@ const PAGES={M1:['network','mqtt','device','binding','schedule','night','firmwar
  A1:['network','mqtt','device','light','binding','linkage','schedule','buttons','night','firmware','diagnostics','logs','maintenance'],
  TC1:['network','mqtt','device','schedule','buttons','firmware','diagnostics','logs','maintenance']};
 const ACTIONS={M1:['schedules.get','schedules.put','schedules.delete','schedules.enable','night.get','night.set','display.set','time.get','time.set'],
- A1:['schedules.get','schedules.put','schedules.delete','schedules.enable','night.get','night.set','buttons.get','buttons.set','fan.set','light.set','child_lock.set','binding.get','binding.set','binding.status.get','binding.probe','linkage.get','linkage.set','light_effect.get','light_effect.set','time.get','time.set'],
+ A1:['schedules.get','schedules.put','schedules.delete','schedules.enable','night.get','night.set','buttons.get','buttons.set','fan.set','light.set','child_lock.set','binding.get','binding.set','binding.status.get','binding.probe','linkage.get','linkage.set','light_effect.get','light_effect.set','light_effect.next','light_effect.select','light_always.set','filter.get','filter.set','filter.reset','time.get','time.set'],
  TC1:['schedules.get','schedules.put','schedules.delete','schedules.enable','buttons.get','buttons.set','outlet.set','indicator.set','child_lock.set','time.get','time.set']};
 (async()=>{for(const model of (process.env.WEB_TEST_MODEL?[process.env.WEB_TEST_MODEL]:['M1','A1','TC1'])){
  const path=model==='TC1'?'TC1/http_server/web/index.html':model+'/web/index.html';
@@ -23,17 +23,17 @@ const ACTIONS={M1:['schedules.get','schedules.put','schedules.delete','schedules
  const buttonItems=Array.from({length:30},(_,i)=>({key:0,clicks:i+1,seconds:0,action:model==='A1'?'fan.set':'outlet.set',params:{toggle:true}}));
  if(model!=='TC1')Object.assign(state,{reset_reason:'watchdog',reset_reason_raw:32,watchdog_enabled:true,watchdog_state:'healthy',watchdog_fault:''});
  const actions=['status.get','capabilities.get','config.get','config.set','logs.get','ota.start',...ACTIONS[model]];
- const fixtures={'status.get':state,'capabilities.get':{model:model.toLowerCase(),actions},
+ const fixtures={'status.get':state,'capabilities.get':{model:model.toLowerCase(),actions,button_keys:model==='A1'?['power','wifi','combination']:['function']},
   'schedules.get':{items:[],capacity:model==='TC1'?128:8,count:0,next:8},'buttons.get':{items:[]},'time.get':{timezone_minutes:480},
   'night.get':{windows:[],revision:1},'logs.get':{records:[{sequence:1,event:'boot'},...(model==='TC1'?[]:[{sequence:2,module:'system',event:'watchdog'}])],next:model==='TC1'?1:2,latest:model==='TC1'?1:2},
   'power.get':{power_watts:0,energy_kwh:0,powers:[0]},'binding.get':{response_ids:[],peers:[],members:[],group:'',revision:1},
   'binding.status.get':{average:{valid:true,sample_count:2,configured_count:2,temperature:25,humidity:50,pm25:20,formaldehyde:0.1},peers:[{mac:'112233445566',fresh:true,transport:'mqtt'}],members:[],linkage_status:'disabled',clock_valid:true,available:0,automatic_on:false,automatic_speed:0},
   'linkage.get':{enabled:0,mode:0,metrics:1,on_metrics:1,off_metrics:1,statistic:0,on_enabled:0,off_enabled:0,on_all:0,off_all:1,fixed_speed:60,min_speed:20,max_speed:100,debounce_seconds:15,min_switch_seconds:60,on_pm:50,off_pm:35,on_hcho:.1,off_hcho:.08,target_pm:35,target_hcho:.08,low_pm:35,high_pm:150,low_hcho:.08,high_hcho:.3,kp:20,ki:.02,kd:0,revision:1},
   'light_effect.get':{effect:0,segments:1,follow_fan:0,quality_pm:35,quality_hcho:.08,segment:[{source:0,display:2,minimum:-10,maximum:50,suitable_low:18,suitable_high:26,colors:[[0,0,255],[0,255,0],[255,0,0]]}],revision:1},
-  'wifi.scan.get':{scanning:false,networks:[]}};
+  'filter.get':{used_seconds:7200,lifetime_hours:6000,remaining_percent:99},'wifi.scan.get':{scanning:false,networks:[]}};
  let holdOutlet;
  w.fetch=async(url,o={})=>{assert.equal(url,'/api/v1/command');const req=JSON.parse(o.body);calls.push(req);
-  if(req.action==='buttons.get'){const {offset=0,limit=8}=req.params;fixtures['buttons.get']={items:buttonItems.slice(offset,offset+limit),next:offset+limit};}
+  if(req.action==='buttons.get'){const {offset=0,limit=8}=req.params;fixtures['buttons.get']={items:buttonItems.slice(offset,offset+limit),next:offset+limit,capacity:model==='A1'?102:68};}
   if(req.action==='buttons.set'){const p=req.params,i=buttonItems.findIndex(v=>v.key===p.key&&(p.clicks?v.clicks===p.clicks:v.seconds===p.seconds));if(i>=0)buttonItems.splice(i,1);if(p.action!=='none')buttonItems.push({...p});}
 
   assert.equal(o.method,'POST');assert.equal(typeof req.params,'object');if(!req.action.endsWith('.get'))assert(req.request_id);
@@ -175,6 +175,18 @@ const ACTIONS={M1:['schedules.get','schedules.put','schedules.delete','schedules
   form.querySelector('[data-value="seconds"]').click();assert.equal(count.max,'4');
   count.value='5';const before=calls.length;form.dispatchEvent(new w.Event('submit',{cancelable:true}));await flush();
   assert.equal(calls.length,before,'reserved recovery hold cannot be saved');
+  if(model==='A1'){
+   const key=form.querySelector('select');assert.deepEqual([...key.options].map(o=>o.value),['0','1','2']);
+   key.value='2';form.querySelector('[data-value="clicks"]').click();count.value='1';
+   for(const name of ['light_effect.next','light_effect.select','filter.reset','light_always.set']){
+    action.value=name;action.dispatchEvent(new w.Event('change',{bubbles:true}));
+    form.dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));for(let i=0;i<16;i++)await flush();
+    assert(calls.some(r=>r.action==='buttons.set'&&r.params.key===2&&r.params.action===name),'combination action saves '+name);
+   }
+   assert(page.querySelector('[data-filter-status]').textContent.includes('2.0'));
+   const hours=page.querySelector('[data-filter-hours]');hours.value='3000';hours.closest('form').dispatchEvent(new w.Event('submit',{cancelable:true}));await flush();
+   assert(calls.some(r=>r.action==='filter.set'&&r.params.lifetime_hours===3000));
+  }
   assert.equal(missing.length,0,'new button UI has no missing translations');
  }
  console.log(model+': unified command API, navigation, typed tasks, logs, controls, safe names and explicit OTA passed');

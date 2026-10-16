@@ -10,13 +10,15 @@ const {h,icon,toast,run,switchRow,seg,daysPicker,presetDays,daysText,hhmm,toMinu
 const ACTIONS={
  'outlet.set':'op.outlet','fan.set':'op.fan','light.set':'op.light',
  'child_lock.set':'op.child_lock','indicator.set':'op.indicator',
- 'display.set':'op.display','system.reboot':'op.reboot'};
+ 'display.set':'op.display','system.reboot':'op.reboot',
+ 'light_effect.next':'op.effect_next','light_effect.select':'op.effect_select',
+ 'filter.reset':'op.filter_reset','light_always.set':'op.light_always'};
 const actKey=a=>ACTIONS[a]||'op.none';
 const sel=(parent,labelKey,options)=>{const s=h('select',{},options.map(([v,k])=>h('option',{value:v},typeof k==='function'?k():t(k))));parent.append(h('label',{class:'field'},h('span',{i18n:labelKey}),s));return s;};
 
 /* Shared action editor: one control group per supported action. */
 function actionEditor(host,{keys=false}={}){
- const caps=UI.caps||{},available=Object.keys(ACTIONS).filter(a=>(caps.actions||[]).includes(a));
+ const caps=UI.caps||{},available=Object.keys(ACTIONS).filter(a=>(caps.actions||[]).includes(a)&&(keys||!['light_effect.next','light_effect.select','filter.reset'].includes(a)));
  const box=h('div',{class:'stack'}),fields=h('div',{class:'stack'});
  const options=[...(keys?[['none','op.none']]:[]),...available.map(a=>[a,actKey(a)])];
  const pick=keys?sel(host,'btn.action',options):seg(options,v=>draw(v),{full:true});
@@ -33,14 +35,19 @@ function actionEditor(host,{keys=false}={}){
    if(params.index!=null)index.value=String(params.index);
    parts.push(()=>index.value==='all'?{}:{index:Number(index.value)});
   }
-  const switchable=['outlet.set','fan.set','light.set','child_lock.set','indicator.set'].includes(a);
+  const switchable=['outlet.set','fan.set','light.set','child_lock.set','indicator.set','light_always.set'].includes(a);
   if(switchable){
-   const values=keys&&['outlet.set','fan.set'].includes(a)?['on','off','toggle']:['on','off'];
+   const values=keys&&(['outlet.set','fan.set'].includes(a)||caps.model==='a1')?['on','off','toggle']:['on','off'];
    const on=sel(fields,'op.state',values.map(v=>[v,'op.'+v]));
    on.value=params.toggle?'toggle':(params.on===false||params.enabled===false)?'off':'on';
    const field=['outlet.set','fan.set'].includes(a)?'on':'enabled';
    parts.push(()=>on.value==='toggle'?{toggle:true}:{[field]:on.value==='on'});
   }
+  if(a==='light_effect.select'){
+   const effect=sel(fields,'op.effect_select',Array.from({length:5},(_,i)=>[String(i),'a1.effect.'+i]));
+   effect.value=String(params.effect||0);parts.push(()=>({effect:Number(effect.value)}));
+  }
+  if(a==='filter.reset')fields.append(info('filter.reset_hint'));
   if(a==='fan.set'){
    const m={speed:params.speed||60},[out,range]=slider(m,'speed',{min:1});
    fields.append(h('div',{class:null},h('div',{class:'row between'},h('span',{class:'label',i18n:'op.speed'}),out)),range);
@@ -50,7 +57,10 @@ function actionEditor(host,{keys=false}={}){
    const step=a==='display.set'?25:1,m={brightness:params.brightness!=null?params.brightness:100};
    const [out,range]=slider(m,'brightness',{min:0,max:100,step,fmt:v=>v+'%'});
    fields.append(h('div',{class:null},h('div',{class:'row between'},h('span',{class:'label',i18n:'op.brightness'}),out)),range);
-   parts.push(()=>({brightness:Number(m.brightness)}));
+   if(a==='light.set'&&keys){
+    const setBrightness=switchRow(null,'op.set_brightness');setBrightness.querySelector('input').checked=params.brightness!=null;
+    fields.append(setBrightness);parts.push(()=>setBrightness.querySelector('input').checked?{brightness:Number(m.brightness)}:{});
+   }else parts.push(()=>({brightness:Number(m.brightness)}));
   }
   read=()=>Object.assign({},...parts.map(f=>f()));
   current=a;
@@ -131,7 +141,9 @@ function schedulePage(dev){
 /* ---------- Custom button events ---------- */
 function buttonsPage(dev){
  const listBox=h('div',{class:'stack'}),keyHost=h('div',{class:'fields'});
- const key=sel(keyHost,'btn.key',dev.model==='A1'?[['0','btn.key_power'],['1','btn.key_wifi']]:[['0','btn.key_fn']]);
+ const keyIds=dev.model==='A1'?(UI.caps.button_keys?.includes('combination')?[0,1,2]:[0,1]):[0];
+ const keyName=k=>t(dev.model==='A1'?['btn.key_power','btn.key_wifi','btn.key_both'][Number(k)]:'btn.key_fn');
+ const key=sel(keyHost,'btn.key',keyIds.map(k=>[String(k),()=>keyName(k)]));
  const count=h('input',{type:'number',min:1,max:30,value:1,required:true});
  const countLabel=h('span',{},t('btn.click_count'));
  const kind=seg([['clicks','btn.click'],['seconds','btn.hold']],v=>{
@@ -140,13 +152,13 @@ function buttonsPage(dev){
  },{full:true});kind.set('clicks');
  keyHost.append(h('div',{class:'field'},h('span',{i18n:'btn.kind'}),kind),h('label',{class:'field'},countLabel,count));
  const editorHost=h('div',{class:'stack'}),editor=actionEditor(editorHost,{keys:true});
- const keyName=k=>t(dev.model==='A1'?(Number(k)===0?'btn.key_power':'btn.key_wifi'):'btn.key_fn');
  const gesture=v=>v.seconds?t('btn.hold_full',{n:v.seconds}):t(v.clicks===1?'btn.single':'btn.click_full',{n:v.clicks});
  function actionText(v){
   if(v.action==='none')return t('op.none');
   const p=v.params||{},state=t(p.toggle?'op.toggle':p.on===false||p.enabled===false?'op.off':'op.on');
   const target=v.action==='outlet.set'?(p.index==null?t('op.all'):(UI.state?.socket_names?.[p.index]||t('tc1.socket_n',{n:p.index+1}))):t(actKey(v.action));
-  if(v.action==='system.reboot')return target;
+  if(['system.reboot','light_effect.next','filter.reset'].includes(v.action))return target;
+  if(v.action==='light_effect.select')return target+' · '+t('a1.effect.'+p.effect);
   let text=v.action==='display.set'?target:state+' · '+target;
   if(p.speed!=null)text+=' · '+p.speed+'%';
   if(p.brightness!=null)text+=' · '+p.brightness+'%';
@@ -173,10 +185,10 @@ function buttonsPage(dev){
     },'common.deleted')},t('common.delete'))));
  }
  async function load(){
-  const items=[];let offset=0;
-  do{const page=await command('buttons.get',{offset,limit:8});items.push(...page.items);if(page.next==null||page.next<=offset)break;offset=page.next;}while(offset<68);
+  const items=[];let offset=0,capacity=68;
+  do{const page=await command('buttons.get',{offset,limit:8});items.push(...page.items);capacity=page.capacity||capacity;if(page.next==null||page.next<=offset)break;offset=page.next;}while(offset<capacity);
   listBox.replaceChildren();
-  for(const k of (dev.model==='A1'?[0,1]:[0])){
+  for(const k of keyIds){
    const groups=[];
    for(const type of ['clicks','seconds']){
     const values=items.filter(v=>Number(v.key)===k&&v[type]>0).sort((a,b)=>a[type]-b[type]);
@@ -198,11 +210,22 @@ function buttonsPage(dev){
   run(save,async()=>{const a=editor.get();if(a.action==='none')throw Error(t('btn.pick_action'));
    await command('buttons.set',{...selected(),...a});await load();},'common.saved');
  });
+ let filterStatus,filterHours;
+ function filterCards(){
+  if(dev.model!=='A1'||!UI.caps.actions.includes('filter.get'))return [];
+  filterStatus=h('p',{'data-filter-status':''});filterHours=h('input',{type:'number',min:1,max:100000,required:true,'data-filter-hours':''});
+  const form=h('form',{class:'stack'},filterStatus,info('filter.hint'),h('label',{class:'field'},h('span',{i18n:'filter.lifetime'}),filterHours),
+   h('div',{class:'form-actions'},h('button',{type:'submit',class:'btn primary'},t('common.save')),
+    h('button',{type:'button',class:'btn ghost',onclick:e=>run(e.currentTarget,async()=>{if(!window.confirm(t('filter.reset_confirm')))return;await command('filter.reset',{});await loadFilter();},null)},t('op.filter_reset'))));
+  form.addEventListener('submit',e=>{e.preventDefault();if(!form.reportValidity())return;run(null,async()=>{await command('filter.set',{lifetime_hours:Number(filterHours.value)});await loadFilter();},'common.saved');});
+  return [card('filter.title',null,form)];
+ }
+ async function loadFilter(){if(!filterStatus)return;const f=await command('filter.get');filterHours.value=f.lifetime_hours;filterStatus.textContent=t('filter.status',{used:(f.used_seconds/3600).toFixed(1),remaining:f.remaining_percent});}
  preview();
  return {el:h('div',{class:'stack'},pageHead('nav.buttons','btn.lead'),card('btn.current',null,listBox),
   card('btn.recovery',null,h('div',{class:'button-mapping'},h('b',{},t('btn.hold_full',{n:5})),h('span',{},t('btn.reset_wifi'))),
-   h('div',{class:'button-mapping'},h('b',{},t('btn.hold_full',{n:10})),h('span',{},t('op.10'))),info('btn.reset_note')),editorCard),
-  async show(){await load();preview();}};
+   h('div',{class:'button-mapping'},h('b',{},t('btn.hold_full',{n:10})),h('span',{},t('op.10'))),info(dev.model==='A1'?'btn.reset_note_a1':'btn.reset_note')),editorCard,...filterCards()),
+  async show(){await load();await loadFilter();preview();}};
 }
 
 /* ---------- Night mode ---------- */
