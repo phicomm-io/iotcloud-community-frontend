@@ -10,6 +10,6 @@ const base=import.meta.env.BASE_URL;
   <div class="auth-layout">
    <section class="account-page surface"><slot /><ServerSettings /></section>
   </div>
-  <footer class="copyright">Copyright &copy; Phicomm Community · <a href="https://github.com/phicomm-io/phicomm-community-firmware" target="_blank" rel="noopener noreferrer">固件仓库</a> · <a href="https://github.com/phicomm-io/phicomm-community-mqtt" target="_blank" rel="noopener noreferrer">MQTT 平台仓库</a> · <a href="https://github.com/phicomm-io/phicomm-community-frontend" target="_blank" rel="noopener noreferrer">前端仓库</a> · <a href="https://phicomm-io.github.io" target="_blank" rel="noopener noreferrer">项目网站</a></footer>
+  <footer class="copyright">Copyright &copy; Phicomm Community · <a href="https://github.com/phicomm-io/phicomm-community-mqtt" target="_blank" rel="noopener noreferrer">MQTT 平台仓库</a> · <a href="https://phicomm-io.github.io" target="_blank" rel="noopener noreferrer">项目网站</a></footer>
  </main>
 </template>
