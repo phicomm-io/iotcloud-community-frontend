@@ -6,7 +6,8 @@ export function legacyCredentials(storage = localStorage) {
   return {username:value.username, password:value.password};
  } catch { return null; }
 }
-const key = owner => 'phicomm.connection.' + owner;
+import {scopeKey} from './serverConfig.js';
+const key = owner => 'phicomm.connection.' + scopeKey() + ':' + owner;
 export function autoConnect(owner, storage = localStorage) {
  try {
   const value = storage.getItem(key(owner));
@@ -16,12 +17,12 @@ export function autoConnect(owner, storage = localStorage) {
 export function setAutoConnect(owner, enabled, storage = localStorage) {
  try { storage.setItem(key(owner), String(enabled)); } catch { /* Storage may be disabled. */ }
 }
-export function rememberLogin(owner, password, storage = localStorage) {
- try { storage.setItem('phicomm.mqtt-login', JSON.stringify({owner,password})); } catch { /* Keep in-memory credentials. */ }
+export function rememberLogin(owner, password, storage = sessionStorage) {
+ try { storage.setItem('phicomm.mqtt-login.'+scopeKey(), JSON.stringify({owner,password})); } catch { /* Keep in-memory credentials. */ }
 }
-export function savedPassword(owner, storage = localStorage) {
- try { const saved=JSON.parse(storage.getItem('phicomm.mqtt-login') || 'null'); return saved?.owner===owner && typeof saved.password==='string' ? saved.password : ''; } catch { return ''; }
+export function savedPassword(owner, storage = sessionStorage) {
+ try { const saved=JSON.parse(storage.getItem('phicomm.mqtt-login.'+scopeKey()) || 'null'); return saved?.owner===owner && typeof saved.password==='string' ? saved.password : ''; } catch { return ''; }
 }
-export function forgetLogin(storage = localStorage) {
- try { storage.removeItem('phicomm.mqtt-login'); } catch { /* Storage may be disabled. */ }
+export function forgetLogin(storage = sessionStorage) {
+ try { storage.removeItem('phicomm.mqtt-login.'+scopeKey()); } catch { /* Storage may be disabled. */ }
 }

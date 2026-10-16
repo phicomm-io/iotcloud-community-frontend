@@ -1,3 +1,4 @@
+import {apiURL, sessionToken} from './serverConfig';
 import { reactive } from "vue";
 import {forgetLogin} from "./connectionPreferences";
 export const account = reactive({
@@ -9,11 +10,14 @@ export const account = reactive({
   loaded: false,
 });
 export async function api(path, options = {}) {
-  const response = await fetch(`/api${path}`, {
-    credentials: "same-origin",
+  const response = await fetch(apiURL(path), {
+    credentials: "include",
     ...options,
-    headers: { "Content-Type": "application/json", ...options.headers },
+    headers: { "Content-Type": "application/json", ...(sessionToken()?{Authorization: `Bearer ${sessionToken()}`} : {}), ...options.headers },
   });
+  const token=response.headers.get('X-IotCloud-Session');
+  if(token)sessionToken(token);
+  if(path==='/auth/logout' || response.status===401)sessionToken('');
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     if (response.status === 401 && !path.startsWith("/admin")) {

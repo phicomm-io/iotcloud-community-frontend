@@ -3,6 +3,7 @@ import {ref,reactive,computed,onMounted,onBeforeUnmount,watch,nextTick} from 'vu
 import {useRoute,useRouter} from 'vue-router';
 import mqtt from 'mqtt';
 import {account,api,restoreAccount} from './account';
+import {server,scopeKey} from './serverConfig';
 import {track} from './analytics';
 import {autoConnect,setAutoConnect,rememberLogin,savedPassword,forgetLogin} from './connectionPreferences';
 import {userKey,requestId,deviceKey,deviceEntry,localDevices,topics,applyMessage,command} from './deviceProtocol';
@@ -14,6 +15,7 @@ import DeviceHome from './components/DeviceHome.vue';
 import PlatformSettings from './components/PlatformSettings.vue';
 import ThemeToggle from './components/ThemeToggle.vue';
 
+const iconURL=import.meta.env.BASE_URL+'icons/iotcloud.svg';
 const demoMode=import.meta.env.VITE_DEMO === '1';
 const demoDevices=demoMode?Object.fromEntries(['tc1','m1','a1'].map(m=>[m,window.PhicommDemo.create(m)])):null;
 const route=useRoute(),router=useRouter();
@@ -22,7 +24,7 @@ function displayName(d){const name=aliases.value[deviceKey(d)]||states[deviceKey
 function renameDevice(d,name,done){
  if(d.version==='v1'){
   if(name)aliases.value[deviceKey(d)]=name;else delete aliases.value[deviceKey(d)];
-  localStorage.setItem('phicomm.names.'+(account.username||'guest'),JSON.stringify(aliases.value));done();return;
+  localStorage.setItem('phicomm.names.'+scopeKey()+':'+(account.username||'guest'),JSON.stringify(aliases.value));done();return;
  }
  deviceCommand({action:'config.set',params:{section:'device',values:{name}}},reply=>{if(!['ok','accepted'].includes(reply.code)){done(reply.message||'保存失败');return;}const state=states[deviceKey(d)]||={};if(name)state.name=name;else{delete state.name;sendTo(d,'status.get');}done();},d);
 }
@@ -54,17 +56,20 @@ function deviceCommand(request,reply,target=active.value){
  const c=command(d,{...request,request_id:id});
  client.publish(c.topic,c.payload,{qos:1,retain:false},e=>{if(e){clearTimeout(timeout);const pending=replies.get(id);replies.delete(id);delete state.pending[id];pending?.reply({code:'error',message:'发送失败'});}});
 }
-const connectionOwner=()=>thirdParty.value?'guest':account.username;
+const guestKey=()=> 'iotcloud.devices.'+encodeURIComponent(connection.host)+'/'+encodeURIComponent(connection.username);
+const guestStorage={getItem:key=>key==='phicomm_devices'?localStorage.getItem(guestKey()):null};
+watch(()=>[connection.host,connection.username],()=>{if(thirdParty.value){disconnect();for(const key of Object.keys(states))delete states[key];refresh();}});
+const connectionOwner=()=>thirdParty.value?'guest:'+connection.host+':'+connection.username:account.username;
 function manualDisconnect(){setAutoConnect(connectionOwner(),false);disconnect();}
 function manualConnect(){setAutoConnect(connectionOwner(),true);connect();}
 function disconnect(){busy.value=false;for(const {reply,timeout} of replies.values()){clearTimeout(timeout);reply({code:'offline',message:'MQTT 已断开'});}replies.clear();client?.end(true);client=null;connected.value=false;Object.keys(states).forEach(k=>delete states[k]);}
 function subscribe(){if(demoMode)return;if(thirdParty.value)client?.subscribe(`phicomm/v2/${connection.username?userKey(connection.username):'local'}/discovery/+`,{qos:1});for(const d of list.value.filter(d=>!d.status||d.status==='active'))client?.subscribe(topics(d),{qos:1},(e,g)=>{if(e||g?.some(x=>x.qos===128))error.value='订阅被拒绝，请检查账号与设备归属';});}
-async function refresh(){try{list.value=(thirdParty.value?localDevices().map(d=>({...d,username:connection.username})):await api('/devices')).map(deviceEntry);if(!list.value.some(d=>deviceKey(d)===selected.value))selected.value=list.value[0]?deviceKey(list.value[0]):'';if(connected.value)subscribe();}catch(e){error.value=e.message;}}
-function connect(){if(demoMode){connected.value=true;busy.value=false;for(const d of list.value)Object.assign(states[deviceKey(d)]||={},demoDevices[d.model].state);return;}if(!thirdParty.value&&connection.password)rememberLogin(account.username,connection.password);disconnect();error.value='';if(!/^wss?:\/\//.test(connection.host)){error.value='请输入 ws:// 或 wss:// 地址';return;}busy.value=true;
+async function refresh(){try{list.value=(thirdParty.value?localDevices(guestStorage).map(d=>({...d,username:connection.username})):await api('/devices')).map(deviceEntry);if(!list.value.some(d=>deviceKey(d)===selected.value))selected.value=list.value[0]?deviceKey(list.value[0]):'';if(connected.value)subscribe();}catch(e){error.value=e.message;}}
+function connect(){if(demoMode){connected.value=true;busy.value=false;for(const d of list.value)Object.assign(states[deviceKey(d)]||={},demoDevices[d.model].state);return;}if(!thirdParty.value&&connection.password)rememberLogin(account.username,connection.password);disconnect();error.value='';if(location.protocol==='https:'&&!connection.host.startsWith('wss://')){error.value='HTTPS 页面需要 wss:// 地址';return;}if(!/^wss?:\/\//.test(connection.host)){error.value='请输入 ws:// 或 wss:// 地址';return;}busy.value=true;
  client=mqtt.connect(connection.host,{username:connection.username,password:connection.password,clientId:'web_'+requestId(),connectTimeout:5000,reconnectPeriod:3000,clean:true});
  client.on('connect',()=>{connected.value=true;busy.value=false;subscribe();track('mqtt_connect',thirdParty.value?'/guest':'/');});
  client.on('close',()=>{connected.value=false;busy.value=false;});client.on('error',()=>{error.value='MQTT 连接失败，请检查地址、凭据和权限';busy.value=false;});
- client.on('message',(topic,payload)=>{if(thirdParty.value && topic.startsWith(`phicomm/v2/${connection.username?userKey(connection.username):'local'}/discovery/`)){try{const a=JSON.parse(payload.toString());if(a.protocol!=='tmcp'||a.protocol_version!==2||a.version!=='v2')return;const d=deviceEntry({mac:topic.split('/')[4],model:a.model,version:'v2',username:connection.username});if(!list.value.some(x=>deviceKey(x)===deviceKey(d))){list.value.push(d);localStorage.setItem('phicomm_devices',JSON.stringify(list.value));if(!selected.value)selected.value=deviceKey(d);subscribe();sendTo(d,'status.get');}}catch{}return;}for(const d of list.value){const s=states[deviceKey(d)] ||= {};if(applyMessage(d,s,topic,payload.toString())){if(topic.endsWith('/result')){const pending=replies.get(s.result?.request_id);if(pending&&pending.key===deviceKey(d)){clearTimeout(pending.timeout);replies.delete(s.result.request_id);pending.reply(s.result);}delete s.pending?.[s.result?.request_id];}break;}}});
+ client.on('message',(topic,payload)=>{if(thirdParty.value && topic.startsWith(`phicomm/v2/${connection.username?userKey(connection.username):'local'}/discovery/`)){try{const a=JSON.parse(payload.toString());if(a.protocol!=='tmcp'||a.protocol_version!==2||a.version!=='v2')return;const d=deviceEntry({mac:topic.split('/')[4],model:a.model,version:'v2',username:connection.username});if(!list.value.some(x=>deviceKey(x)===deviceKey(d))){list.value.push(d);localStorage.setItem(guestKey(),JSON.stringify(list.value));if(!selected.value)selected.value=deviceKey(d);subscribe();sendTo(d,'status.get');}}catch{}return;}for(const d of list.value){const s=states[deviceKey(d)] ||= {};if(applyMessage(d,s,topic,payload.toString())){if(topic.endsWith('/result')){const pending=replies.get(s.result?.request_id);if(pending&&pending.key===deviceKey(d)){clearTimeout(pending.timeout);replies.delete(s.result.request_id);pending.reply(s.result);}delete s.pending?.[s.result?.request_id];}break;}}});
  if(thirdParty.value)localStorage.setItem('tmcp_broker',JSON.stringify({host:connection.host,username:connection.username}));
 }
 function legacyRequest({action,params={}},reply){
@@ -98,17 +103,17 @@ function legacyRequest({action,params={}},reply){
  }catch(e){fail(e.message);}
 }
 function sendTo(d,action,params={}){if(demoMode){Object.assign(states[deviceKey(d)]||={},demoDevices[d.model].state);return;}if(!connected.value){error.value='请先连接 MQTT';return;}const id=requestId(),s=states[deviceKey(d)] ||= {}; (s.pending ||= {})[id]=action;const c=command(d,{action,params,request_id:id});client.publish(c.topic,c.payload,{qos:1,retain:false},e=>{if(e)error.value='发送失败';});}
-async function changeMode(){disconnect();notice.value='';error.value='';if(thirdParty.value){Object.assign(connection,{host:`${location.protocol==='https:'?'wss':'ws'}://${location.host}/mqtt`,username:'',password:''},JSON.parse(localStorage.getItem('tmcp_broker')||'{}'));}else{const s=await api('/register/status');Object.assign(connection,{host:s.mqtt_ws_uri||`${location.protocol==='https:'?'wss':'ws'}://${location.host}/mqtt`,username:account.mqttUsername||account.username,password:account.password||savedPassword(account.username)});}await refresh();if(demoMode||(autoConnect(connectionOwner())&&connection.password))connect();}
-async function add(){try{const d=deviceEntry({...addForm,version:addForm.model==='tc1'?addForm.version:'v2',...(thirdParty.value?{username:connection.username}:{})});if(thirdParty.value){if(list.value.some(x=>x.mac===d.mac))throw Error('设备已存在');localStorage.setItem('phicomm_devices',JSON.stringify([...list.value,d]));}else await api('/devices',{method:'POST',body:JSON.stringify(d)});await refresh();addForm.mac='';}catch(e){error.value=e.message;}}
-async function remove(d){if(!confirm(`移除 ${d.mac}？`))return;try{client?.unsubscribe(topics(d));if(thirdParty.value)localStorage.setItem('phicomm_devices',JSON.stringify(list.value.filter(x=>deviceKey(x)!==deviceKey(d))));else await api(`/devices/${d.namespace?'scoped/':''}${d.mac}${d.namespace?'?mqtt_username='+encodeURIComponent(d.mqtt_username||d.username):''}`,{method:'DELETE'});await refresh();}catch(e){error.value=e.message;}}
+async function changeMode(){disconnect();notice.value='';error.value='';if(thirdParty.value){Object.assign(connection,{host:`${location.protocol==='https:'?'wss':'ws'}://${location.host}/mqtt`,username:'',password:''},JSON.parse(localStorage.getItem('tmcp_broker')||'{}'));}else{const s=await api('/register/status');Object.assign(connection,{host:server.mqttWS||s.mqtt_ws_uri||`${location.protocol==='https:'?'wss':'ws'}://${location.host}/mqtt`,username:account.mqttUsername||account.username,password:account.password||savedPassword(account.username)});}await refresh();if(demoMode||(autoConnect(connectionOwner())&&connection.password))connect();}
+async function add(){try{const d=deviceEntry({...addForm,version:addForm.model==='tc1'?addForm.version:'v2',...(thirdParty.value?{username:connection.username}:{})});if(thirdParty.value){if(list.value.some(x=>x.mac===d.mac))throw Error('设备已存在');localStorage.setItem(guestKey(),JSON.stringify([...list.value,d]));}else await api('/devices',{method:'POST',body:JSON.stringify(d)});await refresh();addForm.mac='';}catch(e){error.value=e.message;}}
+async function remove(d){if(!confirm(`移除 ${d.mac}？`))return;try{client?.unsubscribe(topics(d));if(thirdParty.value)localStorage.setItem(guestKey(),JSON.stringify(list.value.filter(x=>deviceKey(x)!==deviceKey(d))));else await api(`/devices/${d.namespace?'scoped/':''}${d.mac}${d.namespace?'?mqtt_username='+encodeURIComponent(d.mqtt_username||d.username):''}`,{method:'DELETE'});await refresh();}catch(e){error.value=e.message;}}
 async function logout(){try{await api('/auth/logout',{method:'POST',body:'{}'});}catch(e){error.value=e.message;}account.username=null;account.mqttUsername=null;account.isAdmin=false;account.aliases=[];account.password='';forgetLogin();disconnect();await router.replace('/login');}
 async function changePassword(values){try{await api('/auth/password',{method:'POST',body:JSON.stringify({current_password:values.current,password:values.password})});await logout();}catch(e){error.value=e.message;}}
-onMounted(async()=>{if(route.name!=='Guest')await restoreAccount();try{aliases.value=JSON.parse(localStorage.getItem('phicomm.names.'+(account.username||'guest'))||'{}');}catch{}await changeMode();timer=setInterval(()=>now.value=Date.now(),1000);poll=setInterval(()=>{if(!thirdParty.value&&!document.hidden)refresh();},5000);});
+onMounted(async()=>{if(route.name!=='Guest')await restoreAccount();try{aliases.value=JSON.parse(localStorage.getItem('phicomm.names.'+scopeKey()+':'+(account.username||'guest'))||'{}');}catch{}await changeMode();timer=setInterval(()=>now.value=Date.now(),1000);poll=setInterval(()=>{if(!thirdParty.value&&!document.hidden)refresh();},5000);});
 onBeforeUnmount(()=>{disconnect();clearInterval(timer);clearInterval(poll);});
 </script>
 <template>
 <main class="console-page">
-<header class="console-topbar topbar"><div class="brand"><span class="kind">MQTT 管理平台</span><h1>Phicomm</h1></div><nav class="console-nav"><span class="status-pill" :class="{online:connected}">{{connected?'MQTT 已连接':'MQTT 未连接'}}</span><RouterLink v-if="account.isAdmin" class="btn" to="/admin">平台管理</RouterLink><ThemeToggle/><button v-if="account.username" @click="logout">退出</button><RouterLink v-else to="/login">登录</RouterLink></nav></header>
+<header class="console-topbar topbar"><div class="brand"><span class="kind">MQTT 管理平台</span><h1><img :src="iconURL" width="30" height="30" alt="" style="vertical-align:middle;margin-right:8px">IotCloud</h1></div><nav class="console-nav"><span class="status-pill" :class="{online:connected}">{{connected?'MQTT 已连接':'MQTT 未连接'}}</span><RouterLink v-if="account.isAdmin" class="btn" to="/admin">平台管理</RouterLink><ThemeToggle/><button v-if="account.username" @click="logout">退出</button><RouterLink v-else to="/login">登录</RouterLink></nav></header>
 <nav class="platform-tabs tabs" aria-label="主导航"><button :aria-current="page==='home'?'page':undefined" @click="page='home'">首页</button><button :aria-current="page==='settings'?'page':undefined" @click="page='settings'">设置</button></nav>
 <p v-if="error" role="alert" class="feedback error">{{error}}</p><p v-if="notice" role="status" class="feedback">{{notice}}</p>
 <template v-if="page==='home'">
@@ -121,5 +126,5 @@ onBeforeUnmount(()=>{disconnect();clearInterval(timer);clearInterval(poll);});
 <PlatformSettings :connection="connection" :connected="connected" :busy="busy" :third-party="thirdParty" :devices="list" :states="states" :add-form="addForm" :device-name="displayName" :now="now" @rename="nameDialog.open($event,displayName($event))" @mode-change="thirdParty=$event;changeMode()" @connect="manualConnect" @disconnect="manualDisconnect" @add="add" @remove="remove" @password="changePassword" @home="page='home'" @refresh="refresh"/>
 </template>
 <DeviceNameDialog ref="nameDialog" @save="renameDevice"/>
-<footer class="console-footer copyright">Copyright &copy; Phicomm Community · <a href="https://github.com/phicomm-io/phicomm-community-firmware" target="_blank" rel="noopener noreferrer">固件仓库</a> · <a href="https://github.com/phicomm-io/phicomm-community-mqtt" target="_blank" rel="noopener noreferrer">MQTT 平台仓库</a></footer></main>
+<footer class="console-footer copyright">Copyright &copy; Phicomm Community · <a href="https://github.com/phicomm-io/phicomm-community-firmware" target="_blank" rel="noopener noreferrer">固件仓库</a> · <a href="https://github.com/phicomm-io/phicomm-community-mqtt" target="_blank" rel="noopener noreferrer">MQTT 平台仓库</a> · <a href="https://github.com/phicomm-io/phicomm-community-frontend" target="_blank" rel="noopener noreferrer">前端仓库</a> · <a href="https://phicomm-io.github.io" target="_blank" rel="noopener noreferrer">项目网站</a></footer></main>
 </template>

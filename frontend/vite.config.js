@@ -1,4 +1,5 @@
 import { defineConfig } from "vite";
+import {createHash} from 'node:crypto';
 import vue from "@vitejs/plugin-vue";
 import {readFileSync, existsSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
@@ -31,8 +32,8 @@ function devicePages() {
 }
 
 export default defineConfig({
-  base: process.env.VITE_DEMO === '1' ? './' : '/',
-  plugins: [vue(), devicePages()],
+  base: process.env.VITE_BASE_PATH || './',
+  plugins: [vue(), devicePages(), webApp()],
   server: {
     port: 3000,
     proxy: {
@@ -47,3 +48,25 @@ export default defineConfig({
     },
   },
 });
+
+function webApp(){return {name:'iotcloud-webapp',generateBundle(_,bundle){
+ const files=['./','index.html','manifest.webmanifest','icons/iotcloud.svg','icons/icon-192.png','icons/icon-512.png','icons/apple-touch-icon.png',...Object.keys(bundle).filter(name=>!name.endsWith('.map'))];
+ const version=createHash('sha256').update(JSON.stringify(files)+Object.values(bundle).map(item=>item.code||item.source||'').join('')).digest('hex').slice(0,16);
+ this.emitFile({type:'asset',fileName:'sw.js',source:`
+const CACHE='iotcloud-${version}';
+const FILES=${JSON.stringify(files)};
+const urls=FILES.map(file=>new URL(file,self.registration.scope).href);
+self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(urls))));
+self.addEventListener('message',event=>{if(event.data==='ACTIVATE')self.skipWaiting();});
+self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key.startsWith('iotcloud-')&&key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim())));
+self.addEventListener('fetch',event=>{
+ const request=event.request;
+ const url=new URL(request.url);url.hash='';
+ if(request.method!=='GET'||!urls.includes(url.href))return;
+ if(request.mode==='navigate'){
+  event.respondWith(fetch(request).catch(()=>caches.open(CACHE).then(cache=>cache.match(new URL('index.html',self.registration.scope).href))));return;
+ }
+ event.respondWith(caches.open(CACHE).then(async cache=>(await cache.match(url.href))||fetch(request)));
+});
+`});
+}};}

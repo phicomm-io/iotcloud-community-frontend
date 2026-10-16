@@ -7,7 +7,11 @@ import './style.css'
 
 
 
+import {loadServer} from './serverConfig';
+import {registerWebApp} from './webapp';
 async function start(){
+ await loadServer();
+ registerWebApp();
  if(import.meta.env.VITE_DEMO === '1') await import('./demo.js');
  createApp(Root).use(router).mount('#app');
 }

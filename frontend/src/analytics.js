@@ -1,3 +1,4 @@
+import {apiURL} from './serverConfig.js';
 const pages=new Set(['/','/login','/register','/guest','/admin','/settings','/guest/settings']);
 const random=()=>Array.from(crypto.getRandomValues(new Uint8Array(16)),b=>b.toString(16).padStart(2,'0')).join('');
 let fallbackVisitor,fallbackSession;
@@ -16,6 +17,6 @@ export function track(event,page=location.pathname,model=''){
   let referrer='';try{referrer=document.referrer?new URL(document.referrer).origin:'';}catch{}
   const data={...identity(Date.now()),event,page,model,referrer,screen:innerWidth<768?'mobile':innerWidth<1200?'tablet':'desktop'};
   // Fire and forget: telemetry can never block login, MQTT or device controls.
-  fetch('/api/analytics/event',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data),keepalive:true}).catch(()=>{});
+  fetch(apiURL('/analytics/event'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data),keepalive:true}).catch(()=>{});
  }catch{ /* Analytics unavailable; normal application behavior continues. */ }
 }

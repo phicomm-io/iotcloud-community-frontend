@@ -28,6 +28,9 @@ jobs:
       - run: python3 tools/build_release.py
       - run: npx --prefix frontend playwright install --with-deps chromium
       - run: NODE_PATH=frontend/node_modules node tests/test_demos.cjs
+      - run: npm run build --prefix frontend
+      - run: node tests/static-webapp.mjs
+        working-directory: frontend
       - uses: actions/upload-artifact@v4
         with:
           name: frontend-release
