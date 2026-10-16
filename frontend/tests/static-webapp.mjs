@@ -29,8 +29,10 @@ try{
  await page.locator('summary').click();await page.getByPlaceholder('https://api.example.com（留空使用本站）').fill('https://api.example.test');
  await Promise.all([page.waitForEvent('load'),page.getByRole('button',{name:'保存并重新加载'}).click()]);await page.waitForFunction(()=>JSON.parse(localStorage.getItem('iotcloud.server')).apiOrigin==='https://api.example.test');
  await page.getByRole('heading',{name:'登录',exact:true}).waitFor();
+ await page.evaluate(()=>localStorage.setItem('tmcp_broker',JSON.stringify({host:'wss://broker.example.test/mqtt',username:''})));
  await context.setOffline(true);await page.reload();await page.getByRole('heading',{name:'登录',exact:true}).waitFor();
  await page.getByRole('link',{name:/自建 Broker 模式/}).click();await page.getByRole('heading',{name:'IotCloud',exact:true}).waitFor();
+ await page.getByText('MQTT Host 与当前网页域名不同',{exact:false}).waitFor();
  const cached=await page.evaluate(async()=>{const keys=await caches.keys();return (await Promise.all(keys.map(async key=>(await (await caches.open(key)).keys()).map(r=>r.url)))).flat();});
  assert(cached.length>10);assert(!cached.some(url=>url.includes('/api/')||url.endsWith('/config.json')));assert.deepEqual(failures,[]);
  await context.setOffline(false);

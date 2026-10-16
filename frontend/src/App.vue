@@ -30,6 +30,7 @@ function renameDevice(d,name,done){
 }
 const page=ref('home'),thirdParty=ref(route.name==='Guest'),list=ref([]),selected=ref(''),states=reactive({}),connected=ref(false),error=ref(''),notice=ref(''),busy=ref(false),now=ref(Date.now());
 const connection=reactive({host:`${location.protocol==='https:'?'wss':'ws'}://${location.host}/mqtt`,username:'',password:''});
+const differentMqttHost=computed(()=>{try{return new URL(connection.host).hostname!==location.hostname;}catch{return false;}});
 const addForm=reactive({mac:'',model:'tc1',version:'v2'});
 const active=computed(()=>{const d=list.value.find(x=>deviceKey(x)===selected.value);return d?{...states[deviceKey(d)],...d}:null;});
 
@@ -115,6 +116,7 @@ onBeforeUnmount(()=>{disconnect();clearInterval(timer);clearInterval(poll);});
 <main class="console-page">
 <header class="console-topbar topbar"><div class="brand"><span class="kind">MQTT 管理平台</span><h1><img :src="iconURL" width="30" height="30" alt="" style="vertical-align:middle;margin-right:8px">IotCloud</h1></div><nav class="console-nav"><span class="status-pill" :class="{online:connected}">{{connected?'MQTT 已连接':'MQTT 未连接'}}</span><RouterLink v-if="account.isAdmin" class="btn" to="/admin">平台管理</RouterLink><ThemeToggle/><button v-if="account.username" @click="logout">退出</button><RouterLink v-else to="/login">登录</RouterLink></nav></header>
 <nav class="platform-tabs tabs" aria-label="主导航"><button :aria-current="page==='home'?'page':undefined" @click="page='home'">首页</button><button :aria-current="page==='settings'?'page':undefined" @click="page='settings'">设置</button></nav>
+<p v-if="differentMqttHost && !demoMode" role="status" class="feedback">MQTT Host 与当前网页域名不同，请在连接设置中确认并设置正确的 MQTT Host：<strong style="overflow-wrap:anywhere">{{connection.host}}</strong>。<button @click="page='settings'">连接设置</button></p>
 <p v-if="error" role="alert" class="feedback error">{{error}}</p><p v-if="notice" role="status" class="feedback">{{notice}}</p>
 <template v-if="page==='home'">
 <div class="dashboard-grid"><aside class="surface devices-panel"><h2>设备</h2><ul class="device-list"><li v-for="d in list" :key="deviceKey(d)" class="device-list-item"><button class="device-select" :aria-pressed="selected===deviceKey(d)" @click="selected=deviceKey(d)"><DeviceSummary :device="d" :state="states[deviceKey(d)]||{}" :name="displayName(d)" :connected="connected" :now="now"/></button><button class="device-rename btn ghost icon" :aria-label="`修改 ${displayName(d)} 的名称`" @click="nameDialog.open(d,displayName(d))"><AppIcon name="edit" :size="15"/></button></li></ul><button @click="refresh">刷新列表</button><p v-if="!list.length" class="helper-text">暂无设备。设备上线后将自动显示，也可在设置中添加。</p></aside>
