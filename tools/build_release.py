@@ -40,7 +40,11 @@ def main():
         device = out / 'devices' / model
         device.mkdir(parents=True)
         (device / 'index.html').write_bytes(data)
-        (device / 'index.html.gz').write_bytes(gzip.compress(data, compresslevel=9, mtime=0))
+        # GzipFile fixes the OS byte too (gzip.compress varies by Python version).
+        compressed_page = io.BytesIO()
+        with gzip.GzipFile(filename='', fileobj=compressed_page, mode='wb', compresslevel=9, mtime=0) as zipped:
+            zipped.write(data)
+        (device / 'index.html.gz').write_bytes(compressed_page.getvalue())
         adapter = (ROOT / 'common/web/demo.js').read_text().replace('__MODEL__', model)
         demo = data.decode().replace('<head>', '<head><script>' + adapter + '</script>', 1)
         dest = out / 'demos' / model
