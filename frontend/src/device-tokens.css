@@ -1,5 +1,5 @@
 /* Synced from common/web/style.css by scripts/sync-design.py. */
-:root{color-scheme:light dark;
+:root{color-scheme:light dark;-webkit-tap-highlight-color:transparent;
  --bg:#f4f6f9;--surface:#fff;--surface-muted:#eef1f5;--text:#1d2430;--muted:#5f6b7c;--border:#dbe0e8;
  --accent:#305ed4;--accent-text:#fff;--accent-soft:#e6edfc;
  --danger:#b8353c;--danger-soft:#fbe9ea;--success:#26734c;--success-soft:#e3f3ea;--warn:#9a5b00;--warn-soft:#fdf1dc;

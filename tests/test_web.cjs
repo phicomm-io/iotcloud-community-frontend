@@ -111,6 +111,15 @@ const ACTIONS={M1:['schedules.get','schedules.put','schedules.delete','schedules
   assert(text.includes('watchdog timeout')||text.includes('看门狗超时'), 'watchdog reset is explained in diagnostics');
   assert(text.includes('32'),'raw reset reason is visible');
  }else assert(!d.querySelector('[data-key="diag.g_watchdog"]'),'TC1 does not advertise the A1/M1 watchdog');
+ // General settings must be reachable from the menu, not just a direct hash.
+ const generalLink=d.querySelector('#side a[href="#settings/device"]');
+ assert(generalLink,model+' General settings menu entry is missing');
+ generalLink.click();await new Promise(r=>setImmediate(r));
+ w.dispatchEvent(new w.Event('hashchange'));await flush();
+ assert.equal(d.querySelector('[data-settings-page="device"]').hidden,false);
+ assert.equal(generalLink.getAttribute('aria-current'),'page');
+ assert(d.querySelector('[data-settings-page="device"] #deviceName'));
+ assert(d.querySelector('[data-settings-page="device"] #webPassword'));
  // Device name round-trips through config.set.
  d.querySelector('#deviceName').value='new name';
  d.querySelector('#nameForm').dispatchEvent(new w.Event('submit',{cancelable:true}));await flush();

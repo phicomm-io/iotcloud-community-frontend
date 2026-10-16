@@ -219,7 +219,13 @@ function showRoute(){
 }
 function afterShow(page){
  if(!page)return;
- const active=document.querySelector('.side a[aria-current]');if(active&&active.scrollIntoView)active.scrollIntoView({block:'nearest',inline:'center'});
+ const active=document.querySelector('.side a[aria-current]'),side=$('side');
+ // Reveal mobile menu items without scrollIntoView scrolling the whole page.
+ if(active&&side&&side.scrollWidth>side.clientWidth){
+  const item=active.getBoundingClientRect(),menu=side.getBoundingClientRect();
+  if(item.left<menu.left)side.scrollLeft+=item.left-menu.left;
+  else if(item.right>menu.right)side.scrollLeft+=item.right-menu.right;
+ }
  const p=UI.pages[page];if(p&&p.show)p.show();
 }
 /* Wi-Fi scan is shared: start, poll, and hand the sorted list to a callback. */

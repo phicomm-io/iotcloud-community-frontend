@@ -8,6 +8,15 @@ const server=http.createServer((req,res)=>{let file=path.resolve(root,'.'+new UR
   const page=await browser.newPage(),errors=[],external=[];
   page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(!r.url().startsWith(base+'/'))external.push(r.url());});
   await page.goto(base+'/demos/'+model+'/');
+  if(model!=='platform')for(const width of [1280,390]){
+   await page.setViewportSize({width,height:900});
+   await page.locator('[data-tab="settings"]').click();
+   await page.locator('#side a[href="#settings/device"]').click();
+   await page.locator('#deviceName').waitFor({state:'visible'});
+   await page.locator('#webPassword').waitFor({state:'visible'});
+   assert.equal(await page.locator('#side a[href="#settings/device"]').getAttribute('aria-current'),'page');
+   await page.locator('[data-tab="home"]').click();
+  }
   if(model==='a1'){
    await page.locator('#filterCard').waitFor({state:'visible'});
    assert.equal(await page.locator('#filterRemaining').textContent(),'95%');
