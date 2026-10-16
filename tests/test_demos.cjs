@@ -9,7 +9,7 @@ const server=http.createServer((req,res)=>{let file=path.resolve(root,'.'+new UR
   page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(!r.url().startsWith(base+'/'))external.push(r.url());});
   await page.goto(base+'/demos/'+model+'/');
   if(model==='platform'){await page.waitForSelector('.device-select');assert.equal(await page.locator('.device-select').count(),3);for(const b of await page.locator('.device-select').all())await b.click();}
-  else{await page.evaluate(()=>{location.hash='settings/firmware';});await page.locator('#otaSource').selectOption('global');await page.getByRole('button',{name:/检查更新|Check for updates/}).click();await page.getByText(/当前已是最新版本|Already up to date/).waitFor();}
+  else{await page.evaluate(()=>{location.hash='settings/firmware';});for(const source of ['github','cn','global']){await page.locator(`#otaSources [data-source="${source}"]`).click();await page.waitForFunction(()=>[...document.querySelectorAll('#otaSources button')].every(b=>!b.disabled));await page.getByText(/当前已是最新版本|Already up to date/).waitFor();}}
   await page.waitForTimeout(100);assert.deepEqual(errors,[],model+' page errors');assert.deepEqual(external,[],model+' external requests');
   await page.setViewportSize({width:390,height:844});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),model+' mobile overflow');await page.close();console.log(model+' demo passed');
  }
