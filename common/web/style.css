@@ -1,7 +1,7 @@
 /* Unified WebUI design language for TC1, A1 and M1.
  * One stylesheet for all three offline pages; no CDN, no web fonts.
  * Tokens, then layout, then components, then per-product pages. */
-:root{color-scheme:light dark;
+:root{color-scheme:light dark;-webkit-tap-highlight-color:transparent;
  --bg:#f4f6f9;--surface:#fff;--surface-muted:#eef1f5;--text:#1d2430;--muted:#5f6b7c;--border:#dbe0e8;
  --accent:#305ed4;--accent-text:#fff;--accent-soft:#e6edfc;
  --danger:#b8353c;--danger-soft:#fbe9ea;--success:#26734c;--success-soft:#e3f3ea;--warn:#9a5b00;--warn-soft:#fdf1dc;
@@ -53,15 +53,15 @@ svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke
 .home{display:grid;gap:16px}
 
 /* Buttons */
-.btn{font:inherit;font-size:14px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:40px;padding:8px 16px;border-radius:var(--radius-s);border:1px solid var(--border);background:var(--surface);color:var(--text);cursor:pointer;text-decoration:none;width:auto}
+.btn{position:relative;font:inherit;font-size:14px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:40px;padding:8px 16px;border-radius:var(--radius-s);border:1px solid var(--border);background:var(--surface);color:var(--text);cursor:pointer;text-decoration:none;width:auto}
 .btn:hover{background:var(--surface-muted)}
 .btn.primary{background:var(--accent);color:var(--accent-text);border-color:transparent}.btn.primary:hover{filter:brightness(1.08)}
 .btn.danger{color:var(--danger);border-color:var(--danger)}.btn.danger:hover{background:var(--danger-soft)}
 .btn.ghost{border-color:transparent;background:transparent;color:var(--muted)}.btn.ghost:hover{background:var(--surface-muted);color:var(--text)}
 .btn.icon{padding:6px;min-height:32px;width:32px}
 .btn:disabled,.btn[aria-busy=true]{opacity:.55;cursor:not-allowed}
-.btn[aria-busy=true]::before{content:"";width:14px;height:14px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:spin .8s linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
+/* Keep pending feedback out of flex flow so buttons and wrapped rows stay put. */
+.btn[aria-busy=true]::before{content:"";position:absolute;left:25%;bottom:3px;width:50%;height:2px;border-radius:1px;background:currentColor;animation:pulse 1s linear infinite;pointer-events:none}
 
 /* Segmented control */
 .seg{display:inline-flex;background:var(--surface-muted);border-radius:var(--radius-s);padding:3px;gap:2px;flex-wrap:wrap}
