@@ -1,10 +1,18 @@
+// Both Legacy and TMCP devices may report relay states as booleans or 0/1.
+export function socketStates(s={}){
+ const source=Array.isArray(s.socket_states)?s.socket_states:Array.from({length:6},(_,i)=>s[`plug_${i}`]?.on);
+ return Array.from({length:6},(_,i)=>{
+  const v=source[i];
+  return v===true||v===1||v==='1'?true:v===false||v===0||v==='0'?false:undefined;
+ });
+}
 export const deviceType=d=>({tc1:'TC1 智能插排',m1:'M1 空气质量检测器',a1:'A1 空气净化器'})[d.model]||'设备';
 const number=(v,digits=0)=>v!==null&&v!==undefined&&v!==''&&Number.isFinite(Number(v))?Number(v).toFixed(digits):'—';
 export function deviceSummary(d,s={},connected=false,now=Date.now()){
  if(!connected)return '尚未连接';
  if(s.available===false)return '设备离线';
  if(d.model==='tc1'){
-  const sockets=s.socket_states||Array.from({length:6},(_,i)=>s[`plug_${i}`]?.on);
+  const sockets=socketStates(s);
   const known=sockets.length===6&&sockets.every(x=>x!==undefined&&x!==null);
   const power=s.power_watts??s.power;
   if(!known&&power===undefined)return '等待设备数据';

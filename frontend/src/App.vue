@@ -121,5 +121,5 @@ onBeforeUnmount(()=>{disconnect();clearInterval(timer);clearInterval(poll);});
 <PlatformSettings :connection="connection" :connected="connected" :busy="busy" :third-party="thirdParty" :devices="list" :states="states" :add-form="addForm" :device-name="displayName" :now="now" @rename="nameDialog.open($event,displayName($event))" @mode-change="thirdParty=$event;changeMode()" @connect="manualConnect" @disconnect="manualDisconnect" @add="add" @remove="remove" @password="changePassword" @home="page='home'" @refresh="refresh"/>
 </template>
 <DeviceNameDialog ref="nameDialog" @save="renameDevice"/>
-<footer class="console-footer">Phicomm</footer></main>
+<footer class="console-footer copyright">Copyright &copy; Phicomm Community · <a href="https://github.com/phicomm-io/phicomm-community-firmware" target="_blank" rel="noopener noreferrer">固件仓库</a> · <a href="https://github.com/phicomm-io/phicomm-community-mqtt" target="_blank" rel="noopener noreferrer">MQTT 平台仓库</a></footer></main>
 </template>

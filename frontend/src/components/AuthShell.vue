@@ -8,6 +8,6 @@ import ThemeToggle from './ThemeToggle.vue';
   <div class="auth-layout">
    <section class="account-page surface"><slot /></section>
   </div>
-  <footer class="auth-footer">phicomm-community-mqtt <span>支持 TC1 · M1 · A1</span></footer>
+  <footer class="copyright">Copyright &copy; Phicomm Community · <a href="https://github.com/phicomm-io/phicomm-community-firmware" target="_blank" rel="noopener noreferrer">固件仓库</a> · <a href="https://github.com/phicomm-io/phicomm-community-mqtt" target="_blank" rel="noopener noreferrer">MQTT 平台仓库</a></footer>
  </main>
 </template>

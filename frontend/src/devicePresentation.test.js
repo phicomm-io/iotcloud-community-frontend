@@ -11,3 +11,17 @@ test('summaries prioritize useful readings and preserve unknown and offline stat
  assert.equal(deviceSummary({model:'m1'},{sensor_valid:true,sensorAt:100,pm25:19},true,61000),'等待有效空气数据');
  assert.equal(deviceSummary({model:'tc1'},{power:23},false),'尚未连接');
 });
+
+test('Legacy and TMCP numeric relay states render consistently without inventing unknown outlets',async()=>{
+ const {socketStates}=await import('./devicePresentation.js');
+ const {deviceEntry,applyMessage,baseTopic}=await import('./deviceProtocol.js');
+ const legacy=deviceEntry({mac:'aabbccddeeff',version:'v1'}),state={};
+ for(let i=0;i<6;i++)applyMessage(legacy,state,`homeassistant/switch/AABBCCDDEEFF/socket_${i}/state`,`set socket AABBCCDDEEFF ${i} ${i%2}`);
+ assert.deepEqual(socketStates(state),[false,true,false,true,false,true]);
+ assert.equal(deviceSummary(legacy,state,true),'3 开 · 3 关');
+ const tmcp=deviceEntry({mac:'aabbccddeeff',model:'tc1',version:'v2'}),current={};
+ applyMessage(tmcp,current,baseTopic(tmcp)+'/state',JSON.stringify({socket_states:[1,0,true,false,'1','0']}));
+ assert.deepEqual(socketStates(current),[true,false,true,false,true,false]);
+ assert.deepEqual(socketStates({socket_states:[1,null,'',2]}),[true,undefined,undefined,undefined,undefined,undefined]);
+ assert.deepEqual(socketStates({plug_0:{on:0}}),[false,undefined,undefined,undefined,undefined,undefined]);
+});
