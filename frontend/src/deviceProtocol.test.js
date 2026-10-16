@@ -33,3 +33,19 @@ test('legacy HA indicator state uses the same key as the device home adapter',()
  applyMessage(d,state,'homeassistant/switch/D0BAE4632B42/led/state','set led D0BAE4632B42 1');
  assert.equal(state.led_lock.on,1);
 });
+test('A1 filter state survives MQTT replay and refresh, and filter controls use TMCP',()=>{
+ const d=deviceEntry({mac:'aabbccddeeff',model:'a1',username:'alice'}),state={};
+ const filter={used_seconds:3600,lifetime_hours:4320,remaining_percent:100,replacement_due:false};
+ applyMessage(d,state,baseTopic(d)+'/state',JSON.stringify({filter}));
+ assert.deepEqual(state.filter,filter);
+ applyMessage(d,state,baseTopic(d)+'/state','{"fan_on":true}');
+ assert.deepEqual(state.filter,filter,'partial status does not discard filter');
+ state.pending={refresh:'status.get'};
+ applyMessage(d,state,baseTopic(d)+'/result',JSON.stringify({request_id:'refresh',code:'ok',data:{filter:{...filter,used_seconds:0}}}));
+ assert.equal(state.filter.used_seconds,0);
+ for(const [action,params] of [['filter.set',{lifetime_hours:6000}],['filter.reset',{}]]){
+  const request=command(d,{action,params,request_id:'filter-test'});
+  assert.equal(request.topic,baseTopic(d)+'/command');
+  assert.deepEqual(JSON.parse(request.payload),{request_id:'filter-test',action,params});
+ }
+});
