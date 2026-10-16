@@ -30,3 +30,5 @@ python3 tools/build_release.py
 设备模拟器：`node scripts/device-simulator.mjs`。平台开发：`npm --prefix frontend run dev`，API / MQTT 代理可用 `API_TARGET`、`MQTT_TARGET` 配置。浏览器集成测试通过 `PHICOMM_WEB_URL`、`PHICOMM_MQTT_WS` 指向独立测试后端，不在公开 CI 使用生产凭据。
 
 初始设备前端来自固件 commit `86eaf97`，平台前端来自 MQTT 平台 commit `056c56c`。保留源文件中的上游版权与许可声明；此迁移不改变原文件授权。
+
+Frontend extraction source: firmware commit [`b9cdca3e63983acf5fc6f9c145ac0f5e7581a93f`](https://github.com/phicomm-io/phicomm-community-firmware/commit/b9cdca3e63983acf5fc6f9c145ac0f5e7581a93f), after the A1/M1 stability, panel feedback and watchdog branches were merged.
