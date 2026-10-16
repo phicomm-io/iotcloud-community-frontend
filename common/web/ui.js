@@ -512,7 +512,9 @@ function clockCard({load,save,status}){
 let initialized=false,failures=0,lastSuccess=0,loading=null;
 async function load(){
  try{
-  const raw=await command('status.get');failures=0;lastSuccess=Date.now();const s=UI.acceptStatus(raw);
+  const raw=await command('status.get');failures=0;lastSuccess=Date.now();
+  if(raw.ota_active&&raw.ota_mode){UI.pages.firmware?.status(raw);return raw;}
+  const s=UI.acceptStatus(raw);
   $('title').textContent=UI.device.model+' '+(s.name||'');
   renderChips(s);renderBanners(s,false);
   if(!initialized){for(const p of Object.values(UI.pages))if(p.init)p.init(s);initialized=true;}
