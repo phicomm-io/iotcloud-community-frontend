@@ -6,6 +6,7 @@
 const D={
 'import.platform':['Open IotCloud','打开 IotCloud'],
 'import.title':['Import MQTT configuration','导入 MQTT 配置'],
+'import.preview':['Broker: {host}:{port} · Username: {user}','Broker：{host}:{port} · 用户名：{user}'],
 'import.source':['Configuration source: {origin}','配置来源：{origin}'],
 'import.accept':['Receive and prefill','接收并预填'],
 'import.help':['Only accept a transfer you started from a trusted platform. Review the fields and save to apply. The device never exports its saved password.','仅接收你从可信平台发起的配置。接收后请检查下方表单，点击保存才会生效。设备不会导出已保存的密码。'],

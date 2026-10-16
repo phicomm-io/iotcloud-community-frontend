@@ -261,7 +261,7 @@ function mqttImportPanel(dev,fields){
  const source=window.opener;
  const status=h('p',{role:'status'}),accept=h('button',{type:'button',class:'btn primary',disabled:true},t('import.accept')),
  cancel=h('button',{type:'button',class:'btn'},t('common.cancel'));
- box.append(h('h2',{},t('import.title')),h('p',{},t('import.source',{origin:ticket.origin})),
+ box.append(h('h2',{},t('import.title')),h('p',{},t('import.source',{origin:ticket.origin})),h('p',{},t('import.preview',{host:ticket.host,port:ticket.port,user:ticket.user||'—'})),
   h('p',{class:'help'},t('import.help')),h('p',{class:'help'},t('import.http')),
   h('div',{class:'form-actions'},accept,cancel),status);
  let waiting=false,done=false,timer,original=null;
@@ -269,13 +269,13 @@ function mqttImportPanel(dev,fields){
  const detach=()=>{window.removeEventListener('message',receive);clearTimeout(timer);try{window.opener=null;}catch{}};
  const clear=()=>{fields.pass.value='';if(original){fields.host.value=original.host;fields.port.value=original.port;fields.user.value=original.user;if(fields.protocol)fields.protocol.value=original.protocol;fields.clear.checked=original.clear;original=null;}waiting=false;done=true;detach();accept.disabled=true;};
  box.saved=()=>{original=null;fields.pass.value='';clearTimeout(timer);};
+ box.guard=()=>{if(waiting)throw Error(t('import.waiting'));};
  const finish=()=>{clear();status.textContent=t('import.expired');};
  const receive=e=>{
   if(!waiting||done||!IotProvision.packet(e,{source,origin:ticket.origin,id:ticket.id,expires:ticket.expires},'iotcloud.provision.config'))return;
   let data;
-  try{data=IotProvision.config(e.data.config);if(data.expires!==ticket.expires)throw Error();}catch{finish();status.textContent=t('import.invalid');return;}
+  try{data=IotProvision.config(e.data.config);if(data.expires!==ticket.expires||data.host!==ticket.host||data.port!==ticket.port||data.user!==ticket.user)throw Error();}catch{finish();status.textContent=t('import.invalid');return;}
   // Only front-end fields are touched. config.set remains the normal save flow.
-  original={host:fields.host.value,port:fields.port.value,user:fields.user.value,protocol:fields.protocol?.value,clear:fields.clear.checked};
   fields.host.value=data.host;fields.port.value=String(data.port);fields.user.value=data.user;fields.pass.value=data.password;
   if(fields.protocol)fields.protocol.value='tmcp';fields.clear.checked=data.password==='';
   waiting=false;done=true;detach();accept.hidden=true;status.textContent=t('import.received');
@@ -286,6 +286,8 @@ function mqttImportPanel(dev,fields){
  cancel.onclick=()=>{clear();box.hidden=true;};
  accept.onclick=()=>{
   if(done||Date.now()>=ticket.expires||!source){finish();return;}
+  original={host:fields.host.value,port:fields.port.value,user:fields.user.value,protocol:fields.protocol?.value,clear:fields.clear.checked};
+  fields.host.value=ticket.host;fields.port.value=String(ticket.port);fields.user.value=ticket.user;fields.pass.value='';if(fields.protocol)fields.protocol.value='tmcp';fields.clear.checked=false;
   waiting=true;accept.disabled=true;status.textContent=t('import.waiting');
   source.postMessage({type:'iotcloud.provision.ready',id:ticket.id},ticket.origin);
  };
@@ -312,6 +314,7 @@ function mqttPage(dev){
   h('details',{class:'more'},h('summary',{i18n:'common.advanced'}),...(protocol?[h('label',{class:'field'},h('span',{i18n:'mqtt.mode'}),protocol)]:[]),clear),info(dev.haHintKey),
   h('div',{class:'form-actions'},h('button',{class:'btn primary',type:'submit'},h('span',{i18n:'common.save'}))));
  onSubmit(form,()=>{
+  imported.guard?.();
   const enc=new TextEncoder();if(enc.encode(user.value).length>63||enc.encode(pass.value).length>256)throw Error(t('mqtt.too_long'));
   return api('/mqtt/config',{host:host.value.trim(),port:Number(port.value),user:user.value,password:pass.value,clear_password:clear.querySelector('input').checked,...(protocol?{protocol:protocol.value}:{})}).then(result=>{pass.value='';imported.saved?.();return result;});
  });

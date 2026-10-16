@@ -25,12 +25,13 @@ function platformOrigin(raw){
 function nonce(){const a=new Uint8Array(32);crypto.getRandomValues(a);return Array.from(a,n=>n.toString(16).padStart(2,'0')).join('');}
 function readTicket(hash,now=Date.now()){
  if(!hash.startsWith('#iotcloud-import='))return null;
- if(hash.length>1024)throw Error('ticket');
+ if(hash.length>2048)throw Error('ticket');
  const p=new URLSearchParams(hash.slice(1));
- if([...p.keys()].sort().join(',')!=='expires,iotcloud-import,origin')throw Error('ticket');
+ if([...p.keys()].sort().join(',')!=='expires,host,iotcloud-import,origin,port,user')throw Error('ticket');
  const id=p.get('iotcloud-import'),expires=Number(p.get('expires')),origin=platformOrigin(p.get('origin'));
  if(!/^[a-f0-9]{64}$/.test(id)||!Number.isSafeInteger(expires)||expires<=now||expires>now+TTL)throw Error('ticket');
- return {id,expires,origin};
+ const visible=config({v:VERSION,host:p.get('host'),port:Number(p.get('port')),user:p.get('user'),password:'',protocol:'tmcp',expires},now);
+ return {id,expires,origin,host:visible.host,port:visible.port,user:visible.user};
 }
 function config(value,now=Date.now()){
  if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).sort().join(',')!=='expires,host,password,port,protocol,user,v')throw Error('config');

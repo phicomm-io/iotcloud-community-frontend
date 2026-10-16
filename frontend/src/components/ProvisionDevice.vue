@@ -16,7 +16,7 @@ function open(){
  catch{error.value='请填写有效的局域网设备 IP、Broker 主机名、端口和凭据。平台需使用 HTTPS。';return;}
  if(!trusted.value){error.value='请先确认设备地址和局域网可信。';return;}
  const id=P.nonce(),expires=values.expires;
- target.hash=new URLSearchParams({'iotcloud-import':id,origin:location.origin,expires:String(expires)}).toString();
+ target.hash=new URLSearchParams({'iotcloud-import':id,origin:location.origin,expires:String(expires),host:values.host,port:String(values.port),user:values.user}).toString();
  // The new tab first stays on this origin; navigation never contains credentials.
  const popup=window.open('about:blank','_blank');
  if(!popup){error.value='浏览器阻止了新窗口，请允许后重试。';return;}
@@ -52,7 +52,7 @@ onBeforeUnmount(cancel);
 <div class="fields"><label>设备 MQTT 用户名<input v-model="user" maxlength="63" :disabled="pending" autocomplete="off"/></label><label>设备 MQTT 密码<input v-model="password" type="password" maxlength="256" :disabled="pending" autocomplete="off"/></label></div>
 <p class="help">仅配置 TMCP。设备需要支持本功能的新版 WebUI，并可能要求设备网页密码。端口是设备使用的 MQTT TCP 端口，不是网页的 WSS 端口。</p>
 <label class="trust-device"><input v-model="trusted" type="checkbox" required :disabled="pending"/>我已核对设备 IP，仅在可信局域网内发送。HTTP 设备页面不能防止网络窃听或篡改。</label>
-<p class="help">URL 不包含账号密码。接收前会再次确认来源，配置只预填到设备前端，检查并保存后才生效。</p>
+<p class="help">链接只含 Broker 地址、端口、用户名和一次性握手信息，不含密码。接收前会再次确认来源，配置只预填到设备前端，检查并保存后才生效。</p>
 <div class="form-actions"><button class="btn primary" :disabled="pending">打开设备并填写</button><button v-if="pending" type="button" class="btn" @click="cancel();state='传递已取消'">取消传递</button></div>
 </form>
 <p v-if="state" role="status">{{state}}</p><p v-if="error" role="alert">{{error}}</p>

@@ -10,8 +10,8 @@ test('provisioning permits only explicit local device origins and HTTPS platform
 });
 test('short-lived ticket rejects expired, excessive, duplicate and credential-bearing fields',()=>{
  const now=Date.now(),id=P.nonce(),origin='https://platform.example',expires=now+P.TTL;
- const hash='#'+new URLSearchParams({'iotcloud-import':id,origin,expires});
- assert.deepEqual(P.readTicket(hash,now),{id,origin,expires});
+ const hash='#'+new URLSearchParams({'iotcloud-import':id,origin,expires,host:'broker.example',port:1883,user:'demo'});
+ assert.deepEqual(P.readTicket(hash,now),{id,origin,expires,host:'broker.example',port:1883,user:'demo'});
  assert(!hash.includes('password'));assert.equal(P.readTicket('#settings/mqtt'),null);
  for(const extra of ['&password=secret','&origin=https://evil.example'])assert.throws(()=>P.readTicket(hash+extra,now));
  assert.throws(()=>P.readTicket(hash,expires));assert.throws(()=>P.readTicket(hash,now-1));
