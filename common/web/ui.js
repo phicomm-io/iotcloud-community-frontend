@@ -7,6 +7,13 @@
 'use strict';
 const {t}=I18N;
 const $=id=>document.getElementById(id);
+// Remove the non-secret handshake fragment before any async device requests.
+let importTicket=null,importInvalid=false;
+if(location.hash.startsWith('#iotcloud-import=')){
+ try{importTicket=IotProvision.readTicket(location.hash);}catch{importInvalid=true;}
+ history.replaceState(null,'',location.pathname+location.search+'#settings/mqtt');
+}
+
 function h(tag,props,...kids){
  const el=document.createElement(tag);
  for(const [k,v] of Object.entries(props||{})){
@@ -246,6 +253,49 @@ function wifiPage(){
    ['wifi.ssid',s.ssid||'—'],['wifi.ip',s.ip||'—'],s.ap_active?['wifi.ap',s.ap_name]:['wifi.saved_password',t(s.wifi_password_set?'common.yes':'common.no')]]));},
   init(s){ssid.value=s.ssid||'';}};
 }
+function mqttImportPanel(dev,fields){
+ const box=h('section',{class:'card stack',id:'mqttImport',hidden:!importTicket&&!importInvalid});
+ if(importInvalid){box.append(h('p',{role:'alert'},t('import.invalid')));return box;}
+ if(!importTicket)return box;
+ const ticket=importTicket;importTicket=null;
+ const source=window.opener;
+ const status=h('p',{role:'status'}),accept=h('button',{type:'button',class:'btn primary',disabled:true},t('import.accept')),
+ cancel=h('button',{type:'button',class:'btn'},t('common.cancel'));
+ box.append(h('h2',{},t('import.title')),h('p',{},t('import.source',{origin:ticket.origin})),
+  h('p',{class:'help'},t('import.help')),h('p',{class:'help'},t('import.http')),
+  h('div',{class:'form-actions'},accept,cancel),status);
+ let waiting=false,done=false,timer,original=null;
+ box.activate=()=>{if(!done&&source&&Date.now()<ticket.expires)accept.disabled=false;};
+ const detach=()=>{window.removeEventListener('message',receive);clearTimeout(timer);try{window.opener=null;}catch{}};
+ const clear=()=>{fields.pass.value='';if(original){fields.host.value=original.host;fields.port.value=original.port;fields.user.value=original.user;if(fields.protocol)fields.protocol.value=original.protocol;fields.clear.checked=original.clear;original=null;}waiting=false;done=true;detach();accept.disabled=true;};
+ box.saved=()=>{original=null;fields.pass.value='';clearTimeout(timer);};
+ const finish=()=>{clear();status.textContent=t('import.expired');};
+ const receive=e=>{
+  if(!waiting||done||!IotProvision.packet(e,{source,origin:ticket.origin,id:ticket.id,expires:ticket.expires},'iotcloud.provision.config'))return;
+  let data;
+  try{data=IotProvision.config(e.data.config);if(data.expires!==ticket.expires)throw Error();}catch{finish();status.textContent=t('import.invalid');return;}
+  // Only front-end fields are touched. config.set remains the normal save flow.
+  original={host:fields.host.value,port:fields.port.value,user:fields.user.value,protocol:fields.protocol?.value,clear:fields.clear.checked};
+  fields.host.value=data.host;fields.port.value=String(data.port);fields.user.value=data.user;fields.pass.value=data.password;
+  if(fields.protocol)fields.protocol.value='tmcp';fields.clear.checked=data.password==='';
+  waiting=false;done=true;detach();accept.hidden=true;status.textContent=t('import.received');
+  source.postMessage({type:'iotcloud.provision.received',id:ticket.id},ticket.origin);
+  // Never leave an unsaved imported host paired with the device's old password.
+  timer=setTimeout(()=>{clear();status.textContent=t('import.expired');},Math.max(0,ticket.expires-Date.now()));
+ };
+ cancel.onclick=()=>{clear();box.hidden=true;};
+ accept.onclick=()=>{
+  if(done||Date.now()>=ticket.expires||!source){finish();return;}
+  waiting=true;accept.disabled=true;status.textContent=t('import.waiting');
+  source.postMessage({type:'iotcloud.provision.ready',id:ticket.id},ticket.origin);
+ };
+ if(!source){accept.disabled=true;status.textContent=t('import.no_opener');return box;}
+ window.addEventListener('message',receive);
+ timer=setTimeout(finish,Math.max(0,ticket.expires-Date.now()));
+ window.addEventListener('pagehide',clear,{once:true});
+ window.addEventListener('hashchange',()=>{if(location.hash!=='#settings/mqtt')clear();});
+ return box;
+}
 function mqttPage(dev){
  const sum=h('div');
  const host=h('input',{id:'mqttHost',maxLength:dev.mqttHostMax||127,placeholder:t('mqtt.host_ph')});
@@ -254,6 +304,7 @@ function mqttPage(dev){
  const pass=h('input',{id:'mqttPassword',type:'password',maxLength:256,autocomplete:'new-password',placeholder:t('mqtt.pass_ph')});
  const protocol=dev.model==='TC1'?h('select',{id:'mqttMode'},h('option',{value:'tmcp'},'TMCP (v2)'),h('option',{value:'legacy'},'Legacy (v1)')):null;
  const clear=switchRow('clearMqttPassword','mqtt.clear','mqtt.clear_desc');
+ const imported=mqttImportPanel(dev,{host,port,user,pass,protocol,clear:clear.querySelector('input')});
  const form=h('form',{id:'mqttForm',class:'stack'},
   h('div',{class:'fields',style:'grid-template-columns:minmax(0,3fr) minmax(90px,1fr)'},
    h('label',{class:'field'},h('span',{i18n:'mqtt.host'}),host),h('label',{class:'field'},h('span',{i18n:'mqtt.port'}),port)),
@@ -262,12 +313,12 @@ function mqttPage(dev){
   h('div',{class:'form-actions'},h('button',{class:'btn primary',type:'submit'},h('span',{i18n:'common.save'}))));
  onSubmit(form,()=>{
   const enc=new TextEncoder();if(enc.encode(user.value).length>63||enc.encode(pass.value).length>256)throw Error(t('mqtt.too_long'));
-  return api('/mqtt/config',{host:host.value.trim(),port:Number(port.value),user:user.value,password:pass.value,clear_password:clear.querySelector('input').checked,...(protocol?{protocol:protocol.value}:{})});
+  return api('/mqtt/config',{host:host.value.trim(),port:Number(port.value),user:user.value,password:pass.value,clear_password:clear.querySelector('input').checked,...(protocol?{protocol:protocol.value}:{})}).then(result=>{pass.value='';imported.saved?.();return result;});
  });
- return {el:h('div',{class:'stack'},pageHead('nav.mqtt','mqtt.lead'),sum,card('mqtt.broker',null,form)),
+ return {el:h('div',{class:'stack'},pageHead('nav.mqtt','mqtt.lead'),sum,imported,card('mqtt.broker',null,h('p',{class:'help'},h('a',{href:'https://phicomm-io.github.io/iotcloud/#/',target:'_blank',rel:'noopener noreferrer'},t('import.platform'))),form)),
   status(s){sum.replaceChildren(summary([['mqtt.status',!s.mqtt_host?t('state.off'):s.mqtt_connected?t('state.ready'):t('s.'+(s.mqtt_status||'connecting')),!s.mqtt_host?'':s.mqtt_connected?'ok':'warn'],
    ['mqtt.host',s.mqtt_host?s.mqtt_host+':'+s.mqtt_port:'—'],['mqtt.mode',t(s.mqtt_topic_mode==='legacy'?'mqtt.mode_legacy':'mqtt.mode_tmcp')],['mqtt.user',s.mqtt_user||'—']]));},
-  init(s){if(protocol)protocol.value=s.mqtt_protocol||s.mqtt_topic_mode||'tmcp';host.value=s.mqtt_host||'';port.value=s.mqtt_port||1883;user.value=s.mqtt_user||'';}};
+  init(s){if(protocol)protocol.value=s.mqtt_protocol||s.mqtt_topic_mode||'tmcp';host.value=s.mqtt_host||'';port.value=s.mqtt_port||1883;user.value=s.mqtt_user||'';imported.activate?.();}};
 }
 function firmwarePage(dev){
  const online=h('section',{class:'card stack',hidden:!UI.caps?.actions?.includes('ota.sources.get')});

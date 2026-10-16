@@ -4,6 +4,17 @@
 (()=>{
 'use strict';
 const D={
+'import.platform':['Open IotCloud','打开 IotCloud'],
+'import.title':['Import MQTT configuration','导入 MQTT 配置'],
+'import.source':['Configuration source: {origin}','配置来源：{origin}'],
+'import.accept':['Receive and prefill','接收并预填'],
+'import.help':['Only accept a transfer you started from a trusted platform. Review the fields and save to apply. The device never exports its saved password.','仅接收你从可信平台发起的配置。接收后请检查下方表单，点击保存才会生效。设备不会导出已保存的密码。'],
+'import.http':['HTTP cannot protect against LAN interception or tampering. Use only on a trusted network.','HTTP 无法防止局域网窃听或篡改，请仅在可信网络使用。'],
+'import.invalid':['Invalid import request. Start again from the platform.','导入请求无效，请从平台重新发起。'],
+'import.expired':['Transfer cancelled or expired. Start again from the platform.','传递已取消或过期，请从平台重新发起。'],
+'import.waiting':['Waiting for configuration…','正在等待配置…'],
+'import.received':['Configuration prefilled. Review the MQTT Host, port and account below, then save.','配置已预填。请核对下方 MQTT Host、端口与账号，再点击保存。'],
+'import.no_opener':['The platform window is unavailable. Keep it open and restart the transfer.','无法连接平台窗口，请保持平台页面打开并重新发起传递。'],
 'fw.online':['Online updates','在线更新'],'fw.check':['Check for updates','检查更新'],'fw.install_online':['Download and install','下载并安装'],'fw.notes':['Release notes','发布说明'],
 'fw.source_cn':['Mainland China mirror','境内镜像'],'fw.source_global':['Global server','境外服务器'],
 'fw.check_idle':['Choose a source and check','选择来源后检查更新'],'fw.check_checking':['Checking…','正在检查…'],'fw.check_available':['Update available','发现新版本'],'fw.check_up_to_date':['Already up to date','当前已是最新版本'],'fw.check_failed':['Update check failed; try another source','检查失败，请重试或切换来源'],'fw.confirm_online':['Install this signed update and restart the device?','安装此签名更新并重启设备？'],

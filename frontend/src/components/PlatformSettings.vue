@@ -4,7 +4,8 @@ import {account} from '../account';
 import {deviceKey} from '../deviceProtocol';
 import DeviceSummary from './DeviceSummary.vue';
 import AppIcon from './AppIcon.vue';
-const props=defineProps({connection:Object,connected:Boolean,busy:Boolean,thirdParty:Boolean,devices:Array,states:Object,addForm:Object,deviceName:Function,now:Number});
+import ProvisionDevice from './ProvisionDevice.vue';
+const props=defineProps({connection:Object,deviceBroker:Object,connected:Boolean,busy:Boolean,thirdParty:Boolean,devices:Array,states:Object,addForm:Object,deviceName:Function,now:Number});
 const emit=defineEmits(['mode-change','connect','disconnect','add','remove','password','home','refresh','rename']);
 const section=ref('connection'),showPassword=ref(false),adding=ref(false),currentPassword=ref(''),newPassword=ref('');
 const sections=computed(()=>[{id:'connection',title:'MQTT 连接',description:'服务器与连接凭据',icon:'cloud'},{id:'devices',title:'设备管理',description:'设备列表与添加',icon:'plug'},...(account.username?[{id:'account',title:'账号安全',description:'账号信息与密码',icon:'shield'}]:[])]);
@@ -20,6 +21,7 @@ function status(d){return !props.connected?'未连接':props.states[deviceKey(d)
 </aside>
 <div class="settings-content">
 <template v-if="section==='connection'">
+<ProvisionDevice :connection="connection" :broker="deviceBroker"/>
 <section class="card settings-card">
 <header class="settings-card-heading"><span class="settings-icon"><AppIcon name="cloud" :size="23"/></span><div><h2>MQTT 连接</h2><p class="help">选择服务器，建立设备与平台之间的连接。</p></div><span class="badge" :class="connected?'ok':''">{{busy?'连接中':connected?'已连接':'未连接'}}</span></header>
 <div v-if="account.username" class="settings-block"><div class="field-title"><h3>连接方式</h3><p class="help">使用平台服务，或连接自己的 MQTT 服务器。</p></div><div class="broker-options" role="radiogroup" aria-label="连接模式"><button type="button" role="radio" :aria-checked="!thirdParty" :disabled="busy" @click="!thirdParty||emit('mode-change',false)"><AppIcon name="cloud"/><span><b>平台 Broker</b><small>使用当前账号连接</small></span><span class="choice-dot"></span></button><button type="button" role="radio" :aria-checked="thirdParty" :disabled="busy" @click="thirdParty||emit('mode-change',true)"><AppIcon name="settings"/><span><b>第三方 Broker</b><small>使用自己的服务器</small></span><span class="choice-dot"></span></button></div></div>
@@ -32,6 +34,7 @@ function status(d){return !props.connected?'未连接':props.states[deviceKey(d)
 <div class="settings-tip"><AppIcon name="signal" :size="20"/><div><b>连接之后</b><p>使用相同 MQTT 账号的 TMCP 设备会自动出现在设备列表中。也可以前往设备管理手动添加。</p><button class="btn ghost" @click="section='devices'">查看设备管理<AppIcon name="arrow" :size="15"/></button></div></div>
 </template>
 <template v-else-if="section==='devices'">
+<ProvisionDevice :connection="connection" :broker="deviceBroker"/>
 <section class="card settings-card">
 <header class="settings-card-heading"><span class="settings-icon"><AppIcon name="plug" :size="23"/></span><div><h2>设备管理</h2><p class="help">在这里查看和管理当前{{thirdParty?'浏览器':'账号'}}的设备。</p></div><span class="badge">{{devices.length}} 台</span></header>
 <div class="device-toolbar"><span class="help">{{online}} 台在线 · {{devices.length}} 台设备</span><div><button class="btn" @click="emit('refresh')" aria-label="刷新设备列表">刷新</button><button class="btn primary" :aria-expanded="adding" @click="adding=!adding"><AppIcon :name="adding?'close':'plus'" :size="17"/>{{adding?'取消添加':'添加设备'}}</button></div></div>

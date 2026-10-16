@@ -34,7 +34,10 @@ try{
  await page.getByRole('link',{name:/自建 Broker 模式/}).click();await page.getByRole('heading',{name:'IotCloud',exact:true}).waitFor();
  const reminder=page.getByRole('status').filter({hasText:'配置 IoT 设备时'});
  await reminder.waitFor();assert.equal(await reminder.locator('strong').textContent(),'broker.example.test');
- assert.equal(await reminder.getByRole('button').count(),0);
+ await reminder.getByRole('button',{name:'我知道了'}).click();assert.equal(await reminder.count(),0);
+ await page.reload();await page.getByRole('heading',{name:'IotCloud',exact:true}).waitFor();assert.equal(await page.getByText('配置 IoT 设备时',{exact:false}).count(),0);
+ await page.getByRole('navigation',{name:'主导航'}).getByRole('button',{name:'设置',exact:true}).click();
+ await page.getByRole('heading',{name:'配置本地 IoT 设备',exact:true}).waitFor();
  const cached=await page.evaluate(async()=>{const keys=await caches.keys();return (await Promise.all(keys.map(async key=>(await (await caches.open(key)).keys()).map(r=>r.url)))).flat();});
  assert(cached.length>10);assert(!cached.some(url=>url.includes('/api/')||url.endsWith('/config.json')));assert.deepEqual(failures,[]);
  await context.setOffline(false);

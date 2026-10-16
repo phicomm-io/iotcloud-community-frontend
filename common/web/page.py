@@ -11,7 +11,7 @@ def render_page(path):
     text = path.read_text()
     # The product page lists its own fragments; a name resolves to common/web
     # first and to the product's web directory second.
-    for name in ("style.css", "i18n.js", "service.js", "ui.js", "automation.js", "page.js"):
+    for name in ("style.css", "i18n.js", "service.js", "provision.js", "ui.js", "automation.js", "page.js"):
         content = _source(path, name)
         for marker in ("/* @include " + name + " */", "<!-- @include " + name + " -->"):
             text = text.replace(marker, content)
