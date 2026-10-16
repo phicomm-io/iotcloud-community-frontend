@@ -37,3 +37,5 @@ label{display:grid;gap:6px;font-size:14px;min-width:0}input[type=email]{font:inh
  .device-refresh{width:44px;min-height:44px;flex-shrink:0;padding:8px}
  .device-host-hint{padding:8px 10px;margin:0 0 12px;gap:8px;font-size:12px;align-items:center}.device-host-hint>button{min-height:44px;padding:8px;font-size:12px}.device-host-hint summary{line-height:1.5}
 }
+
+.devices-panel>.add-device-entry{width:100%;margin-top:12px}

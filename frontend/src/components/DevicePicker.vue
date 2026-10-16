@@ -4,7 +4,7 @@ import {deviceKey} from '../deviceProtocol';
 import DeviceSummary from './DeviceSummary.vue';
 import AppIcon from './AppIcon.vue';
 defineProps({devices:Array,selected:String,states:Object,deviceName:Function,connected:Boolean,now:Number});
-const emit=defineEmits(['select','refresh']);
+const emit=defineEmits(['select','refresh','add']);
 const dialog=ref(),list=ref();
 let media,overflow,trigger;
 function unlock(){
@@ -25,6 +25,7 @@ async function open(){
  const selected=list.value.querySelector('[aria-pressed=true]');
  if(selected)list.value.scrollTop+=selected.getBoundingClientRect().top-list.value.getBoundingClientRect().top;
 }
+function add(){close();emit('add');}
 function select(device){emit('select',deviceKey(device));close();}
 function keydown(event){
  if(event.key!=='Tab')return;
@@ -41,6 +42,7 @@ defineExpose({open});
 <template>
  <dialog ref="dialog" class="device-picker" aria-labelledby="device-picker-title" @cancel="unlock" @close="closed" @click="backdrop" @keydown="keydown">
   <header><h2 id="device-picker-title">切换设备 <small>{{devices.length}} 台</small></h2><button type="button" aria-label="关闭设备列表" autofocus @click="close"><AppIcon name="close"/></button></header>
+  <button class="add-device-entry" type="button" @click="add"><AppIcon name="plus" :size="17"/>添加设备</button>
   <ul ref="list" class="picker-list">
    <li v-for="device in devices" :key="deviceKey(device)"><button type="button" :aria-pressed="selected===deviceKey(device)" @click="select(device)"><DeviceSummary :device="device" :state="states[deviceKey(device)]||{}" :name="deviceName(device)" :connected="connected" :now="now"/><AppIcon v-if="selected===deviceKey(device)" name="check"/></button></li>
    <li v-if="!devices.length" class="help">暂无设备，可在设置中添加。</li>
@@ -56,5 +58,6 @@ defineExpose({open});
 .device-picker button{min-height:44px}.device-picker header button{width:44px;padding:8px}
 .picker-list{list-style:none;margin:0;padding:12px 16px;overflow-y:auto;overscroll-behavior:contain;min-height:0;display:grid;gap:10px}
 .picker-list>li>button{width:100%;padding:12px;justify-content:flex-start;text-align:left}.picker-list>li>button[aria-pressed=true]{border-color:var(--accent);background:var(--accent-soft)}
+.device-picker>.add-device-entry{margin:12px 16px 0;flex-shrink:0}
 .device-picker footer{border-top:1px solid var(--border);padding-bottom:max(12px,env(safe-area-inset-bottom))}
 </style>

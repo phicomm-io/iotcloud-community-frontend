@@ -7,9 +7,9 @@ import AppIcon from './AppIcon.vue';
 import ProvisionDevice from './ProvisionDevice.vue';
 import NodeSelector from './NodeSelector.vue';
 const demoMode=import.meta.env.VITE_DEMO==='1';
-const props=defineProps({connection:Object,deviceBroker:Object,connected:Boolean,busy:Boolean,thirdParty:Boolean,devices:Array,states:Object,addForm:Object,deviceName:Function,now:Number});
+const props=defineProps({initialSection:{type:String,default:'connection'},connection:Object,deviceBroker:Object,connected:Boolean,busy:Boolean,thirdParty:Boolean,devices:Array,states:Object,addForm:Object,deviceName:Function,now:Number});
 const emit=defineEmits(['mode-change','connect','disconnect','add','remove','password','mqtt-password','home','refresh','rename']);
-const section=ref('connection'),showPassword=ref(false),adding=ref(false),currentPassword=ref(''),newPassword=ref(''),mqttCurrent=ref(''),mqttNew=ref('');
+const section=ref(props.initialSection),showPassword=ref(false),adding=ref(false),currentPassword=ref(''),newPassword=ref(''),mqttCurrent=ref(''),mqttNew=ref('');
 const sections=computed(()=>[{id:'connection',title:'MQTT 连接',description:'服务器与连接凭据',icon:'cloud'},{id:'devices',title:'设备管理',description:'设备列表与添加',icon:'plug'},...(account.username?[{id:'account',title:'账号安全',description:'账号信息与密码',icon:'shield'}]:[])]);
 const online=computed(()=>props.devices.filter(d=>props.connected&&props.states[deviceKey(d)]?.available===true).length);
 function status(d){return !props.connected?'未连接':props.states[deviceKey(d)]?.available===true?'在线':props.states[deviceKey(d)]?.available===false?'离线':'状态未知';}
