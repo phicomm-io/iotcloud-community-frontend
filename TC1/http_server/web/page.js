@@ -90,7 +90,7 @@ UI.start({
  scheduleLead:'sch.lead_tc1',interval:3000,hasButtons:true,
  groups:[['grp.network',['network','mqtt']],['grp.device',['device']],['grp.auto',['schedule','buttons']],['grp.system',['firmware','diagnostics','logs','maintenance']]],
  nav:{network:'nav.wifi',mqtt:'nav.mqtt',device:'nav.general',schedule:'nav.schedule',buttons:'nav.buttons',firmware:'nav.firmware',diagnostics:'nav.diagnostics',logs:'nav.logs',maintenance:'nav.maintenance'},
- pages:{},
+ pages:{device:{}},
  diagGroups:[['diag.g_sockets',['socket_names','socket_states','child_lock','led_enabled']],
   ['diag.g_power',['report_seconds','powerCoefficientX100']],
   ['diag.g_time',['time_synced','utc_time']],['diag.g_lan',['mask','gateway']]],
