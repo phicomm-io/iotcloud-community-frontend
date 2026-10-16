@@ -3,6 +3,13 @@ export function legacyCredentials(storage = localStorage) {
  try {
   const value = JSON.parse(storage.getItem('mqtt_config') || 'null');
   if (typeof value?.username !== 'string' || !value.username.trim() || typeof value.password !== 'string' || !value.password) return null;
+  // Never prefill a different node with legacy Broker credentials.
+  if(globalThis.location?.hostname){
+   const host=new URL(scopeKey()).hostname;
+   let legacyHost='mqtt.fjrcn.cn';
+   try{if(value.host)legacyHost=new URL(value.host).hostname;}catch{return null;}
+   if(host!==legacyHost)return null;
+  }
   return {username:value.username, password:value.password};
  } catch { return null; }
 }
