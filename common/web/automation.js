@@ -213,7 +213,7 @@ function buttonsPage(dev){
  let filterStatus,filterHours;
  function filterCards(){
   if(dev.model!=='A1'||!UI.caps.actions.includes('filter.get'))return [];
-  filterStatus=h('p',{'data-filter-status':''});filterHours=h('input',{type:'number',min:1,max:100000,required:true,'data-filter-hours':''});
+  filterStatus=h('p',{'data-filter-status':''});filterHours=h('input',{type:'number',min:1,max:20000,required:true,'data-filter-hours':''});
   const form=h('form',{class:'stack'},filterStatus,info('filter.hint'),h('label',{class:'field'},h('span',{i18n:'filter.lifetime'}),filterHours),
    h('div',{class:'form-actions'},h('button',{type:'submit',class:'btn primary'},t('common.save')),
     h('button',{type:'button',class:'btn ghost',onclick:e=>run(e.currentTarget,async()=>{if(!window.confirm(t('filter.reset_confirm')))return;await command('filter.reset',{});await loadFilter();},null)},t('op.filter_reset'))));

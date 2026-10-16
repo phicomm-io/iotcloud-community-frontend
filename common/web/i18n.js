@@ -4,6 +4,14 @@
 (()=>{
 'use strict';
 const D={
+'filter.title':['Estimated filter life','滤芯寿命预估'],
+'filter.hint':['Counts fan running time only. Default: 4320 h (180 days continuously). Adjust to your filter specification; air quality and filter condition also affect replacement.','仅累计风机开启时间，默认 4320 小时（连续运行 180 天）。可按滤芯规格调整；更换时间还需结合空气质量和滤芯状态。'],
+'filter.usage':['Used {used} / {total} h','已用 {used} / {total} 小时'],
+'filter.normal':['In service','使用中'],'filter.due':['Replace filter soon','建议更换滤芯'],'filter.expired':['Replacement due','请更换滤芯'],
+'filter.settings':['Adjust rated lifetime','调整额定寿命'],'filter.lifetime':['Rated lifetime (hours, 1–20000)','额定寿命（小时，1–20000）'],
+'filter.reset':['Reset after replacing filter','更换滤芯后重置'],
+'filter.confirm':['Reset accumulated usage to zero? Only reset after installing a new filter.','将累计使用时间清零并恢复至 100%？请在更换新滤芯后执行。'],
+'filter.reset_done':['Filter usage reset','滤芯使用时间已重置'],
 'import.platform':['Open IotCloud','打开 IotCloud'],
 'import.title':['Import MQTT configuration','导入 MQTT 配置'],
 'import.preview':['Broker: {host}:{port} · Username: {user}','Broker：{host}:{port} · 用户名：{user}'],
@@ -16,8 +24,8 @@ const D={
 'import.waiting':['Waiting for configuration…','正在等待配置…'],
 'import.received':['Configuration prefilled. Review the MQTT Host, port and account below, then save.','配置已预填。请核对下方 MQTT Host、端口与账号，再点击保存。'],
 'import.no_opener':['The platform window is unavailable. Keep it open and restart the transfer.','无法连接平台窗口，请保持平台页面打开并重新发起传递。'],
-'fw.online':['Online updates','在线更新'],'fw.check':['Check for updates','检查更新'],'fw.install_online':['Download and install','下载并安装'],'fw.notes':['Release notes','发布说明'],
-'fw.source_cn':['Mainland China mirror','境内镜像'],'fw.source_global':['Global server','境外服务器'],
+'fw.cancel':['Cancel download','终止下载'],'fw.cancelling':['Cancelling; services will resume shortly.','正在终止，稍后恢复正常服务。'],'fw.online':['Online updates','在线更新'],'fw.check':['Check for updates','检查更新'],'fw.install_online':['Download and install','下载并安装'],'fw.notes':['Release notes','发布说明'],
+'fw.sources_help':['Choose a source to check its latest version.','选择更新来源，检查最新版本。'],'fw.source_github':['GitHub Pages (HTTPS)','GitHub Pages（HTTPS）'],'fw.source_cn':['China mirror (HTTP)','境内镜像（HTTP）'],'fw.source_global':['Global mirror (HTTP)','境外镜像（HTTP）'],
 'fw.check_idle':['Choose a source and check','选择来源后检查更新'],'fw.check_checking':['Checking…','正在检查…'],'fw.check_available':['Update available','发现新版本'],'fw.check_up_to_date':['Already up to date','当前已是最新版本'],'fw.check_failed':['Update check failed; try another source','检查失败，请重试或切换来源'],'fw.confirm_online':['Install this signed update and restart the device?','安装此签名更新并重启设备？'],
 /* Application watchdog diagnostics (A1/M1). */
 'diag.g_watchdog':['Restart & watchdog','复位与看门狗'],
@@ -43,8 +51,6 @@ const D={
 'op.effect_next':['Cycle light effect','切换到下一灯效'],'op.effect_select':['Select light effect','设置灯效'],
 'op.filter_reset':['Reset filter usage','重置滤芯寿命'],'op.light_always':['Light always on','灯环常亮'],
 'op.set_brightness':['Also set brightness','同时设置亮度'],
-'filter.title':['Filter life','滤芯寿命'],'filter.lifetime':['Rated life (hours)','额定使用寿命（小时）'],
-'filter.hint':['Estimated from motor running time. Starts at zero after this feature is installed; set the rated hours for your filter.','按风机运行时间估算，启用此功能后从零累计；请按所用滤芯设置额定寿命。'],
 'filter.status':['Used {used} hours · {remaining}% remaining','已使用 {used} 小时 · 剩余 {remaining}%'],
 'filter.reset_hint':['Use this gesture after replacing the filter to clear its accumulated runtime.','更换滤芯后使用此手势，将累计运行时间清零。'],
 'filter.reset_confirm':['Clear the filter runtime after replacing the filter?','确认已更换滤芯并清零累计使用时间？'],
