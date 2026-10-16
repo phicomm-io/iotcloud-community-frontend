@@ -32,6 +32,8 @@ jobs:
       - run: NODE_PATH=frontend/node_modules node tests/test_interaction_layout.cjs
       - run: BROWSER=webkit NODE_PATH=frontend/node_modules node tests/test_interaction_layout.cjs
       - run: npm run build --prefix frontend
+      - run: node tests/mobile-layout.mjs
+        working-directory: frontend
       - run: node tests/static-webapp.mjs
         working-directory: frontend
       - run: node tests/provisioning.mjs

@@ -5,6 +5,8 @@ import {deviceKey} from '../deviceProtocol';
 import DeviceSummary from './DeviceSummary.vue';
 import AppIcon from './AppIcon.vue';
 import ProvisionDevice from './ProvisionDevice.vue';
+import NodeSelector from './NodeSelector.vue';
+const demoMode=import.meta.env.VITE_DEMO==='1';
 const props=defineProps({connection:Object,deviceBroker:Object,connected:Boolean,busy:Boolean,thirdParty:Boolean,devices:Array,states:Object,addForm:Object,deviceName:Function,now:Number});
 const emit=defineEmits(['mode-change','connect','disconnect','add','remove','password','mqtt-password','home','refresh','rename']);
 const section=ref('connection'),showPassword=ref(false),adding=ref(false),currentPassword=ref(''),newPassword=ref(''),mqttCurrent=ref(''),mqttNew=ref('');
@@ -21,6 +23,7 @@ function status(d){return !props.connected?'未连接':props.states[deviceKey(d)
 </aside>
 <div class="settings-content">
 <template v-if="section==='connection'">
+<section v-if="!demoMode" class="card settings-card"><header class="settings-card-heading"><div><h2>平台节点</h2><p class="help">切换节点将重新加载页面，使用目标节点的登录状态。</p></div></header><NodeSelector/></section>
 <ProvisionDevice :connection="connection" :broker="deviceBroker"/>
 <section class="card settings-card">
 <header class="settings-card-heading"><span class="settings-icon"><AppIcon name="cloud" :size="23"/></span><div><h2>MQTT 连接</h2><p class="help">选择服务器，建立设备与平台之间的连接。</p></div><span class="badge" :class="connected?'ok':''">{{busy?'连接中':connected?'已连接':'未连接'}}</span></header>

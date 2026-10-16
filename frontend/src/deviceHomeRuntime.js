@@ -15,6 +15,6 @@
  UI.start=options=>{dev=options;UI.device=options;I18N.set('zh-CN');queueMicrotask(()=>{I18N.apply();lock();(async function poll(){await pollLoad();if(!stopped)setTimeout(poll,3000);})();});};
  document.addEventListener('click',event=>{const link=event.target.closest('a[href^="#settings/"]');if(link){event.preventDefault();UI.toast('此项请在设备本地 WebUI 中设置');}});
  window.addEventListener('pagehide',()=>stopped=true);
- const style=document.createElement('style');style.textContent='body{max-width:none;margin:0;padding:0 0 8px}#settingsPage{display:none!important}.banner{margin-top:0}';document.head.append(style);
+ const style=document.createElement('style');style.textContent='body{max-width:none;margin:0;padding:0 0 8px}#settingsPage{display:none!important}.banner{margin-top:0}@media(max-width:600px){.grid{grid-template-columns:minmax(0,1fr)}.metric .stat{display:flex;flex-wrap:wrap;align-items:baseline;column-gap:4px}.metric .stat small{margin-left:0}}';document.head.append(style);
  new ResizeObserver(()=>{parent.postMessage({type:'device-height',height:Math.ceil(document.body.getBoundingClientRect().height)+8},parent.location.origin);}).observe(document.body);
 })();

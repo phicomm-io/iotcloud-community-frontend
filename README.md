@@ -35,6 +35,21 @@ A1 首页的滤芯寿命卡片显示设备累计运行小时和剩余百分比�
 
 Frontend extraction source: firmware commit [`b9cdca3e63983acf5fc6f9c145ac0f5e7581a93f`](https://github.com/phicomm-io/phicomm-community-firmware/commit/b9cdca3e63983acf5fc6f9c145ac0f5e7581a93f), after the A1/M1 stability, panel feedback and watchdog branches were merged.
 
+## IotCloud 手机端导航
+
+手机首页优先显示当前设备的控制与读数。点击设备名称旁的“切换设备”打开底部列表，选中后自动收起；列表内可刷新设备，改名和添加设备位于“设置 → 设备管理”。桌面端使用侧栏切换设备。手机端的平台管理入口位于“设置 → 账号安全”。
+
+登录和注册页保留节点选择；进入平台后，从“设置 → MQTT 连接 → 平台节点”切换。切换会重新加载页面，使用目标节点自己的账号与设备。首页的设备接入地址提示可展开查看说明，也可点击“我知道了”关闭。
+
+手机浏览器回归使用独立的 HTTP/MQTT 模拟数据，覆盖 Chromium、WebKit、首屏操作位置、弹层滚动和焦点、节点隔离以及控制命令目标，不连接真实设备。截图输出到 `build/mobile-layout/`：
+
+```sh
+cd frontend
+npm run build
+VITE_DEMO=1 npm run build -- --outDir ../build/bundle/demos/platform --emptyOutDir
+node tests/mobile-layout.mjs
+```
+
 ## IotCloud 静态部署与 Web App
 
 在 `frontend/` 执行 `npm ci && npm run build`，将 **dist 内的全部文件**上传到 GitHub Pages 或其他 HTTPS 静态托管。默认使用相对资源路径及 Hash 路由，支持 `/仓库名/` 子路径，不需要 SPA 重写规则。图标源文件为 `frontend/public/icons/iotcloud.svg`；`icon-512.png` 可用作项目头像。

@@ -1,5 +1,5 @@
 <script setup>
-import {ref,reactive,computed,onMounted,onBeforeUnmount,watch,nextTick} from 'vue';
+import {ref,reactive,computed,onMounted,onBeforeUnmount,watch} from 'vue';
 import {useRoute,useRouter} from 'vue-router';
 import mqtt from 'mqtt';
 import {account,api,restoreAccount} from './account';
@@ -10,6 +10,7 @@ import {userKey,requestId,deviceKey,deviceEntry,localDevices,topics,applyMessage
 import {deviceType} from './devicePresentation';
 import DeviceSummary from './components/DeviceSummary.vue';
 import DeviceNameDialog from './components/DeviceNameDialog.vue';
+import DevicePicker from './components/DevicePicker.vue';
 import AppIcon from './components/AppIcon.vue';
 import DeviceHome from './components/DeviceHome.vue';
 import PlatformSettings from './components/PlatformSettings.vue';
@@ -19,7 +20,7 @@ const iconURL=import.meta.env.BASE_URL+'icons/iotcloud.svg';
 const demoMode=import.meta.env.VITE_DEMO === '1';
 const demoDevices=demoMode?Object.fromEntries(['tc1','m1','a1'].map(m=>[m,window.PhicommDemo.create(m)])):null;
 const route=useRoute(),router=useRouter();
-const home=ref(null),nameDialog=ref(null),aliases=ref({});
+const home=ref(null),devicePicker=ref(null),nameDialog=ref(null),aliases=ref({});
 function displayName(d){const name=aliases.value[deviceKey(d)]||states[deviceKey(d)]?.name||d.name;if(name)return name;const peers=list.value.filter(x=>x.model===d.model);return deviceType(d)+(peers.length>1?' '+(peers.findIndex(x=>deviceKey(x)===deviceKey(d))+1):'');}
 function renameDevice(d,name,done){
  if(d.version==='v1'){
@@ -40,12 +41,6 @@ function dismissDeviceHint(){hintDismissed.value=hintKey.value;try{localStorage.
 const addForm=reactive({mac:'',model:'tc1',version:'v2'});
 const active=computed(()=>{const d=list.value.find(x=>deviceKey(x)===selected.value);return d?{...states[deviceKey(d)],...d}:null;});
 
-watch(selected,async()=>{
- await nextTick();
- if(!matchMedia('(max-width:800px)').matches)return;
- const item=document.querySelector('.device-select[aria-pressed=true]'),bar=item?.closest('.device-list');
- if(bar)bar.scrollLeft+=item.getBoundingClientRect().left-bar.getBoundingClientRect().left;
-});
 watch(page,value=>track('pageview',thirdParty.value?(value==='settings'?'/guest/settings':'/guest'):(value==='settings'?'/settings':'/')));
 watch(()=>active.value?deviceKey(active.value):'',value=>{if(value)track('device_view',thirdParty.value?'/guest':'/',active.value.model);});
 let client,timer,poll;
@@ -121,15 +116,19 @@ onBeforeUnmount(()=>{disconnect();clearInterval(timer);clearInterval(poll);});
 </script>
 <template>
 <main class="console-page">
-<header class="console-topbar topbar"><div class="brand"><span class="kind">MQTT 管理平台</span><h1><img :src="iconURL" width="30" height="30" alt="" style="vertical-align:middle;margin-right:8px">IotCloud</h1></div><nav class="console-nav"><span class="status-pill" :class="{online:connected}">{{connected?'MQTT 已连接':'MQTT 未连接'}}</span><RouterLink v-if="account.isAdmin" class="btn" to="/admin">平台管理</RouterLink><ThemeToggle/><button v-if="account.username" @click="logout">退出</button><RouterLink v-else to="/login">登录</RouterLink></nav></header>
+<header class="console-topbar topbar"><div class="brand"><span class="kind">MQTT 管理平台</span><h1><img :src="iconURL" width="30" height="30" alt="" style="vertical-align:middle;margin-right:8px">IotCloud</h1></div><nav class="console-nav"><span class="status-pill" :class="{online:connected}">{{connected?'MQTT 已连接':'MQTT 未连接'}}</span><RouterLink v-if="account.isAdmin" class="btn console-admin" to="/admin">平台管理</RouterLink><ThemeToggle/><button v-if="account.username" @click="logout">退出</button><RouterLink v-else to="/login">登录</RouterLink></nav></header>
 <nav class="platform-tabs tabs" aria-label="主导航"><button :aria-current="page==='home'?'page':undefined" @click="page='home'">首页</button><button :aria-current="page==='settings'?'page':undefined" @click="page='settings'">设置</button></nav>
-<p v-if="showDeviceHint" role="status" class="feedback">配置 IoT 设备时，请在设备本地网页的 MQTT 设置中将 Host 填为 <strong style="overflow-wrap:anywhere">{{mqttDeviceHost}}</strong>，端口按 Broker 的设备接入配置填写。不要填写当前网页域名或 WebSocket 地址。<button type="button" @click="dismissDeviceHint">我知道了</button></p>
+<div v-if="showDeviceHint" role="status" class="feedback device-host-hint"><details><summary>设备接入地址：<strong>{{mqttDeviceHost}}</strong></summary><p>配置 IoT 设备时，请在设备本地网页的 MQTT 设置中将 Host 填为上述地址，端口按 Broker 的设备接入配置填写。不要填写当前网页域名或 WebSocket 地址。</p></details><button type="button" @click="dismissDeviceHint">我知道了</button></div>
 <p v-if="error" role="alert" class="feedback error">{{error}}</p><p v-if="notice" role="status" class="feedback">{{notice}}</p>
 <template v-if="page==='home'">
 <div class="dashboard-grid"><aside class="surface devices-panel"><h2>设备</h2><ul class="device-list"><li v-for="d in list" :key="deviceKey(d)" class="device-list-item"><button class="device-select" :aria-pressed="selected===deviceKey(d)" @click="selected=deviceKey(d)"><DeviceSummary :device="d" :state="states[deviceKey(d)]||{}" :name="displayName(d)" :connected="connected" :now="now"/></button><button class="device-rename btn ghost icon" :aria-label="`修改 ${displayName(d)} 的名称`" @click="nameDialog.open(d,displayName(d))"><AppIcon name="edit" :size="15"/></button></li></ul><button @click="refresh">刷新列表</button><p v-if="!list.length" class="helper-text">暂无设备。设备上线后将自动显示，也可在设置中添加。</p></aside>
-<div v-if="active" class="device-area"><div class="device-heading"><div><h2>{{displayName(active)}}</h2><p class="help">{{deviceType(active)}}</p></div><span class="badge" :class="active.available===true&&connected?'ok':''">{{!connected?'MQTT 未连接':active.available===false?'离线':active.available===true?'在线':'等待设备状态'}}</span><button :disabled="!connected" @click="home?.refresh()">刷新状态</button></div>
+<div v-if="active" class="device-area"><div class="mobile-device-heading">
+<button class="device-picker-trigger" type="button" aria-haspopup="dialog" :aria-label="`切换设备，当前：${displayName(active)}`" @click="devicePicker.open()"><span class="current-device"><b :title="displayName(active)">{{displayName(active)}}</b><small>{{!connected?'MQTT 未连接':active.available===false?'离线':active.available===true?'在线':'等待设备状态'}}</small></span><span class="switch-device-label">切换设备<AppIcon name="arrow" :size="16"/></span></button>
+<button class="device-refresh" type="button" aria-label="刷新当前设备状态" :disabled="!connected" @click="home?.refresh()"><AppIcon name="refresh"/></button>
+</div><div class="device-heading"><div><h2>{{displayName(active)}}</h2><p class="help">{{deviceType(active)}}</p></div><span class="badge" :class="active.available===true&&connected?'ok':''">{{!connected?'MQTT 未连接':active.available===false?'离线':active.available===true?'在线':'等待设备状态'}}</span><button :disabled="!connected" @click="home?.refresh()">刷新状态</button></div>
 <DeviceHome ref="home" :key="selected" :device="active" @command="deviceCommand" @settings="page='settings'"/>
 </div><section v-else class="surface empty-control"><h2>从一台设备开始</h2><p>在设置中连接 Broker 并添加设备。</p><button @click="page='settings'">打开设置</button></section></div>
+<DevicePicker ref="devicePicker" :devices="list" :selected="selected" :states="states" :device-name="displayName" :connected="connected" :now="now" @select="selected=$event" @refresh="refresh"/>
 </template>
 <template v-else>
 <PlatformSettings :device-broker="deviceBroker" :connection="connection" :connected="connected" :busy="busy" :third-party="thirdParty" :devices="list" :states="states" :add-form="addForm" :device-name="displayName" :now="now" @rename="nameDialog.open($event,displayName($event))" @mode-change="thirdParty=$event;changeMode()" @connect="manualConnect" @disconnect="manualDisconnect" @add="add" @remove="remove" @password="changePassword" @mqtt-password="changeMQTTPassword" @home="page='home'" @refresh="refresh"/>
