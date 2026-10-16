@@ -183,7 +183,7 @@ pre{overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;bac
 .diag dt{color:var(--muted)}.diag dd{margin:0;text-align:right;overflow-wrap:anywhere}
 
 /* ---------- A1 ---------- */
-.a1-home{grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);grid-template-areas:"fan panel" "fan auto" "light light"}
+.a1-home{grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);grid-template-areas:"fan panel" "fan auto" "filter filter" "light light"}
 .fan-hero{display:flex;align-items:center;gap:20px}
 .power{flex:none;width:96px;height:96px;border-radius:50%;border:0;display:grid;place-items:center;cursor:pointer;background:var(--surface-muted);color:var(--muted);box-shadow:inset 0 0 0 1px var(--border);transition:background .2s,box-shadow .2s,color .2s;width:96px}
 .power svg{width:38px;height:38px}

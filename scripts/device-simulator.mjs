@@ -45,11 +45,13 @@ function makeState(model) {
       segment: [{ source: 0, display: 2, minimum: -10, maximum: 50, suitable_low: 18, suitable_high: 26,
         colors: [[0, 0, 255], [0, 255, 0], [255, 0, 0]] }], revision: 1 },
     binding_status: 'disabled',
+    filter: {used_seconds:864000,lifetime_hours:4320,remaining_percent:95,replacement_due:false},
   };
   return { ...common, ...sensors, model: 'm1', brightness: 50 };
 }
 
 function dataFor(state, model, action) {
+  if(action.startsWith('filter.'))return state.filter;
   if (action === 'status.get') return state;
   if (action === 'capabilities.get') return { model, actions: [] };
   if (action === 'power.get') return { power_watts: state.power_watts || 0, energy_kwh: state.energy_kwh || 0, powers: state.powers || [0] };
@@ -65,6 +67,11 @@ function dataFor(state, model, action) {
 }
 
 function apply(state, action, params = {}) {
+  if(state.filter&&action.startsWith('filter.')){
+    if(action==='filter.reset')state.filter.used_seconds=0;
+    if(action==='filter.set')state.filter.lifetime_hours=params.lifetime_hours;
+    const f=state.filter;f.remaining_percent=Math.max(0,Math.ceil((1-f.used_seconds/(f.lifetime_hours*3600))*100));f.replacement_due=f.remaining_percent<=10;
+  }
   if (action === 'config.set') {
     if (params.section === 'device' && Object.hasOwn(params.values || {}, 'name')) {
       state.name = params.values.name || defaultName(state.model);
