@@ -5,7 +5,7 @@ import AuthShell from "../components/AuthShell.vue";
 import AppIcon from "../components/AppIcon.vue";
 import { api, account, applyAccount } from "../account";
 import {track} from "../analytics";
-import {legacyCredentials, rememberLogin} from "../connectionPreferences";
+import {legacyCredentials, rememberLogin, savedPassword} from "../connectionPreferences";
 const candidate = legacyCredentials();
 const username = ref(candidate?.username || ""),
   password = ref(candidate?.password || ""),
@@ -25,8 +25,8 @@ async function login() {
       }),
     });
     applyAccount(result);
-    account.password = password.value;
-    rememberLogin(account.username, password.value);
+    account.password = result.mqtt_password_separate ? savedPassword(account.username) : password.value;
+    rememberLogin(account.username, account.password);
     track("login","/login");
     account.loaded = true;
     await router.push("/");
@@ -50,7 +50,7 @@ async function login() {
   <p class="auth-register">还没有账号？<RouterLink to="/register">注册账号</RouterLink></p>
   <div class="auth-divider"><span>或者</span></div>
   <RouterLink to="/guest" class="guest-entry"><span class="guest-entry-icon"><AppIcon name="guest" :size="22" /></span><span><b>自建 Broker 模式</b><small>填写自己的 MQTT 服务器，无需注册</small></span><AppIcon name="arrow" :size="18" /></RouterLink>
-  <p class="auth-footnote">网站与平台 MQTT 使用同一账号密码。</p>
+  <p class="auth-footnote">MQTT 密码默认使用注册密码，可在设置中独立修改。</p>
  </AuthShell>
 </template>
 
