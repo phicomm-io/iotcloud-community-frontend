@@ -13,6 +13,8 @@ const power=$('power');power.append(icon('power'));
 const speed=$('speed');let dragging=false;
 const presets=seg([[20,()=>t('a1.p_quiet')+' 20%'],[40,()=>t('a1.p_low')+' 40%'],[60,()=>t('a1.p_mid')+' 60%'],[100,()=>t('a1.p_max')+' 100%']],v=>setSpeed(v),{full:true});
 $('presets').replaceWith(presets);
+const fanModes=seg([['manual','auto.manual'],['auto','auto.auto']],mode=>run(null,()=>UI.control('fan.mode.set',{mode},{fan_mode:mode}).then(refresh),null),{full:true});
+$('fanMode').append(fanModes);
 function setSpeed(v){speed.value=v;$('speedValue').textContent=v+'%';return run(null,()=>api('/fan/config',{speed:Number(v)}).then(refresh),null);}
 speed.addEventListener('input',()=>{dragging=true;$('speedValue').textContent=speed.value+'%';presets.set(Number(speed.value));});
 speed.addEventListener('change',()=>{dragging=false;setSpeed(speed.value);});
@@ -22,12 +24,15 @@ function renderFan(s){
  const locked=s.ota_active||s.reboot_pending||UI.controlBusy;
  power.setAttribute('aria-pressed',String(s.fan_on));power.disabled=locked;speed.disabled=locked;
  presets.querySelectorAll('button').forEach(b=>b.disabled=locked);
- const auto=bindingStatus.linkage_status==='active'&&bindingStatus.automatic_on;
- $('fanState').textContent=s.fan_on?t('a1.running'):t('a1.off');
+ const auto=s.fan_mode==='auto';
+ $('fanMode').hidden=!UI.caps?.actions?.includes('fan.mode.set');fanModes.set(s.fan_mode||'manual');
+ fanModes.querySelectorAll('button').forEach(b=>b.disabled=locked);
+ $('speedLabel').textContent=t(auto?'auto.maximum':'a1.speed');
+ $('fanState').textContent=s.fan_on?t(s.fan_state==='idle'?'auto.idle':'a1.running'):t('a1.off');
  $('fanSub').textContent=locked?t('a1.locked_ota'):s.fan_on?t(auto?'a1.sub_auto':'a1.sub_manual',{p:s.percentage}):t('a1.sub_off',{p:s.requested_speed});
  const previewSpeed=$('previewSpeed');
- if(previewSpeed&&document.activeElement!==previewSpeed){const value=s.fan_on?s.percentage:s.requested_speed;previewSpeed.value=value;$('previewSpeedValue').textContent=value+'%';}
- if(!dragging&&document.activeElement!==speed){const v=s.fan_on?s.percentage:s.requested_speed;speed.value=v;$('speedValue').textContent=v+'%';presets.set(s.fan_on?s.percentage:null);}
+ if(previewSpeed&&document.activeElement!==previewSpeed){const value=auto?s.auto_max_speed:s.requested_speed;previewSpeed.value=value;$('previewSpeedValue').textContent=value+'%';}
+ if(!dragging&&document.activeElement!==speed){const v=auto?s.auto_max_speed:s.requested_speed;speed.value=v;$('speedValue').textContent=v+'%';presets.set(v);}
  $('outBar').style.width=s.applied_speed+'%';$('targetBar').style.width=s.percentage+'%';$('targetBar').hidden=!s.percentage;
  $('outText').textContent=!s.fan_on&&!s.applied_speed?t('a1.out_stopped'):s.applied_speed!==s.percentage?t('a1.out_ramp',{a:s.applied_speed,p:s.percentage}):t('a1.out_steady',{a:s.applied_speed});
  for(const [id,badge] of [['panelBadge',$('panelBadge')],['panelBadge2',$('panelBadge2')]]){badge.className='badge '+(s.panel_ready?'ok':'bad');badge.textContent=t(s.panel_ready?'a1.panel_ok':'a1.panel_bad');}
@@ -66,7 +71,7 @@ function renderAuto(){
  const c=$('autoCard'),st=bindingStatus.linkage_status,peers=bindingStatus.peers||[];
  const head=h('div',{class:'card-head'},h('div',{},h('h2',{i18n:'a1.auto'}),h('p',{class:'help',i18n:'a1.auto_lead'})),
   h('span',{class:'badge '+(st==='active'?'ok':st==='sensor_failed'?'warn':'')},t('s.link_'+st)));
- if(!peers.length){c.replaceChildren(head,h('div',{class:'empty'},h('p',{},t('a1.auto_empty')),
+ if(!peers.length){c.replaceChildren(head,h('div',{class:'empty'},h('p',{},t(UI.state?.fan_mode==='auto'?'auto.no_sensor':'a1.auto_empty')),
   h('a',{class:'btn',href:'#settings/binding',style:'margin-top:12px'},icon('link'),h('span',{},t('a1.auto_link')))));return;}
  const fresh=peers.filter(p=>p.fresh).length;
  const meta=h('p',{class:'help'},t('a1.auto_peers',{n:peers.length,f:fresh})+' · '+peers.map(p=>String(p.transport||'mqtt').toUpperCase()).join('/'));
@@ -283,49 +288,33 @@ async function showBinding(){
 
 /* ---------- Settings: automatic control rules ---------- */
 async function showLinkage(){
- bindingStatus=await api('/binding/status').catch(()=>bindingStatus);
- const m=await api('/linkage/config');const page=document.querySelector('[data-settings-page="linkage"]');
- const has=(mask,bit)=>!!(mask&bit);
- const metricSeg=()=>{const s=seg([[1,'PM2.5'],[2,()=>t('m.formaldehyde')],[3,'link.both']],v=>{m.metrics=v;draw();});s.set(m.metrics);return s;};
+ const m=await api('/linkage/config'),page=document.querySelector('[data-settings-page="linkage"]');
+ const modern=UI.caps?.actions?.includes('fan.mode.set');
  const draw=()=>{
-  const modes=h('div',{class:'options',role:'radiogroup'},[0,1,2].map(v=>h('label',{class:'option'},h('input',{type:'radio',name:'mode',value:v,checked:m.mode===v,onchange:()=>{m.mode=v;draw();}}),
-   h('b',{},t('link.mode.'+v)),h('span',{},t('link.mode_desc.'+v)))));
-  let detail;
-  if(m.mode===0){const [o,r]=slider(m,'fixed_speed',{min:1});detail=h('div',{},h('div',{class:'row between'},h('span',{class:'label',i18n:'link.fixed'}),o),r);}
-  else if(m.mode===1)detail=h('div',{class:'stack'},
-   has(m.metrics,1)&&h('div',{class:'sentence'},t('link.lin_pm_a'),num(m,'low_pm',{unit:'µg/m³',step:1}),t('link.lin_b'),num(m,'min_speed',{unit:'%',step:1}),t('link.lin_c'),num(m,'high_pm',{unit:'µg/m³',step:1}),t('link.lin_b'),num(m,'max_speed',{unit:'%',step:1})),
-   has(m.metrics,2)&&h('div',{class:'sentence'},t('link.lin_hcho_a'),num(m,'low_hcho',{unit:'mg/m³',step:.001}),t('link.lin_b'),num(m,'min_speed',{unit:'%',step:1}),t('link.lin_c'),num(m,'high_hcho',{unit:'mg/m³',step:.001}),t('link.lin_b'),num(m,'max_speed',{unit:'%',step:1})));
-  else detail=h('div',{class:'stack'},
-   has(m.metrics,1)&&h('div',{class:'sentence'},t('link.pid_pm'),num(m,'target_pm',{unit:'µg/m³',step:1})),
-   has(m.metrics,2)&&h('div',{class:'sentence'},t('link.pid_hcho'),num(m,'target_hcho',{unit:'mg/m³',step:.001})),
-   h('div',{class:'sentence'},t('link.range'),num(m,'min_speed',{unit:'%',step:1}),'–',num(m,'max_speed',{unit:'%',step:1})),
-   h('details',{class:'more'},h('summary',{i18n:'link.pid_tune'}),h('div',{class:'fields'},['kp','ki','kd'].map(k=>h('label',{class:'field'},h('span',{},k.toUpperCase()),num(m,k,{step:.01}))))));
-  const rule=kind=>{
-   const en=kind+'_enabled',mk=kind+'_metrics',all=kind+'_all',cmp=t(kind==='on'?'link.above':'link.below');
-   const which=seg([[1,'PM2.5'],[2,()=>t('m.formaldehyde')],[3,'link.both']],v=>{m[mk]=v;draw();});which.set(m[mk]);
-   const anyAll=seg([[0,'link.any'],[1,'link.all']],v=>{m[all]=v;});anyAll.set(m[all]);
-   const warn=kind==='off'&&m.on_enabled&&(m.off_pm>=m.on_pm||m.off_hcho>=m.on_hcho)?h('p',{class:'help',style:'color:var(--warn)'},t('link.hyst_warn')):null;
-   const box=h('div',{class:'subcard stack'},flag(m,en,'link.'+kind+'_rule','link.'+kind+'_desc'),
-    h('div',{class:'row'},h('span',{class:'help',i18n:'link.watch'}),which,m[mk]===3?anyAll:null),
-    has(m[mk],1)&&h('div',{class:'sentence'},'PM2.5 '+cmp,num(m,kind+'_pm',{unit:'µg/m³',step:1})),
-    has(m[mk],2)&&h('div',{class:'sentence'},t('m.formaldehyde')+' '+cmp,num(m,kind+'_hcho',{unit:'mg/m³',step:.001})),warn);
-   return box;};
-  const master=flag(m,'enabled','link.enable','link.enable_desc');master.querySelector('input').addEventListener('change',draw);
-  // replaceChildren() stringifies a null child, so assemble the list first.
-  const rows=[pageHead('nav.linkage','link.lead')];
-  if(!(bindingStatus.peers||[]).length)rows.push(h('div',{class:'banner warn'},icon('alert'),
-   h('span',{},t('link.no_peer')+' '),h('a',{href:'#settings/binding'},t('a1.auto_link'))));
-  rows.push(h('section',{class:'card'},master),
-   h('fieldset',{class:'bare',disabled:!m.enabled},
-    h('section',{class:'card stack'},h('h2',{i18n:'link.speed'}),h('div',{class:'row between'},h('span',{class:'label',i18n:'link.metric'}),metricSeg()),modes,detail),
-    h('section',{class:'card stack',style:'margin-top:16px'},h('div',{},h('h2',{i18n:'link.onoff'}),h('p',{class:'help',i18n:'link.onoff_lead'})),rule('on'),rule('off'),
-     h('details',{class:'more'},h('summary',{i18n:'common.advanced'}),
-      h('div',{class:'fields'},
-       h('label',{class:'field'},h('span',{i18n:'link.statistic'}),h('select',{onchange:e=>m.statistic=+e.target.value},[0,1,2,3,4,5].map(v=>h('option',{value:v,selected:m.statistic===v},t('link.stat.'+v))))),
-       h('label',{class:'field'},h('span',{i18n:'link.debounce'}),num(m,'debounce_seconds',{unit:t('unit.s'),min:0})),
-       h('label',{class:'field'},h('span',{i18n:'link.min_switch'}),num(m,'min_switch_seconds',{unit:t('unit.s'),min:0})))))),
-   saveBar(()=>api('/linkage/config',m)));
-  page.replaceChildren(...rows);
+  const choose=seg([[1,'PM2.5'],[2,()=>t('m.formaldehyde')],[3,'link.both']],v=>{m.metrics=v;draw();});choose.set(m.metrics);
+  const modes=seg([[0,'link.mode.0'],[1,'link.mode.1'],[2,'link.mode.2']],v=>{m.mode=v;draw();});modes.set(m.mode);
+  const detail=[];
+  const field=(key,label,options={})=>h('label',{class:'field'},h('span',{},t(label)),num(m,key,options));
+  if(m.mode===0)detail.push(field('fixed_speed','link.fixed',{min:1,max:100,unit:'%'}));
+  if(m.mode===1){
+   if(m.metrics&1)detail.push(field('low_pm','auto.low_pm',{min:0,unit:'µg/m³'}),field('high_pm','auto.high_pm',{min:0,unit:'µg/m³'}));
+   if(m.metrics&2)detail.push(field('low_hcho','auto.low_hcho',{min:0,step:.001,unit:'mg/m³'}),field('high_hcho','auto.high_hcho',{min:0,step:.001,unit:'mg/m³'}));
+  }
+  if(m.mode===2){
+   if(m.metrics&1)detail.push(field('target_pm','link.pid_pm',{min:.01,unit:'µg/m³'}));
+   if(m.metrics&2)detail.push(field('target_hcho','link.pid_hcho',{min:.001,step:.001,unit:'mg/m³'}));
+   detail.push(h('details',{class:'more'},h('summary',{i18n:'link.pid_tune'}),h('div',{class:'fields'},['kp','ki','kd'].map(k=>h('label',{class:'field'},h('span',{},k.toUpperCase()),num(m,k,{min:0,step:.01}))))));
+  }
+  const range=[field('min_speed','auto.minimum',{min:modern?0:1,max:100,unit:'%'}),field('max_speed','auto.maximum',{min:1,max:100,unit:'%'})];
+  if(modern)range.push(field('fallback_speed','auto.fallback',{min:0,max:100,unit:'%'}));
+  page.replaceChildren(pageHead('nav.linkage',modern?'auto.help':'link.lead'),
+   h('section',{class:'card stack'},flag(m,'enabled','link.enable','auto.mode_help'),
+    h('div',{class:'fields'},range),modern?info('auto.range_help'):null),
+   h('section',{class:'card stack'},h('h2',{i18n:'link.speed'}),choose,modes,h('div',{class:'fields'},detail)),
+   h('section',{class:'card stack'},h('h2',{i18n:'common.advanced'}),
+    h('label',{class:'field'},h('span',{i18n:'link.statistic'}),h('select',{onchange:e=>m.statistic=+e.target.value},[0,1,2,3,4,5].map(v=>h('option',{value:v,selected:m.statistic===v},t('link.stat.'+v))))),
+    h('div',{class:'fields'},field('debounce_seconds','link.debounce',{min:0,max:3600,unit:t('unit.s')}),field('min_switch_seconds','link.min_switch',{min:0,max:3600,unit:t('unit.s')}))),
+   saveBar(()=>api('/linkage/config',m).then(refresh)));
  };
  draw();
 }

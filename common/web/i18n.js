@@ -4,6 +4,16 @@
 (()=>{
 'use strict';
 const D={
+'auto.mode':['Operating mode','运行模式'],'auto.auto':['Auto','自动'],'auto.manual':['Manual','手动'],
+'auto.toggle':['Toggle auto/manual','切换自动／手动模式'],'auto.idle':['Idle','待机'],
+'auto.minimum':['Minimum speed','最低风速'],'auto.maximum':['Maximum speed','最高风速'],
+'auto.fallback':['Sensor offline speed','传感器离线风速'],
+'auto.help':['Adjusts speed while powered on. Switching mode does not turn power on.','开机时按空气质量调速，切换模式不会自动开机。'],
+'auto.mode_help':['Auto adjusts speed; manual restores your last manual speed.','自动模式按空气质量调速；手动模式恢复上次手动风速。'],
+'auto.range_help':['A minimum of 0 allows idle. Offline speed is limited to this range. Night windows override this range. The ring and slider adjust the current maximum in auto mode.','最低风速设为 0 可停转待机。离线风速受上下限约束，夜间时段可单独设置。自动模式下滑环和滑块调整当前时段的风速上限。'],
+'auto.no_sensor':['No sensor available. The configured offline speed applies while powered on.','暂无可用传感器，开机时使用设定的离线风速。'],
+'auto.low_pm':['PM2.5 at minimum speed','最低风速对应 PM2.5'],'auto.high_pm':['PM2.5 at maximum speed','最高风速对应 PM2.5'],
+'auto.low_hcho':['Formaldehyde at minimum speed','最低风速对应甲醛'],'auto.high_hcho':['Formaldehyde at maximum speed','最高风速对应甲醛'],
 'filter.title':['Estimated filter life','滤芯寿命预估'],
 'filter.hint':['Counts fan running time only. Default: 4320 h (180 days continuously). Adjust to your filter specification; air quality and filter condition also affect replacement.','仅累计风机开启时间，默认 4320 小时（连续运行 180 天）。可按滤芯规格调整；更换时间还需结合空气质量和滤芯状态。'],
 'filter.usage':['Used {used} / {total} h','已用 {used} / {total} 小时'],
@@ -74,7 +84,7 @@ const D={
 'nav.home':['Home','首页'],'nav.settings':['Settings','设置'],
 'grp.network':['Network','网络'],'grp.device':['Device','设备'],'grp.auto':['Automation','自动化'],'grp.system':['System','系统'],
 'nav.wifi':['Wi-Fi','Wi-Fi'],'nav.mqtt':['MQTT / Home Assistant','MQTT / Home Assistant'],'nav.general':['General','通用'],'nav.light':['Light effects','灯效'],
-'nav.binding':['Linked M1','绑定 M1'],'nav.linkage':['Auto control','自动联动'],'nav.schedule':['Schedules','定时任务'],'nav.sleep':['Night mode','夜间模式'],
+'nav.binding':['Linked M1','绑定 M1'],'nav.linkage':['Auto control','自动调速'],'nav.schedule':['Schedules','定时任务'],'nav.sleep':['Night mode','夜间模式'],
 'nav.buttons':['Button events','按键事件'],'nav.permission':['Linkage access','联动许可'],
 'nav.firmware':['Firmware','固件升级'],'nav.diagnostics':['Diagnostics','诊断'],'nav.logs':['Logs','日志'],'nav.maintenance':['Restart & reset','重启与恢复'],
 /* header */
@@ -160,10 +170,10 @@ const D={
 'a1.panel':['Panel','面板'],'a1.panel_ok':['Panel connected','面板通信正常'],'a1.panel_bad':['Panel not responding','面板无响应'],
 'a1.child_lock':['Child lock','童锁'],'a1.child_lock_desc':['Locks power and speed keys on the device','锁定机身电源和调速按键'],'a1.lock_on':['Child lock on','童锁已开启'],'a1.lock_off':['Child lock off','童锁已关闭'],
 'a1.button_hint':['Hold the Wi-Fi key for 2.5 s to open the setup hotspot; this works with child lock on.','长按 Wi-Fi 键 2.5 秒可开启配网热点，童锁期间仍可使用。'],
-'a1.auto':['Auto control','自动联动'],'a1.auto_lead':['Adjusts the fan from linked M1 readings','根据绑定的 M1 读数调节风速'],
+'a1.auto':['Auto control','自动调速'],'a1.auto_lead':['Adjusts the fan from linked M1 readings','根据绑定的 M1 读数调节风速'],
 'a1.auto_empty':['No M1 is linked yet. Link one to run the purifier automatically.','尚未绑定 M1，绑定后可按空气质量自动运行。'],'a1.auto_link':['Link an M1','绑定 M1'],
-'a1.auto_enable':['Turn on auto control','开启自动联动'],'a1.auto_peers':['{n} M1 · {f} reporting','{n} 台 M1 · {f} 台有数据'],
-'a1.auto_failed':['No fresh M1 data. The fan keeps its current state.','暂无有效的 M1 数据，风机保持当前状态。'],'a1.auto_speed':['Auto speed {p}%','自动风速 {p}%'],
+'a1.auto_enable':['Turn on auto control','开启自动调速'],'a1.auto_peers':['{n} M1 · {f} reporting','{n} 台 M1 · {f} 台有数据'],
+'a1.auto_failed':['No fresh M1 data. The configured offline speed applies while powered on.','暂无有效的 M1 数据，开机时使用设定的离线风速。'],'a1.auto_speed':['Auto speed {p}%','自动风速 {p}%'],
 's.link_disabled':['Off','未开启'],'s.link_active':['Active','运行中'],'s.link_sensor_failed':['No data','无数据'],
 'a1.ring':['Light ring','灯环'],'a1.ring_on':['Light ring','启用灯环'],'a1.always_on':['Always on','常亮'],'a1.always_on_desc':['Otherwise it lights for 2 s after each change','否则仅在操作后亮 2 秒'],
 'a1.color':['Colour','颜色'],'a1.brightness':['Brightness','亮度'],'a1.effect_note':['Effect: {e}.','当前灯效：{e}。'],'a1.effect_change':['Change','更改'],
@@ -192,7 +202,7 @@ const D={
 'bind.group_name':['Group name','组名称'],'bind.group_ph':['Empty = standalone','留空为独立设备'],'bind.member_add':['Add member','添加成员'],
 /* A1 linkage */
 'link.lead':['Rules that turn the purifier on, off and set its speed from M1 readings.','根据 M1 读数开关净化器并调节风速的规则。'],
-'link.enable':['Automatic control','自动联动'],'link.enable_desc':['Manual control still works at any time','随时仍可手动控制'],
+'link.enable':['Automatic control','自动调速'],'link.enable_desc':['Manual control still works at any time','随时仍可手动控制'],
 'link.no_peer':['Link an M1 first.','请先绑定 M1。'],'link.speed':['Fan speed','风速调节'],'link.metric':['Based on','依据指标'],'link.both':['Both','两者'],
 'link.mode.0':['Fixed','固定风速'],'link.mode.1':['Proportional','线性调节'],'link.mode.2':['Target (PID)','目标值（PID）'],
 'link.mode_desc.0':['Always the same speed','始终同一风速'],'link.mode_desc.1':['Faster as air gets worse','空气越差风速越高'],'link.mode_desc.2':['Hold a target level','维持在目标值'],
@@ -216,7 +226,7 @@ const D={
 'night.add':['New night period','新建夜间时段'],'night.start':['From','开始'],'night.end':['Until','结束'],'night.next_day':['(next day)','（次日）'],
 'night.fan':['Limit fan speed','限制风速'],'night.fan_desc':['Cap the speed during this period','时段内限制最高风速'],'night.fan_max':['Max speed','最高风速'],
 'night.light':['Dim the light ring','调暗灯环'],'night.light_desc':['Cap brightness, 0 turns it off','限制亮度，0 为关闭'],'night.light_max':['Max brightness','亮度上限'],
-'night.block_t':['Don’t auto-start','禁止自动开启'],'night.block_desc':['Auto control cannot turn the purifier on','自动联动不会开启净化器'],
+'night.block_t':['Don’t auto-start','禁止自动开启'],'night.block_desc':['Auto control cannot turn the purifier on','自动调速不会开启净化器'],
 'night.fan_cap':['Fan ≤ {p}%','风速 ≤ {p}%'],'night.light_cap':['Light ≤ {p}%','灯光 ≤ {p}%'],'night.light_off':['Light off','灯光关闭'],'night.block':['No auto-start','禁止自动开启'],'night.add_btn':['Add period','添加'],
 /* M1 */
 'm1.overall':['Air quality','空气质量'],'m1.v_excellent':['Excellent','优'],'m1.v_good':['Good','良好'],'m1.v_fair':['Fair','一般'],'m1.v_poor':['Poor','较差'],
