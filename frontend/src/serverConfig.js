@@ -29,4 +29,16 @@ export function selectNode(id){
  if(!node)throw Error('未知节点');
  saveServer({apiOrigin:node.apiOrigin===location.origin?'':node.apiOrigin,mqttWS:node.mqttWS});
 }
-export function sessionToken(value){const key='iotcloud.session.'+scopeKey();if(value!==undefined){if(value)sessionStorage.setItem(key,value);else sessionStorage.removeItem(key);}return sessionStorage.getItem(key)||'';}
+// Keep sessions across browser restarts; migrate existing tab-only sessions.
+export function sessionToken(value) {
+ const key='iotcloud.session.'+scopeKey();
+ if(value!==undefined){
+  for(const name of ['localStorage','sessionStorage'])try{if(value)globalThis[name].setItem(key,value);else globalThis[name].removeItem(key);}catch{}
+  return value||'';
+ }
+ for(const name of ['localStorage','sessionStorage'])try{
+  const saved=globalThis[name].getItem(key);
+  if(saved){if(name==='sessionStorage')sessionToken(saved);return saved;}
+ }catch{}
+ return '';
+}

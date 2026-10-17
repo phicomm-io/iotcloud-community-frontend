@@ -62,7 +62,7 @@ node tests/mobile-layout.mjs
 
 本地设置优先于 config.json；留空使用本站 API 和后端公布的 Broker。后端地址不带 `/api`。更换平台会重新加载，会话及连接偏好按后端隔离；访客设备列表按 Broker 地址和 MQTT 用户隔离。旧的未分组访客列表不自动导入，以免将设备带到另一个 Broker。平台模式只使用后端配套的 Broker；任意 Broker 使用访客模式。HTTPS 页面必须连接 WSS。
 
-跨域后端需要本次 MQTT 后端改动，并在 `backend/config.yaml` 设置明确的 `allowed_origins`，例如 `['https://你的账号.github.io']`，不含项目路径或末尾斜线。`public_url` 仍是后端自己的公网地址。会话通过受白名单保护的响应头传递，前端放入 sessionStorage 并以 Bearer 请求，避免依赖第三方 Cookie。MQTT 密码仅在当前标签页的会话存储中保留，不放入公开配置或应用缓存。不要把不可信网页加入白名单。
+跨域后端需要本次 MQTT 后端改动，并在 `backend/config.yaml` 设置明确的 `allowed_origins`，例如 `['https://你的账号.github.io']`，不含项目路径或末尾斜线。`public_url` 仍是后端自己的公网地址。会话通过受白名单保护的响应头传递，前端按节点持久保存并以 Bearer 请求，避免依赖第三方 Cookie。登录会话与 MQTT 连接凭据保存在当前浏览器的本地存储中，关闭浏览器后可恢复；后端新会话有效期为 30 天。主动退出或会话失效会清除对应节点的凭据，不放入公开配置或应用缓存。不要把不可信网页加入白名单。
 
 浏览器可将 IotCloud 安装为 Web App（支持的平台使用“安装应用”或“添加到主屏幕”）。首次联网成功后缓存应用壳、全部构建 JS/CSS 和图标，因此离线可以打开登录页或访客界面；离线不能登录、同步账号设备或控制远程设备。API、config.json、MQTT 和实时状态不进入 Service Worker 缓存。每次构建生成内容版本，更新先完整下载，提示用户确认后切换并重新加载；激活后删除此应用的旧版本缓存。demo 不注册 Service Worker。
 

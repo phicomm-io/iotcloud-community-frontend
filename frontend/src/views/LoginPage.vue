@@ -39,7 +39,7 @@ async function login() {
 </script>
 <template>
  <AuthShell>
-  <div class="auth-card-heading"><span class="eyebrow">欢迎回来</span><h1>登录</h1><p>登录账号，查看并管理你的云端设备。</p></div>
+  <div class="auth-card-heading"><span class="eyebrow">欢迎回来</span><h1>登录</h1><p>登录后在此浏览器保持登录 30 天，并自动连接设备。</p></div>
   <div v-if="candidate" class="migration-notice" role="status"><b>平台已更新</b><p>已填入此浏览器保存的 MQTT 账号。首次登录会自动迁移到新版平台，原账号和设备归属保持不变。</p><button type="button" class="btn ghost" @click="username=candidate.username;password=candidate.password">使用已保存账号：{{candidate.username}}</button></div>
   <form class="auth-form" @submit.prevent="login">
    <label>用户名<input v-model="username" autocomplete="username" placeholder="用户名、别名或验证邮箱" required /></label>
