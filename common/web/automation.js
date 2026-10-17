@@ -8,7 +8,7 @@ const {h,icon,toast,run,switchRow,seg,daysPicker,presetDays,daysText,hhmm,toMinu
 
 /* Action kinds a schedule or button event can run, keyed by action name. */
 const ACTIONS={
- 'outlet.set':'op.outlet','fan.set':'op.fan','light.set':'op.light',
+ 'fan.mode.set':'auto.mode','fan.mode.toggle':'auto.toggle','outlet.set':'op.outlet','fan.set':'op.fan','light.set':'op.light',
  'child_lock.set':'op.child_lock','indicator.set':'op.indicator',
  'display.set':'op.display','system.reboot':'op.reboot',
  'light_effect.next':'op.effect_next','light_effect.select':'op.effect_select',
@@ -18,7 +18,7 @@ const sel=(parent,labelKey,options)=>{const s=h('select',{},options.map(([v,k])=
 
 /* Shared action editor: one control group per supported action. */
 function actionEditor(host,{keys=false}={}){
- const caps=UI.caps||{},available=Object.keys(ACTIONS).filter(a=>(caps.actions||[]).includes(a)&&(keys||!['light_effect.next','light_effect.select','filter.reset'].includes(a)));
+ const caps=UI.caps||{},available=Object.keys(ACTIONS).filter(a=>(caps.actions||[]).includes(a)&&(keys||!['light_effect.next','light_effect.select','filter.reset','fan.mode.toggle'].includes(a)));
  const box=h('div',{class:'stack'}),fields=h('div',{class:'stack'});
  const options=[...(keys?[['none','op.none']]:[]),...available.map(a=>[a,actKey(a)])];
  const pick=keys?sel(host,'btn.action',options):seg(options,v=>draw(v),{full:true});
@@ -35,6 +35,7 @@ function actionEditor(host,{keys=false}={}){
    if(params.index!=null)index.value=String(params.index);
    parts.push(()=>index.value==='all'?{}:{index:Number(index.value)});
   }
+  if(a==='fan.mode.set'){const mode=sel(fields,'auto.mode',[['manual','auto.manual'],['auto','auto.auto']]);mode.value=params.mode||'manual';parts.push(()=>({mode:mode.value}));}
   const switchable=['outlet.set','fan.set','light.set','child_lock.set','indicator.set','light_always.set'].includes(a);
   if(switchable){
    const values=keys&&(['outlet.set','fan.set'].includes(a)||caps.model==='a1')?['on','off','toggle']:['on','off'];
@@ -230,6 +231,7 @@ function buttonsPage(dev){
 
 /* ---------- Night mode ---------- */
 function nightPage(dev){
+ const modern=UI.caps?.actions?.includes('fan.mode.set');
  const isM1=dev.model==='M1',list=h('div',{class:'stack'});
  let model=[];
  function window(cfg,i){
@@ -237,11 +239,13 @@ function nightPage(dev){
   const dim=switchRow(null,isM1?'night.screen':'night.light','night.light_desc');dim.querySelector('input').checked=!!cfg.light;
   const bright={brightness:Math.round(cfg.brightness*100/255)};
   const [bOut,bRange]=slider(bright,'brightness',{min:0,max:100,step:isM1?25:1,fmt:v=>v?v+'%':t('state.off')});
-  const speed={max_speed:cfg.max_speed};
+  const speed={max_speed:cfg.max_speed,min_speed:cfg.min_speed??0,fallback_speed:cfg.fallback_speed??30};
   const [fOut,fRange]=slider(speed,'max_speed',{min:1});
   const fan=switchRow(null,'night.fan','night.fan_desc'),block=switchRow(null,'night.block_t','night.block_desc');
   fan.querySelector('input').checked=!!cfg.fan;block.querySelector('input').checked=!!cfg.block_start;
-  const extra=isM1?[]:[fan,h('div',{class:'field'},h('div',{class:'row between'},h('span',{class:'label',i18n:'night.fan_max'}),fOut)),fRange,block];
+  const automatic=[];
+  if(modern)for(const key of ['min_speed','fallback_speed']){const [out,range]=slider(speed,key,{min:0,max:100});automatic.push(h('div',{class:'row between'},h('span',{i18n:key==='min_speed'?'auto.minimum':'auto.fallback'}),out),range);}
+  const extra=isM1?[]:[fan,h('div',{class:'field'},h('div',{class:'row between'},h('span',{class:'label',i18n:'night.fan_max'}),fOut)),fRange,...(modern?automatic:[block])];
   const field=h('fieldset',{},h('legend',{},t('night.period',{n:i+1})),
    h('div',{class:'field'},h('div',{class:'row between'},h('span',{class:'label',i18n:'sch.repeat'}),presetDays(days)),days),
    h('div',{class:'fields'},h('label',{class:'field'},h('span',{i18n:'night.start'}),start),h('label',{class:'field'},h('span',{i18n:'night.end'}),end)),
@@ -251,7 +255,7 @@ function nightPage(dev){
   const collect=()=>{
    cfg.days=days.mask();cfg.start=toMinutes(start.value);cfg.end=toMinutes(end.value);
    cfg.light=Number(dim.querySelector('input').checked);cfg.brightness=Math.round(bright.brightness*255/100);
-   if(!isM1){cfg.fan=Number(fan.querySelector('input').checked);cfg.block_start=Number(block.querySelector('input').checked);cfg.max_speed=Number(speed.max_speed);}
+   if(!isM1){cfg.fan=Number(fan.querySelector('input').checked);cfg.block_start=Number(block.querySelector('input').checked);cfg.max_speed=Number(speed.max_speed);if(modern){cfg.min_speed=Number(speed.min_speed);cfg.fallback_speed=Number(speed.fallback_speed);}}
   };
   field.addEventListener('input',collect);field.addEventListener('change',collect);
   return field;
@@ -261,7 +265,7 @@ function nightPage(dev){
  }
  const add=h('button',{type:'button',class:'btn'},icon('plus'),h('span',{i18n:'night.add_btn'}));
  add.onclick=()=>run(add,async()=>{if(model.length>=4)throw Error(t('common.max',{n:4}));
-  model.push({days:127,fan:isM1?0:1,light:1,max_speed:30,brightness:0,block_start:1,start:1320,end:420});draw();},null);
+  model.push({days:127,fan:isM1?0:1,light:1,max_speed:30,min_speed:0,fallback_speed:30,brightness:0,block_start:0,start:1320,end:420});draw();},null);
  const save=h('button',{type:'button',class:'btn primary'},h('span',{i18n:'common.save'}));
  save.onclick=()=>run(save,async()=>{await command('night.set',{windows:model});toast(t('common.saved'));});
  return {el:h('div',{class:'stack'},pageHead('nav.sleep','night.lead'),card('night.list',null,list,

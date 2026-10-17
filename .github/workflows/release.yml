@@ -25,6 +25,7 @@ jobs:
       - run: NODE_PATH=frontend/node_modules node tests/test_web.cjs
       - run: NODE_PATH=frontend/node_modules node tests/test_a1_light_save.cjs
       - run: NODE_PATH=frontend/node_modules node tests/test_a1_filter.cjs
+      - run: NODE_PATH=frontend/node_modules node tests/test_a1_auto.cjs
       - run: python3 -m unittest discover -s tests -p 'test_*.py'
       - run: python3 tools/build_release.py
       - run: npx --prefix frontend playwright install --with-deps chromium webkit
