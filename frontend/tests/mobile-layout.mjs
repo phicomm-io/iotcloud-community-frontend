@@ -25,7 +25,7 @@ const engines=process.env.BROWSER?[process.env.BROWSER]:['chromium','webkit'];
 const defaultDevices=['tc1','a1','m1'].map((model,i)=>({model,mac:'aabbccddee0'+i,version:'v2',username:'layout-test'}));
 await mkdir(evidence,{recursive:true});
 
-async function fixture(browser,{admin=false,guest=false,count=3,hint=false,connectDelay=0}={}){
+async function fixture(browser,{admin=false,guest=false,count=3,hint=false,connectDelay=0,loseNameReceipt=false}={}){
  const context=await browser.newContext({viewport:{width:375,height:667},hasTouch:true,serviceWorkers:'block'});
  const page=await context.newPage(),errors=[],commands=[],connections=[],apiRequests=[],channels=new Set();
  page.on('pageerror',error=>errors.push(error.message));
@@ -72,6 +72,7 @@ async function fixture(browser,{admin=false,guest=false,count=3,hint=false,conne
     const mac=packet.topic.split('/').at(-2),device=devices.get(mac),request=JSON.parse(packet.payload.toString());
     assert(device,'Command must target a fixture device');commands.push({mac,...request});
     const data=device.command(request.action,request.params);
+    if(loseNameReceipt&&request.action==='config.set'&&request.params.section==='device')return;
     send({cmd:'publish',topic:packet.topic.replace(/\/command$/,'/result'),qos:0,payload:JSON.stringify({request_id:request.request_id,code:request.action.endsWith('.get')?'ok':'accepted',data})});
    }
    if(packet.cmd==='pingreq')send({cmd:'pingresp'});
@@ -109,6 +110,18 @@ try{
    await delayed.page.waitForTimeout(1200);
    assert.equal(delayed.commands.filter(c=>c.action==='status.get'&&c.mac===delayed.state.devices[1].mac).length,1,'Hidden light settings must not trigger rapid status polling');
    assert.deepEqual(delayed.errors,[]);await delayed.context.close();
+   const renamed=await fixture(browser,{loseNameReceipt:true});
+   await renamed.page.setViewportSize({width:1440,height:900});
+   for(const model of ['A1','M1']){
+    await expect(renamed.page.getByRole('button',{name:`修改 ${model} 客厅设备 的名称`,exact:true})).toBeVisible();
+    await renamed.page.getByRole('button',{name:`修改 ${model} 客厅设备 的名称`,exact:true}).click();
+    await renamed.page.getByLabel('设备名称',{exact:true}).fill(model+' 已确认');
+    await renamed.page.getByRole('button',{name:'保存名称',exact:true}).click();
+    await expect(renamed.page.locator('.rename-dialog')).not.toBeVisible({timeout:5000});
+    await expect(renamed.page.getByRole('button',{name:`修改 ${model} 已确认 的名称`,exact:true})).toBeVisible();
+   }
+   assert.equal(renamed.commands.filter(c=>c.action==='config.set').length,2);
+   assert.deepEqual(renamed.errors,[]);await renamed.context.close();
    const f=await fixture(browser),{page}=f;
    await expect(page.frameLocator('iframe').locator('#allOn')).toBeEnabled();
    for(const viewport of [{width:375,height:667},{width:390,height:844},{width:320,height:667}]){

@@ -8,6 +8,7 @@ import {track} from './analytics';
 import {autoConnect,setAutoConnect,rememberLogin,savedPassword,forgetLogin} from './connectionPreferences';
 import {userKey,requestId,deviceKey,deviceEntry,localDevices,topics,applyMessage,command} from './deviceProtocol';
 import {deviceType} from './devicePresentation';
+import {saveDeviceName} from './deviceName';
 import DeviceSummary from './components/DeviceSummary.vue';
 import DeviceNameDialog from './components/DeviceNameDialog.vue';
 import DevicePicker from './components/DevicePicker.vue';
@@ -27,7 +28,7 @@ function renameDevice(d,name,done){
   if(name)aliases.value[deviceKey(d)]=name;else delete aliases.value[deviceKey(d)];
   localStorage.setItem('phicomm.names.'+scopeKey()+':'+(account.username||'guest'),JSON.stringify(aliases.value));done();return;
  }
- deviceCommand({action:'config.set',params:{section:'device',values:{name}}},reply=>{if(!['ok','accepted'].includes(reply.code)){done(reply.message||'保存失败');return;}const state=states[deviceKey(d)]||={};if(name)state.name=name;else{delete state.name;sendTo(d,'status.get');}done();},d);
+ saveDeviceName(deviceCommand,d,name,reply=>{if(!['ok','accepted'].includes(reply.code)){done(reply.message||'保存失败');return;}const state=states[deviceKey(d)]||={};if(name)state.name=name;else{delete state.name;sendTo(d,'status.get');}done();});
 }
 const settingsSection=ref('connection');
 function openSettings(section='connection'){settingsSection.value=section;page.value='settings';window.scrollTo({top:0});}

@@ -1,5 +1,6 @@
 import {test,expect} from '@playwright/test';
 import fs from 'node:fs';
+import {runInNewContext} from 'node:vm';
 const password='browser-test-password-123';
 async function register(page,name){const r=await page.request.post('/api/register',{headers:{Origin:new URL(page.url()).origin},data:{username:name,password}});expect(r.status()).toBe(200);}
 async function login(page,name,pw=password){await page.goto('/#/login');await page.getByLabel('用户名',{exact:true}).fill(name);await page.getByLabel('密码',{exact:true}).fill(pw);await page.getByRole('button',{name:'登录',exact:true}).click();await expect(page).toHaveURL(/\/$/);}
@@ -11,11 +12,23 @@ test('all three current TMCP models auto-discover and use correlated commands',a
  test.setTimeout(60000);const {default:mqtt}=await import('mqtt');const user='tmcp_'+Date.now();await page.goto('/#/login');await register(page,user);await login(page,user);
  const c=await new Promise((resolve,reject)=>{const client=mqtt.connect(baseURL.replace(/^http/,'ws')+'/mqtt',{username:user,password,reconnectPeriod:500});client.once('connect',()=>resolve(client));client.once('error',reject);});
  const scope='u_'+Buffer.from(user).toString('hex');
+ const sandbox={window:{},structuredClone};runInNewContext(fs.readFileSync(new URL('../../common/web/demo.js',import.meta.url),'utf8'),sandbox);
  try{for(const [model,mac] of [['tc1','020000001001'],['m1','020000001002'],['a1','020000001003']]){
   await new Promise((resolve,reject)=>c.publish(`phicomm/v2/${scope}/discovery/${mac}`,JSON.stringify({schema:1,model,version:'v2',protocol:'tmcp',protocol_version:2}),{qos:1,retain:false},e=>e?reject(e):resolve()));
-  const device=page.locator('.device-select').filter({hasText:model.toUpperCase()});await expect(device).toBeVisible({timeout:12000});await device.click();
+  const device=page.locator('.device-select').filter({hasText:model.toUpperCase()});await expect(device).toBeVisible({timeout:12000});
   const base=`phicomm/v2/${scope}/${model}/${mac}`;await expect.poll(()=>c.connected).toBe(true);await expect(page.getByText('MQTT 已连接',{exact:true})).toBeVisible({timeout:10000});await new Promise((resolve,reject)=>c.subscribe(base+'/command',{qos:1},(e,g)=>e||g[0].qos===128?reject(e||Error('denied')):resolve()));
+  const simulated=sandbox.window.PhicommDemo.create(model);
+  const respond=(topic,payload)=>{
+   if(topic!==base+'/command')return;
+   const request=JSON.parse(payload),data=simulated.command(request.action,request.params);
+   c.publish(base+'/result',JSON.stringify({request_id:request.request_id,code:request.action.endsWith('.get')?'ok':'accepted',data}),{qos:1});
+  };
+  c.on('message',respond);
+  // Reload after subscription so initial reads cannot race fixture startup.
+  await page.reload();await expect(device).toBeVisible();await device.click();
   const result=new Promise(resolve=>{const handler=(t,p)=>{if(t===base+'/command'){const request=JSON.parse(p);if(request.action==='status.get'){c.off('message',handler);resolve(request);}}};c.on('message',handler);});
   await page.getByRole('button',{name:'刷新状态',exact:true}).click();const q=await result;expect(q.action).toBe('status.get');expect(q.params).toEqual({});expect(q.request_id).toBeTruthy();
+  await expect(page.frameLocator('iframe').locator('body > p[role=status]')).toBeHidden();
+  c.off('message',respond);
  }}finally{c.end(true);}
 });
