@@ -28,7 +28,7 @@ function reading(v,digits=0){return live.value&&valid(v)?Number(v).toFixed(digit
  <span v-else-if="device.model==='m1'" class="rack-body">
   <span class="ring-mini"><span>{{quality}}</span></span><span class="sensor-copy"><span class="stat">{{freshAir?Math.round(Number(state.pm25)):'—'}}<small>μg/m³</small></span><small class="rack-detail">PM2.5</small></span>
  </span>
- <span v-else-if="device.model==='a1'" class="rack-body"><span class="stat">{{live&&state?.fan_on!==undefined?(state.fan_on?reading(speed):'0'):'—'}}<small>%</small></span><AppIcon name="fan" :size="34"/></span>
+ <span v-else-if="device.model==='a1'" class="rack-body"><span class="stat">{{live&&state?.fan_on!==undefined?(state.fan_on?reading(speed):'0'):'—'}}<small>%</small></span><span class="sensor-copy"><AppIcon name="fan" :size="28"/><small v-if="live&&state?.fan_mode" class="rack-detail">{{state.fan_mode==='auto'?'自动':'手动'}} · {{!state.fan_on?'关机':state.fan_state==='idle'?'待机':'运行'}}</small></span></span>
 </span>
 </template>
 <style scoped>
