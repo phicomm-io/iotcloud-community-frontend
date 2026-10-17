@@ -16,6 +16,7 @@ const message = ref(""),
   model = ref("tc1"),
   version = ref("v2"),
   level = ref(1),
+  savedRegisterLevel = ref(1),
   contact = ref("");
 const request = (path, method = "GET", body) =>
   api("/admin" + path, {
@@ -31,6 +32,7 @@ async function refresh() {
   users.value = u;
   devices.value = d;
   level.value = c.register_level;
+  savedRegisterLevel.value = c.register_level;
   contact.value = c.contact_info;
 }
 async function run(fn) {
@@ -169,7 +171,7 @@ function bind() {
           ><button>保存</button>
         </form>
       </section>
-      <AdminVerificationEmails :enabled="level === 2"/></template
+      <AdminVerificationEmails :enabled="savedRegisterLevel === 2"/></template
     >
   </main>
 </template>
