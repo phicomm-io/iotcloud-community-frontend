@@ -25,7 +25,7 @@ const engines=process.env.BROWSER?[process.env.BROWSER]:['chromium','webkit'];
 const defaultDevices=['tc1','a1','m1'].map((model,i)=>({model,mac:'aabbccddee0'+i,version:'v2',username:'layout-test'}));
 await mkdir(evidence,{recursive:true});
 
-async function fixture(browser,{admin=false,guest=false,count=3,hint=false}={}){
+async function fixture(browser,{admin=false,guest=false,count=3,hint=false,connectDelay=0}={}){
  const context=await browser.newContext({viewport:{width:375,height:667},hasTouch:true,serviceWorkers:'block'});
  const page=await context.newPage(),errors=[],commands=[],connections=[],apiRequests=[],channels=new Set();
  page.on('pageerror',error=>errors.push(error.message));
@@ -59,7 +59,7 @@ async function fixture(browser,{admin=false,guest=false,count=3,hint=false}={}){
   const send=packet=>socket.send(mqttPacket.generate(packet));
   const channel={send,topics:new Set()};channels.add(channel);socket.onClose(()=>channels.delete(channel));
   parser.on('packet',packet=>{
-   if(packet.cmd==='connect'){connections.push(packet.username);send({cmd:'connack',returnCode:0,sessionPresent:false});}
+   if(packet.cmd==='connect'){connections.push(packet.username);setTimeout(()=>send({cmd:'connack',returnCode:0,sessionPresent:false}),connectDelay);}
    if(packet.cmd==='subscribe'){
     send({cmd:'suback',messageId:packet.messageId,granted:packet.subscriptions.map(()=>0)});
     for(const subscription of packet.subscriptions){
@@ -101,6 +101,14 @@ try{
   assert(['chromium','webkit'].includes(engine));
   const browser=await ({chromium,webkit}[engine]).launch();
   try{
+   // Initial reads wait for MQTT readiness rather than the next 3-second poll.
+   const delayed=await fixture(browser,{connectDelay:1200});
+   await choose(delayed.page,'A1');
+   await expect(delayed.page.frameLocator('iframe').locator('#power')).toBeEnabled({timeout:2200});
+   await expect(delayed.page.frameLocator('iframe').locator('[data-settings-page="light"]')).toHaveJSProperty('hidden',true);
+   await delayed.page.waitForTimeout(1200);
+   assert.equal(delayed.commands.filter(c=>c.action==='status.get'&&c.mac===delayed.state.devices[1].mac).length,1,'Hidden light settings must not trigger rapid status polling');
+   assert.deepEqual(delayed.errors,[]);await delayed.context.close();
    const f=await fixture(browser),{page}=f;
    await expect(page.frameLocator('iframe').locator('#allOn')).toBeEnabled();
    for(const viewport of [{width:375,height:667},{width:390,height:844},{width:320,height:667}]){
@@ -202,6 +210,7 @@ try{
    const external=[];demoPage.on('request',request=>{if(!request.url().startsWith(base+'/'))external.push(request.url());});
    await demoPage.route('**/*',route=>route.request().url().startsWith(base+'/demo/')?route.continue():route.abort());
    await demoPage.goto(base+'/demo/');
+   await expect(demoPage.getByRole('link',{name:'打开正式管理平台 ↗'})).toHaveAttribute('href','https://phicomm-io.github.io/iotcloud/');
    await expect(demoPage.locator('.device-picker-trigger')).toBeVisible();
    for(const [i,model] of ['TC1','M1','A1'].entries()){
     await demoPage.locator('.device-picker-trigger').click();await demoPage.locator('.picker-list > li button').nth(i).click();
@@ -210,7 +219,12 @@ try{
    await expect(demoPage.frameLocator('iframe').locator('#power')).toBeEnabled();
    await demoPage.frameLocator('iframe').locator('#power').click();
    await settings(demoPage).click();await expect(demoPage.locator('.node-bar')).toHaveCount(0);
-   assert.deepEqual(external,[]);await demoContext.close();
+   assert.deepEqual(external,[]);
+   await demoPage.route('https://phicomm-io.github.io/iotcloud/',route=>route.fulfill({contentType:'text/html',body:'<h1>Formal platform destination</h1>'}));
+   await demoPage.getByRole('link',{name:'打开正式管理平台 ↗'}).click();
+   await expect(demoPage).toHaveURL('https://phicomm-io.github.io/iotcloud/');
+   await expect(demoPage.getByRole('heading',{name:'Formal platform destination'})).toBeVisible();
+   await demoContext.close();
    console.log(`PASS ${engine}: first-screen controls, picker/focus/scroll, target routing, desktop, node isolation, long names, 0/1/20 devices, admin, guest and demo`);
   }finally{await browser.close();}
  }

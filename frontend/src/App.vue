@@ -47,7 +47,17 @@ watch(page,value=>track('pageview',thirdParty.value?(value==='settings'?'/guest/
 watch(()=>active.value?deviceKey(active.value):'',value=>{if(value)track('device_view',thirdParty.value?'/guest':'/',active.value.model);});
 let client,timer,poll;
 const replies=new Map();
-function deviceCommand(request,reply,target=active.value){
+async function deviceCommand(request,reply,target=active.value){
+ // A newly mounted device page can request data before MQTT finishes connecting.
+ // Wait only for reads; never queue a device write for a later connection.
+ if(!connected.value&&busy.value&&request.action.endsWith('.get')){
+  await new Promise(resolve=>{
+   const finish=()=>{clearTimeout(timer);stop();resolve();};
+   const stop=watch([connected,busy],([ready,connecting])=>{if(ready||!connecting)finish();});
+   const timer=setTimeout(finish,5000);
+  });
+ }
+
  if(demoMode&&target){const data=demoDevices[target.model].command(request.action,request.params);Object.assign(states[deviceKey(target)]||={},demoDevices[target.model].state);reply({code:request.action.endsWith('.get')?'ok':'accepted',data});return;}
  if(!connected.value||!target){reply({code:'offline',message:'请先连接 MQTT'});return;}
  if(target.version==='v1'){legacyRequest(request,reply);return;}

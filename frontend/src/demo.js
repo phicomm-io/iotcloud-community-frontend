@@ -11,3 +11,5 @@ window.fetch=async(url,options={})=>{
  return new Response(JSON.stringify(data),{status:200,headers:{'Content-Type':'application/json'}});
 };
 const banner=document.createElement('div');banner.textContent='管理平台交互演示 · 模拟数据 · 不连接 MQTT · 刷新重置';banner.style='padding:8px;text-align:center;background:#c7ed70;color:#1b3028;font-size:12px';document.body.prepend(banner);
+
+const platformLink=document.createElement('a');platformLink.href='https://phicomm-io.github.io/iotcloud/';platformLink.textContent='打开正式管理平台 ↗';platformLink.style='display:inline-block;margin-left:12px;padding:6px 0;color:inherit;font-weight:600';banner.append(platformLink);
