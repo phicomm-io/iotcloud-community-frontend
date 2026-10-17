@@ -1,4 +1,5 @@
 <script setup>
+import AdminVerificationEmails from "../components/AdminVerificationEmails.vue";
 import AdminAnalytics from "../components/AdminAnalytics.vue";
 import ThemeToggle from "../components/ThemeToggle.vue";
 import { ref, onMounted, onBeforeUnmount, watch } from "vue";
@@ -167,7 +168,8 @@ function bind() {
           ><label>联系信息<input v-model="contact" /></label
           ><button>保存</button>
         </form>
-      </section></template
+      </section>
+      <AdminVerificationEmails :enabled="level === 2"/></template
     >
   </main>
 </template>
