@@ -8,7 +8,7 @@ const PAGES={M1:['network','mqtt','device','binding','schedule','night','firmwar
  A1:['network','mqtt','device','light','binding','linkage','schedule','buttons','night','firmware','diagnostics','logs','maintenance'],
  TC1:['network','mqtt','device','schedule','buttons','firmware','diagnostics','logs','maintenance']};
 const ACTIONS={M1:['schedules.get','schedules.put','schedules.delete','schedules.enable','night.get','night.set','display.set','time.get','time.set'],
- A1:['schedules.get','schedules.put','schedules.delete','schedules.enable','night.get','night.set','buttons.get','buttons.set','fan.set','light.set','child_lock.set','binding.get','binding.set','binding.status.get','binding.probe','linkage.get','linkage.set','light_effect.get','light_effect.set','light_effect.next','light_effect.select','light_always.set','filter.get','filter.set','filter.reset','time.get','time.set'],
+ A1:['schedules.get','schedules.put','schedules.delete','schedules.enable','night.get','night.set','buttons.get','buttons.set','fan.panel','fan.set','light.set','child_lock.set','binding.get','binding.set','binding.status.get','binding.probe','linkage.get','linkage.set','light_effect.get','light_effect.set','light_effect.next','light_effect.select','light_always.set','filter.get','filter.set','filter.reset','time.get','time.set'],
  TC1:['schedules.get','schedules.put','schedules.delete','schedules.enable','buttons.get','buttons.set','outlet.set','indicator.set','child_lock.set','time.get','time.set']};
 (async()=>{for(const model of (process.env.WEB_TEST_MODEL?[process.env.WEB_TEST_MODEL]:['M1','A1','TC1'])){
  const path=model==='TC1'?'TC1/http_server/web/index.html':model+'/web/index.html';
@@ -201,7 +201,7 @@ const ACTIONS={M1:['schedules.get','schedules.put','schedules.delete','schedules
   if(model==='A1'){
    const key=form.querySelector('select');assert.deepEqual([...key.options].map(o=>o.value),['0','1','2']);
    key.value='2';form.querySelector('[data-value="clicks"]').click();count.value='1';
-   for(const name of ['light_effect.next','light_effect.select','filter.reset','light_always.set']){
+   for(const name of ['fan.panel','light_effect.next','light_effect.select','filter.reset','light_always.set']){
     action.value=name;action.dispatchEvent(new w.Event('change',{bubbles:true}));
     form.dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));for(let i=0;i<16;i++)await flush();
     assert(calls.some(r=>r.action==='buttons.set'&&r.params.key===2&&r.params.action===name),'combination action saves '+name);
