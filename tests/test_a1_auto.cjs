@@ -32,3 +32,31 @@ test('A1 mode controls, idle state, automatic cap and manual speed remain distin
   w.UI.caps={actions:[]};render();assert.equal(d.getElementById('fanMode').hidden,true);
  }finally{dom.window.close();}
 });
+test('A1 hysteresis settings validate and save through the shared local/platform UI',async()=>{
+ const html=cp.execFileSync('python3',['common/web/page.py','A1/web/index.html'],{encoding:'utf8'});
+ const dom=new JSDOM(html,{runScripts:'outside-only',url:'http://device.local'}),w=dom.window;
+ try{
+  w.TextEncoder=TextEncoder;w.scrollTo=()=>{};w.setTimeout=()=>0;
+  const writes=[],config={enabled:1,mode:2,metrics:3,hysteresis_enabled:0,target_pm:35,on_pm:50,target_hcho:.08,on_hcho:.1,min_speed:20,max_speed:80,fallback_speed:30,statistic:0,debounce_seconds:15,min_switch_seconds:60,kp:20,ki:.02,kd:0};
+  w.fetch=async(url,options)=>{const req=JSON.parse(options.body);writes.push(req);return {ok:true,json:async()=>({code:'ok',data:req.action==='linkage.get'?{...config}:{}})};};
+  const scripts=[...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m=>m[1]);
+  scripts.forEach((source,i)=>{if(i===scripts.length-1){w.UI.start=dev=>{w.UI.device=dev;w.UI.pages=dev.pages;};w.UI.reload=async()=>w.UI.state;}vm.runInContext(source,dom.getInternalVMContext());});
+  w.I18N.set('en');w.UI.caps={actions:['fan.mode.set']};
+  await w.UI.pages.linkage.show();
+  const page=w.document.querySelector('[data-settings-page="linkage"]');
+  const label=text=>[...page.querySelectorAll('label')].find(el=>el.textContent.includes(text));
+  const toggle=label('Enable start/idle hysteresis').querySelector('input');
+  toggle.checked=true;toggle.dispatchEvent(new w.Event('change'));
+  assert.equal(page.textContent.split('PM2.5 target / idle at').length-1,1,'PID shares the outer target');
+  const change=(title,value)=>{const el=label(title).querySelector('input');el.value=value;el.dispatchEvent(new w.Event('input'));};
+  change('PM2.5 start threshold',60);change('PM2.5 target / idle at',30);
+  page.querySelector('.form-actions button').click();for(let i=0;i<4;i++)await flush();
+  const saved=writes.findLast(r=>r.action==='linkage.set');
+  assert.equal(saved.params.hysteresis_enabled,1);assert.equal(saved.params.on_pm,60);assert.equal(saved.params.target_pm,30);
+  const count=writes.filter(r=>r.action==='linkage.set').length;
+  change('Formaldehyde start threshold',.07);page.querySelector('.form-actions button').click();for(let i=0;i<3;i++)await flush();
+  assert.equal(writes.filter(r=>r.action==='linkage.set').length,count,'invalid thresholds never sent');
+  delete config.hysteresis_enabled;await w.UI.pages.linkage.show();
+  assert.equal(page.textContent.includes('Enable start/idle hysteresis'),false,'older firmware stays supported');
+ }finally{dom.window.close();}
+});

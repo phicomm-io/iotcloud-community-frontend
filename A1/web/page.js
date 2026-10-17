@@ -293,16 +293,27 @@ async function showLinkage(){
  const draw=()=>{
   const choose=seg([[1,'PM2.5'],[2,()=>t('m.formaldehyde')],[3,'link.both']],v=>{m.metrics=v;draw();});choose.set(m.metrics);
   const modes=seg([[0,'link.mode.0'],[1,'link.mode.1'],[2,'link.mode.2']],v=>{m.mode=v;draw();});modes.set(m.mode);
-  const detail=[];
+  const detail=[],gate=[];
+  const supportsGate=Object.hasOwn(m,'hysteresis_enabled');
   const field=(key,label,options={})=>h('label',{class:'field'},h('span',{},t(label)),num(m,key,options));
   if(m.mode===0)detail.push(field('fixed_speed','link.fixed',{min:1,max:100,unit:'%'}));
   if(m.mode===1){
    if(m.metrics&1)detail.push(field('low_pm','auto.low_pm',{min:0,unit:'µg/m³'}),field('high_pm','auto.high_pm',{min:0,unit:'µg/m³'}));
    if(m.metrics&2)detail.push(field('low_hcho','auto.low_hcho',{min:0,step:.001,unit:'mg/m³'}),field('high_hcho','auto.high_hcho',{min:0,step:.001,unit:'mg/m³'}));
   }
+  if(supportsGate){
+   const toggle=flag(m,'hysteresis_enabled','auto.hysteresis','auto.hysteresis_help');
+   toggle.querySelector('input').addEventListener('change',draw);
+   gate.push(toggle);
+   if(m.hysteresis_enabled){
+    if(m.metrics&1)gate.push(field('target_pm','auto.target_pm',{min:.01,max:5000,unit:'µg/m³'}),field('on_pm','auto.start_pm',{min:0,max:5000,unit:'µg/m³'}));
+    if(m.metrics&2)gate.push(field('target_hcho','auto.target_hcho',{min:.001,max:10,step:.001,unit:'mg/m³'}),field('on_hcho','auto.start_hcho',{min:0,max:10,step:.001,unit:'mg/m³'}));
+    gate.push(info('auto.hysteresis_detail'));
+   }
+  }
   if(m.mode===2){
-   if(m.metrics&1)detail.push(field('target_pm','link.pid_pm',{min:.01,unit:'µg/m³'}));
-   if(m.metrics&2)detail.push(field('target_hcho','link.pid_hcho',{min:.001,step:.001,unit:'mg/m³'}));
+   if(!m.hysteresis_enabled&&(m.metrics&1))detail.push(field('target_pm','link.pid_pm',{min:.01,unit:'µg/m³'}));
+   if(!m.hysteresis_enabled&&(m.metrics&2))detail.push(field('target_hcho','link.pid_hcho',{min:.001,step:.001,unit:'mg/m³'}));
    detail.push(h('details',{class:'more'},h('summary',{i18n:'link.pid_tune'}),h('div',{class:'fields'},['kp','ki','kd'].map(k=>h('label',{class:'field'},h('span',{},k.toUpperCase()),num(m,k,{min:0,step:.01}))))));
   }
   const range=[field('min_speed','auto.minimum',{min:modern?0:1,max:100,unit:'%'}),field('max_speed','auto.maximum',{min:1,max:100,unit:'%'})];
@@ -311,10 +322,14 @@ async function showLinkage(){
    h('section',{class:'card stack'},flag(m,'enabled','link.enable','auto.mode_help'),
     h('div',{class:'fields'},range),modern?info('auto.range_help'):null),
    h('section',{class:'card stack'},h('h2',{i18n:'link.speed'}),choose,modes,h('div',{class:'fields'},detail)),
+   supportsGate?h('section',{class:'card stack'},h('h2',{i18n:'auto.hysteresis_title'}),h('div',{class:'fields'},gate)):null,
    h('section',{class:'card stack'},h('h2',{i18n:'common.advanced'}),
     h('label',{class:'field'},h('span',{i18n:'link.statistic'}),h('select',{onchange:e=>m.statistic=+e.target.value},[0,1,2,3,4,5].map(v=>h('option',{value:v,selected:m.statistic===v},t('link.stat.'+v))))),
     h('div',{class:'fields'},field('debounce_seconds','link.debounce',{min:0,max:3600,unit:t('unit.s')}),field('min_switch_seconds','link.min_switch',{min:0,max:3600,unit:t('unit.s')}))),
-   saveBar(()=>api('/linkage/config',m).then(refresh)));
+   saveBar(()=>{
+    if(m.hysteresis_enabled&&(((m.metrics&1)&&m.on_pm<=m.target_pm)||((m.metrics&2)&&m.on_hcho<=m.target_hcho)))throw new Error(t('auto.hysteresis_invalid'));
+    return api('/linkage/config',m).then(refresh);
+   }));
  };
  draw();
 }

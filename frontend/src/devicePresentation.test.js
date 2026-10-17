@@ -25,3 +25,8 @@ test('Legacy and TMCP numeric relay states render consistently without inventing
  assert.deepEqual(socketStates({socket_states:[1,null,'',2]}),[true,undefined,undefined,undefined,undefined,undefined]);
  assert.deepEqual(socketStates({plug_0:{on:0}}),[false,undefined,undefined,undefined,undefined,undefined]);
 });
+
+test('A1 summaries retain selected mode while idle or powered off',()=>{
+ assert.equal(deviceSummary({model:'a1'},{fan_on:true,fan_mode:'auto',fan_state:'idle',led_enabled:false},true),'自动 待机 · 灯光关闭');
+ assert.equal(deviceSummary({model:'a1'},{fan_on:false,fan_mode:'auto',led_enabled:false},true),'自动 已停止 · 灯光关闭');
+});
