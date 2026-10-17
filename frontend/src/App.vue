@@ -16,11 +16,13 @@ import AppIcon from './components/AppIcon.vue';
 import DeviceHome from './components/DeviceHome.vue';
 import PlatformSettings from './components/PlatformSettings.vue';
 import ThemeToggle from './components/ThemeToggle.vue';
+import InstallApp from './components/InstallApp.vue';
 
 const iconURL=import.meta.env.BASE_URL+'icons/iotcloud.svg';
 const demoMode=import.meta.env.VITE_DEMO === '1';
 const demoDevices=demoMode?Object.fromEntries(['tc1','m1','a1'].map(m=>[m,window.PhicommDemo.create(m)])):null;
 const route=useRoute(),router=useRouter();
+const installApp=ref(null),listReady=ref(false);
 const home=ref(null),devicePicker=ref(null),nameDialog=ref(null),aliases=ref({});
 function displayName(d){const name=aliases.value[deviceKey(d)]||states[deviceKey(d)]?.name||d.name;if(name)return name;const peers=list.value.filter(x=>x.model===d.model);return deviceType(d)+(peers.length>1?' '+(peers.findIndex(x=>deviceKey(x)===deviceKey(d))+1):'');}
 function renameDevice(d,name,done){
@@ -79,7 +81,7 @@ function manualDisconnect(){setAutoConnect(connectionOwner(),false);disconnect()
 function manualConnect(){setAutoConnect(connectionOwner(),true);connect();}
 function disconnect(){busy.value=false;for(const {reply,timeout} of replies.values()){clearTimeout(timeout);reply({code:'offline',message:'MQTT 已断开'});}replies.clear();client?.end(true);client=null;connected.value=false;Object.keys(states).forEach(k=>delete states[k]);}
 function subscribe(){if(demoMode)return;if(thirdParty.value)client?.subscribe(`phicomm/v2/${connection.username?userKey(connection.username):'local'}/discovery/+`,{qos:1});for(const d of list.value.filter(d=>!d.status||d.status==='active'))client?.subscribe(topics(d),{qos:1},(e,g)=>{if(e||g?.some(x=>x.qos===128))error.value='订阅被拒绝，请检查账号与设备归属';});}
-async function refresh(){try{list.value=(thirdParty.value?localDevices(guestStorage).map(d=>({...d,username:connection.username})):await api('/devices')).map(deviceEntry);if(!list.value.some(d=>deviceKey(d)===selected.value))selected.value=list.value[0]?deviceKey(list.value[0]):'';if(connected.value)subscribe();}catch(e){error.value=e.message;}}
+async function refresh(){try{list.value=(thirdParty.value?localDevices(guestStorage).map(d=>({...d,username:connection.username})):await api('/devices')).map(deviceEntry);if(!list.value.some(d=>deviceKey(d)===selected.value))selected.value=list.value[0]?deviceKey(list.value[0]):'';if(connected.value)subscribe();listReady.value=true;}catch(e){error.value=e.message;}}
 function connect(){if(demoMode){connected.value=true;busy.value=false;for(const d of list.value)Object.assign(states[deviceKey(d)]||={},demoDevices[d.model].state);return;}if(!thirdParty.value&&connection.password)rememberLogin(account.username,connection.password);disconnect();error.value='';if(location.protocol==='https:'&&!connection.host.startsWith('wss://')){error.value='HTTPS 页面需要 wss:// 地址';return;}if(!/^wss?:\/\//.test(connection.host)){error.value='请输入 ws:// 或 wss:// 地址';return;}busy.value=true;
  client=mqtt.connect(connection.host,{username:connection.username,password:connection.password,clientId:'web_'+requestId(),connectTimeout:5000,reconnectPeriod:3000,clean:true});
  client.on('connect',()=>{connected.value=true;busy.value=false;subscribe();track('mqtt_connect',thirdParty.value?'/guest':'/');});
@@ -144,8 +146,9 @@ onBeforeUnmount(()=>{disconnect();clearInterval(timer);clearInterval(poll);});
 <DevicePicker ref="devicePicker" :devices="list" :selected="selected" :states="states" :device-name="displayName" :connected="connected" :now="now" @select="selected=$event" @refresh="refresh" @add="openSettings('devices')"/>
 </template>
 <template v-else>
-<PlatformSettings :initial-section="settingsSection" :device-broker="deviceBroker" :connection="connection" :connected="connected" :busy="busy" :third-party="thirdParty" :devices="list" :states="states" :add-form="addForm" :device-name="displayName" :now="now" @rename="nameDialog.open($event,displayName($event))" @mode-change="thirdParty=$event;changeMode()" @connect="manualConnect" @disconnect="manualDisconnect" @add="add" @remove="remove" @password="changePassword" @mqtt-password="changeMQTTPassword" @home="page='home'" @refresh="refresh"/>
+<PlatformSettings :initial-section="settingsSection" :device-broker="deviceBroker" :connection="connection" :connected="connected" :busy="busy" :third-party="thirdParty" :devices="list" :states="states" :add-form="addForm" :device-name="displayName" :now="now" @install="installApp?.open()" @rename="nameDialog.open($event,displayName($event))" @mode-change="thirdParty=$event;changeMode()" @connect="manualConnect" @disconnect="manualDisconnect" @add="add" @remove="remove" @password="changePassword" @mqtt-password="changeMQTTPassword" @home="page='home'" @refresh="refresh"/>
 </template>
+<InstallApp v-if="!demoMode" ref="installApp" :eligible="page==='home'&&listReady&&!!account.username&&!thirdParty"/>
 <DeviceNameDialog ref="nameDialog" @save="renameDevice"/>
 <footer class="console-footer copyright">Copyright &copy; Phicomm Community · <a href="https://github.com/phicomm-io/phicomm-community-mqtt" target="_blank" rel="noopener noreferrer">MQTT 平台仓库</a> · <a href="https://phicomm-io.github.io" target="_blank" rel="noopener noreferrer">项目网站</a></footer></main>
 </template>

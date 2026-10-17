@@ -9,7 +9,9 @@ import './style.css'
 
 import {loadServer} from './serverConfig';
 import {registerWebApp} from './webapp';
+import {registerInstallPrompt} from './installApp';
 async function start(){
+ registerInstallPrompt();
  await loadServer();
  registerWebApp();
  if(import.meta.env.VITE_DEMO === '1') await import('./demo.js');
