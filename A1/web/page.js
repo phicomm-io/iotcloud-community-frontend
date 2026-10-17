@@ -70,7 +70,8 @@ $('filterReset').onclick=()=>run(null,async()=>{
 function renderAuto(){
  const c=$('autoCard'),st=bindingStatus.linkage_status,peers=bindingStatus.peers||[];
  const head=h('div',{class:'card-head'},h('div',{},h('h2',{},h('a',{href:'#settings/linkage',i18n:'a1.auto'})),h('p',{class:'help',i18n:'a1.auto_lead'})),
-  h('span',{class:'badge '+(st==='active'?'ok':st==='sensor_failed'?'warn':'')},t('s.link_'+st)));
+  h('div',{class:'row'},h('span',{class:'badge '+(st==='active'?'ok':st==='sensor_failed'?'warn':'')},t('s.link_'+st)),
+   h('a',{class:'btn',href:'#settings/linkage'},h('span',{},t('auto.settings')))));
  if(!peers.length){c.replaceChildren(head,h('div',{class:'empty'},h('p',{},t(UI.state?.fan_mode==='auto'?'auto.no_sensor':'a1.auto_empty')),
   h('a',{class:'btn',href:'#settings/binding',style:'margin-top:12px'},icon('link'),h('span',{},t('a1.auto_link')))));return;}
  const fresh=peers.filter(p=>p.fresh).length;
@@ -80,7 +81,6 @@ function renderAuto(){
  if(st==='disabled'){c.replaceChildren(head,meta,readings,h('a',{class:'btn',href:'#settings/linkage',style:'margin-top:12px'},h('span',{},t('a1.auto_enable'))));return;}
  // replaceChildren() stringifies null, so build the list explicitly.
  const rows=[head,readings];
- rows.push(h('a',{class:'btn',href:'#settings/linkage'},h('span',{},t('auto.settings'))));
  if(st==='sensor_failed')rows.push(h('div',{class:'banner warn'},icon('alert'),h('span',{},t('a1.auto_failed'))));
  rows.push(h('div',{class:'row between'},meta,h('span',{class:'badge info'},t('a1.auto_speed',{p:bindingStatus.automatic_speed}))));
  c.replaceChildren(...rows);
