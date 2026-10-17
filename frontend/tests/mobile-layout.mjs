@@ -30,7 +30,7 @@ async function fixture(browser,{admin=false,guest=false,count=3,hint=false,conne
  const page=await context.newPage(),errors=[],commands=[],connections=[],apiRequests=[],channels=new Set();
  page.on('pageerror',error=>errors.push(error.message));
  const state={devices:Array.from({length:count},(_,i)=>({...defaultDevices[i%3],mac:(0xaabbccddee00+i).toString(16)})),online:true};
- const devices=new Map(state.devices.map(d=>[d.mac,createDevice(d.model)]));
+ const devices=new Map(state.devices.map(d=>[d.mac,createDevice(d.model)])),lostNameReads=new Set();
  for(const [mac,device] of devices){device.state.device_id=mac;device.state.name=device.state.model.toUpperCase()+' 客厅设备';}
  const mqttURL=hint?'wss://broker.example.test/mqtt':base.replace('http:','ws:')+'/mqtt';
  await page.addInitScript(({base,mqttURL,guest,devices})=>{
@@ -72,7 +72,8 @@ async function fixture(browser,{admin=false,guest=false,count=3,hint=false,conne
     const mac=packet.topic.split('/').at(-2),device=devices.get(mac),request=JSON.parse(packet.payload.toString());
     assert(device,'Command must target a fixture device');commands.push({mac,...request});
     const data=device.command(request.action,request.params);
-    if(loseNameReceipt&&request.action==='config.set'&&request.params.section==='device')return;
+    if(loseNameReceipt&&request.action==='config.set'&&request.params.section==='device'){lostNameReads.add(mac);return;}
+    if(request.action==='config.get'&&lostNameReads.delete(mac))return;
     send({cmd:'publish',topic:packet.topic.replace(/\/command$/,'/result'),qos:0,payload:JSON.stringify({request_id:request.request_id,code:request.action.endsWith('.get')?'ok':'accepted',data})});
    }
    if(packet.cmd==='pingreq')send({cmd:'pingresp'});
@@ -117,7 +118,7 @@ try{
     await renamed.page.getByRole('button',{name:`修改 ${model} 客厅设备 的名称`,exact:true}).click();
     await renamed.page.getByLabel('设备名称',{exact:true}).fill(model+' 已确认');
     await renamed.page.getByRole('button',{name:'保存名称',exact:true}).click();
-    await expect(renamed.page.locator('.rename-dialog')).not.toBeVisible({timeout:5000});
+    await expect(renamed.page.locator('.rename-dialog')).not.toBeVisible({timeout:10000});
     await expect(renamed.page.getByRole('button',{name:`修改 ${model} 已确认 的名称`,exact:true})).toBeVisible();
    }
    assert.equal(renamed.commands.filter(c=>c.action==='config.set').length,2);

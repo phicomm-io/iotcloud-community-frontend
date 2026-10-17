@@ -48,7 +48,7 @@ watch(page,value=>track('pageview',thirdParty.value?(value==='settings'?'/guest/
 watch(()=>active.value?deviceKey(active.value):'',value=>{if(value)track('device_view',thirdParty.value?'/guest':'/',active.value.model);});
 let client,timer,poll;
 const replies=new Map();
-async function deviceCommand(request,reply,target=active.value){
+async function deviceCommand(request,reply,target=active.value,{timeoutMs=20000}={}){
  // A newly mounted device page can request data before MQTT finishes connecting.
  // Wait only for reads; never queue a device write for a later connection.
  if(!connected.value&&busy.value&&request.action.endsWith('.get')){
@@ -66,7 +66,7 @@ async function deviceCommand(request,reply,target=active.value){
  if(request.action.endsWith('.get')){const existing=[...replies.values()].find(p=>p.signature===signature);if(existing){const previous=existing.reply;existing.reply=value=>{previous(value);reply(value);};return;}}
  const id=requestId(),d=target;
  const state=states[deviceKey(d)]||={};(state.pending||={})[id]=request.action;
- const timeout=setTimeout(()=>{const pending=replies.get(id);replies.delete(id);delete state.pending[id];pending?.reply({code:'timeout',message:'暂未收到操作回执，请等待状态更新'});},20000);
+ const timeout=setTimeout(()=>{const pending=replies.get(id);replies.delete(id);delete state.pending[id];pending?.reply({code:'timeout',message:'暂未收到操作回执，请等待状态更新'});},timeoutMs);
  replies.set(id,{reply,timeout,key:deviceKey(d),signature});
  const c=command(d,{...request,request_id:id});
  client.publish(c.topic,c.payload,{qos:1,retain:false},e=>{if(e){clearTimeout(timeout);const pending=replies.get(id);replies.delete(id);delete state.pending[id];pending?.reply({code:'error',message:'发送失败'});}});

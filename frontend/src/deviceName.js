@@ -10,7 +10,7 @@ export function saveDeviceName(send,device,name,done,{schedule=setTimeout,cancel
    if(finished)return;
    if(reply.code==='ok'&&expected!==null&&reply.data?.name===expected){finish({code:'ok',data:{name:expected}});return;}
    timer=schedule(verify,1500);
-  },device);
+  },device,{timeoutMs:3000});
  }
  // Schedule first so a synchronous offline/error response can cancel it.
  timer=schedule(verify,1500);
