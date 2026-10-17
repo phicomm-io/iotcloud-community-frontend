@@ -93,7 +93,7 @@ const D={
 'nav.home':['Home','首页'],'nav.settings':['Settings','设置'],
 'grp.network':['Network','网络'],'grp.device':['Device','设备'],'grp.auto':['Automation','自动化'],'grp.system':['System','系统'],
 'nav.wifi':['Wi-Fi','Wi-Fi'],'nav.mqtt':['MQTT / Home Assistant','MQTT / Home Assistant'],'nav.general':['General','通用'],'nav.light':['Light effects','灯效'],
-'nav.binding':['Linked M1','绑定 M1'],'nav.linkage':['Auto control','自动调速'],'nav.schedule':['Schedules','定时任务'],'nav.sleep':['Night mode','夜间模式'],
+'nav.binding':['Linked M1','绑定 M1'],'nav.linkage':['Auto control','自动调速'],'auto.settings':['Automatic control settings','自动调速设置'],'nav.schedule':['Schedules','定时任务'],'nav.sleep':['Night mode','夜间模式'],
 'nav.buttons':['Button events','按键事件'],'nav.permission':['Linkage access','联动许可'],
 'nav.firmware':['Firmware','固件升级'],'nav.diagnostics':['Diagnostics','诊断'],'nav.logs':['Logs','日志'],'nav.maintenance':['Restart & reset','重启与恢复'],
 /* header */
