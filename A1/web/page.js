@@ -329,7 +329,7 @@ async function showLinkage(){
     h('div',{class:'fields'},field('debounce_seconds','link.debounce',{min:0,max:3600,unit:t('unit.s')}),field('min_switch_seconds','link.min_switch',{min:0,max:3600,unit:t('unit.s')}))),
    saveBar(()=>{
     if(m.hysteresis_enabled&&(((m.metrics&1)&&m.on_pm<=m.target_pm)||((m.metrics&2)&&m.on_hcho<=m.target_hcho)))throw new Error(t('auto.hysteresis_invalid'));
-    return api('/linkage/config',m).then(refresh);
+    return api('/linkage/config',m).then(saved=>{m.revision=saved.revision;return refresh();});
    }));
  };
  draw();
