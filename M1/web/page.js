@@ -18,11 +18,12 @@ $('metrics').append(...METRICS.map(k=>{
 }));
 // A serial number proves identification; bus initialization alone does not.
 let lastCo2=null,lastCo2Serial='';
+const co2Scale=h('div');
 const co2Badge=h('span',{class:'badge'});
 const co2Value=h('span',{class:'num',id:'co2Value'},'—');
 const co2Card=h('section',{class:'card metric',id:'co2Card'},
  h('div',{class:'row between'},h('div',{class:'label','data-i18n':'m.co2'},t('m.co2')),co2Badge),
- h('div',{class:'stat'},co2Value,h('small',{},'ppm')));
+ h('div',{class:'stat'},co2Value,h('small',{},UI.AIR.co2.unit)),co2Scale);
 co2Card.hidden=true;
 $('metrics').append(co2Card);
 const screen=seg([[0,'state.off'],[1,'1'],[2,'2'],[3,'3'],[4,'4']],v=>run(null,()=>UI.control('display.set',{brightness:v*25},{brightness_requested:v}),'toast.accepted'),{full:true,aria:t('m1.screen')});
@@ -39,7 +40,15 @@ function renderHome(s){
  if(co2Fresh)lastCo2=Math.round(co2.co2_ppm);
  co2Value.textContent=lastCo2===null?'—':String(lastCo2);
  co2Value.style.color=co2Fresh?'':'var(--muted)';
- co2Badge.textContent=lastCo2!==null&&!co2Fresh?t('m.co2_stale'):'';
+ const co2Grade=lastCo2===null?null:UI.grade('co2',lastCo2);
+ co2Badge.className='badge '+(co2Fresh?co2Grade.cls:'');
+ co2Badge.textContent=co2Fresh?t(co2Grade.key):lastCo2!==null?t('m.co2_stale'):'';
+ co2Scale.replaceChildren(UI.airScale('co2',lastCo2??0));
+ co2Scale.classList.toggle('co2-stale',!co2Fresh);
+ co2Scale.classList.toggle('co2-empty',lastCo2===null);
+ co2Scale.title=t('m.co2_range');
+ co2Scale.setAttribute('aria-label',t('m.co2_range'));
+
  const stale=!s.sensor_valid||s.age_ms>STALE_MS;
  const fmt={pm25:v=>String(Math.round(v)),formaldehyde:v=>v.toFixed(3),temperature:v=>v.toFixed(1),humidity:v=>v.toFixed(0)};
  const grades={};

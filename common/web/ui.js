@@ -126,7 +126,9 @@ const clone=o=>JSON.parse(JSON.stringify(o));
 
 /* Air quality bands: PM2.5 per GB 3095, formaldehyde limit per GB/T 18883-2022,
  * temperature and humidity comfort per the A1 light-segment defaults. */
+// CO2 ventilation reference: HSE using-co2-monitors (1000 / 1500 ppm).
 const AIR={
+ co2:{unit:'ppm',max:2500,bands:[[1000,'comfort','ok'],[1500,'elevated','warn'],[Infinity,'ventilate','bad']]},
  pm25:{unit:'µg/m³',max:250,bands:[[35,'excellent','ok'],[75,'good','ok'],[115,'light','warn'],[150,'moderate','warn'],[250,'heavy','bad'],[Infinity,'severe','bad']]},
  formaldehyde:{unit:'mg/m³',max:0.2,bands:[[0.08,'pass','ok'],[0.1,'slight','warn'],[Infinity,'exceed','bad']]},
  temperature:{unit:'℃',min:0,max:40,bands:[[18,'cool','warn'],[26,'comfort','ok'],[Infinity,'warm','warn']]},
