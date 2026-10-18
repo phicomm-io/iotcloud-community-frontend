@@ -277,3 +277,5 @@ pre{overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;bac
 
 .co2-stale .scale i,.co2-stale .scale b{background:var(--muted)}
 .co2-empty .scale b{display:none}
+.metrics.with-co2 .label{min-width:0;overflow-wrap:anywhere}
+.metrics.with-co2 .badge{max-width:100%;white-space:normal;overflow-wrap:anywhere}
