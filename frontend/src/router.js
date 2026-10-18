@@ -3,6 +3,7 @@ import { account, restoreAccount } from './account';
 const router = createRouter({
  history: createWebHashHistory(),
  routes: [
+  { path: '/github', name: 'GitHub', component: () => import('./views/GitHubPage.vue') },
   { path: '/login', name: 'Login', component: () => import('./views/LoginPage.vue') },
   { path: '/', name: 'Console', component: () => import('./App.vue'), meta: { requiresAccount: true } },
   { path: '/guest', name: 'Guest', component: () => import('./App.vue') },

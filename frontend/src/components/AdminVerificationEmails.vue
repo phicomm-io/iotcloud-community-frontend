@@ -4,7 +4,7 @@ import {api} from '../account';
 const props=defineProps({enabled:Boolean});
 const data=ref(null),error=ref(''),busy=ref(false),days=ref(30),email=ref(''),status=ref(''),page=ref(1),revealed=ref(new Set()),clock=ref(Date.now());
 let timer,tick,sequence=0,stopped=false,serverOffset=0;
-const labels={unknown:'发送结果未知',sending:'发送中／结果待确认',sent:'已发送，待注册',registered:'已注册',expired:'已过期，未注册',failed:'发送失败',superseded:'重发后失效',verified:'验证通过，注册未完成',registration_failed:'验证通过，注册失败'};
+const labels={unknown:'发送结果未知',sending:'发送中／结果待确认',sent:'已发送，待注册',registered:'已注册',expired:'已过期',failed:'发送失败',superseded:'重发后失效',verified:'验证通过，注册未完成',registration_failed:'验证通过，注册失败'};
 const metrics=[['sent_emails','已发送邮箱'],['registered_emails','已注册邮箱'],['unregistered_emails','已发送但未注册'],['expired_unregistered_emails','已过期未注册'],['failed_attempts','发送失败次数']];
 const pages=computed(()=>Math.max(1,Math.ceil((data.value?.total||0)/50)));
 function effectiveStatus(row){return row.status==='sent'&&row.expires_at*1000<=clock.value+serverOffset?'expired':row.status;}
@@ -26,7 +26,7 @@ onBeforeUnmount(()=>{stopped=true;clearInterval(timer);clearInterval(tick);});
 <section class="card verification-records" aria-labelledby="verification-records-title">
  <header class="verification-heading"><div><h2 id="verification-records-title">注册验证码记录</h2><p class="help">{{props.enabled?'邮箱验证已开启':'邮箱验证未开启，仍可查看历史记录'}} · 每 30 秒刷新</p></div><button type="button" :disabled="busy" @click="refresh()">{{busy?'刷新中…':'刷新记录'}}</button></header>
  <p class="help verification-note">“已发送”表示邮件服务器已接受，不代表已送达收件箱。可结合未注册数量排查邮件或垃圾箱问题。记录保留 90 天，从功能启用后开始。</p>
- <form class="verification-filters" @submit.prevent="refresh(true)"><label>记录范围<select aria-label="记录范围" v-model="days" @change="refresh(true)"><option :value="1">近 1 天</option><option :value="7">近 7 天</option><option :value="30">近 30 天</option><option :value="90">近 90 天</option></select></label><label>状态<select aria-label="状态" v-model="status" @change="refresh(true)"><option value="">全部状态</option><option v-for="(name,key) in labels" :key="key" :value="key">{{name}}</option></select></label><label>搜索邮箱<input v-model="email" maxlength="254" placeholder="输入全部或部分邮箱" type="search" /></label><button :disabled="busy">查询</button></form>
+ <form class="verification-filters" @submit.prevent="refresh(true)"><label>记录范围<select aria-label="记录范围" v-model="days" @change="refresh(true)"><option :value="1">近 1 天</option><option :value="7">近 7 天</option><option :value="30">近 30 天</option><option :value="90">近 90 天</option></select></label><label>状态<select aria-label="状态" v-model="status" @change="refresh(true)"><option value="">全部状态</option><option v-for="(name,key) in labels" :key="key" :value="key">{{name}}</option></select></label><label>搜索邮箱<input v-model="email" maxlength="254" placeholder="输入全部或部分邮箱" type="text" /></label><button :disabled="busy">查询</button></form>
  <p v-if="error" role="alert" class="error">{{error}}</p>
  <template v-if="data">
   <div class="verification-metrics"><div v-for="[key,title] in metrics" :key="key"><span>{{title}}</span><b>{{data.summary[key]}}</b></div></div>

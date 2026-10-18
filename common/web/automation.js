@@ -8,7 +8,7 @@ const {h,icon,toast,run,switchRow,seg,daysPicker,presetDays,daysText,hhmm,toMinu
 
 /* Action kinds a schedule or button event can run, keyed by action name. */
 const ACTIONS={
- 'fan.mode.set':'auto.mode','fan.mode.toggle':'auto.toggle','outlet.set':'op.outlet','fan.set':'op.fan','light.set':'op.light',
+ 'fan.panel':'op.fan_panel','fan.mode.set':'auto.mode','fan.mode.toggle':'auto.toggle','outlet.set':'op.outlet','fan.set':'op.fan','light.set':'op.light',
  'child_lock.set':'op.child_lock','indicator.set':'op.indicator',
  'display.set':'op.display','system.reboot':'op.reboot',
  'light_effect.next':'op.effect_next','light_effect.select':'op.effect_select',
@@ -18,7 +18,7 @@ const sel=(parent,labelKey,options)=>{const s=h('select',{},options.map(([v,k])=
 
 /* Shared action editor: one control group per supported action. */
 function actionEditor(host,{keys=false}={}){
- const caps=UI.caps||{},available=Object.keys(ACTIONS).filter(a=>(caps.actions||[]).includes(a)&&(keys||!['light_effect.next','light_effect.select','filter.reset','fan.mode.toggle'].includes(a)));
+ const caps=UI.caps||{},available=Object.keys(ACTIONS).filter(a=>(caps.actions||[]).includes(a)&&(keys||!['light_effect.next','light_effect.select','filter.reset','fan.mode.toggle','fan.panel'].includes(a)));
  const box=h('div',{class:'stack'}),fields=h('div',{class:'stack'});
  const options=[...(keys?[['none','op.none']]:[]),...available.map(a=>[a,actKey(a)])];
  const pick=keys?sel(host,'btn.action',options):seg(options,v=>draw(v),{full:true});
@@ -158,7 +158,7 @@ function buttonsPage(dev){
   if(v.action==='none')return t('op.none');
   const p=v.params||{},state=t(p.toggle?'op.toggle':p.on===false||p.enabled===false?'op.off':'op.on');
   const target=v.action==='outlet.set'?(p.index==null?t('op.all'):(UI.state?.socket_names?.[p.index]||t('tc1.socket_n',{n:p.index+1}))):t(actKey(v.action));
-  if(['system.reboot','light_effect.next','filter.reset'].includes(v.action))return target;
+  if(['system.reboot','light_effect.next','filter.reset','fan.panel','fan.mode.toggle'].includes(v.action))return target;
   if(v.action==='light_effect.select')return target+' · '+t('a1.effect.'+p.effect);
   let text=v.action==='display.set'?target:state+' · '+target;
   if(p.speed!=null)text+=' · '+p.speed+'%';

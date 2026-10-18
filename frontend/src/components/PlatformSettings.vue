@@ -1,4 +1,5 @@
 <script setup>
+import GitHubAccount from './GitHubAccount.vue';
 import {ref,computed} from 'vue';
 import {account} from '../account';
 import {deviceKey} from '../deviceProtocol';
@@ -49,6 +50,7 @@ function status(d){return !props.connected?'未连接':props.states[deviceKey(d)
 </section>
 </template>
 <template v-else>
+<GitHubAccount v-if="!demoMode"/>
 <section class="card settings-card"><header class="settings-card-heading"><div><h2>修改 MQTT 密码</h2><p class="help">默认使用注册密码。修改后请更新所有设备的 MQTT 密码，网站登录密码保持不变。</p></div></header><form @submit.prevent="emit('mqtt-password',{current:mqttCurrent,password:mqttNew})"><div class="settings-block settings-fields"><label>网站当前密码<input v-model="mqttCurrent" type="password" autocomplete="current-password" required/></label><label>新 MQTT 密码<input v-model="mqttNew" type="password" autocomplete="new-password" minlength="6" required/></label></div><footer class="settings-actions"><button class="btn primary">保存 MQTT 密码</button></footer></form></section>
 <section class="card settings-card"><header class="settings-card-heading"><span class="settings-icon"><AppIcon name="guest" :size="23"/></span><div><h2>账号安全</h2><p class="help">管理登录信息，保护你的设备访问权限。</p></div></header><div class="account-summary"><span class="account-avatar">{{account.username?.slice(0,1).toUpperCase()}}</span><div><b>{{account.username}}</b><p class="help">{{account.isAdmin?'管理员':'普通账号'}} · 网站与 MQTT 密码独立管理</p></div><span class="badge ok">已登录</span></div></section>
 <section class="card settings-card"><header class="settings-card-heading"><span class="settings-icon"><AppIcon name="shield" :size="23"/></span><div><h2>修改密码</h2><p class="help">修改成功后，使用新密码重新登录，MQTT 密码保持不变。</p></div></header><form @submit.prevent="emit('password',{current:currentPassword,password:newPassword})"><div class="settings-block"><div class="settings-fields"><label>当前密码<input v-model="currentPassword" type="password" required autocomplete="current-password"/></label><label>新密码<input v-model="newPassword" type="password" required minlength="6" autocomplete="new-password"/><small class="help">至少 6 个字符</small></label></div></div><footer class="settings-actions"><p class="help">网站密码与 MQTT 密码独立，设备无需修改。</p><button class="btn primary">修改密码并退出</button></footer></form></section>

@@ -45,6 +45,7 @@ try{for(const [engine,type] of engines){
   await section.getByRole('button',{name:'下一页',exact:true}).click();await expect(section.getByText('当前条件下暂无验证码记录。')).toBeVisible();
   await section.getByRole('button',{name:'上一页',exact:true}).click();await expect(section.getByRole('button',{name:'查看验证码',exact:true})).toBeVisible();
   await section.getByRole('button',{name:'查看验证码',exact:true}).click();expire=true;await section.getByRole('button',{name:'刷新记录',exact:true}).click();await expect(section.getByRole('button',{name:'查看验证码',exact:true})).toHaveCount(0);await expect(section.getByLabel('有效验证码')).toHaveCount(0);
+  for(const control of await section.locator('input,select,button').all())assert((await control.boundingBox()).height>=40,'small form control');
   assert(await section.evaluate(el=>el.scrollWidth<=el.clientWidth+1),'records overflow');assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'page overflow');
   await section.screenshot({path:resolve(evidence,engine+'-'+width+'.png')});
   fail=true;await section.getByRole('button',{name:'刷新记录',exact:true}).click();await expect(section.getByRole('alert')).toHaveText('记录加载失败，请重试');await expect(section.getByLabel('有效验证码')).toHaveCount(0);

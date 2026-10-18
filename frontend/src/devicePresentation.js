@@ -26,5 +26,5 @@ export function deviceSummary(d,s={},connected=false,now=Date.now()){
  }
  if(s.fan_on===undefined)return '等待设备数据';
  const speed=s.applied_speed??s.percentage??s.speed;
- return `${s.fan_on?(s.fan_state==='idle'?'待机':(s.fan_mode==='auto'?'自动 ':s.fan_mode==='manual'?'手动 ':'运行 ')+number(speed)+'%'):'已停止'} · ${s.led_enabled===undefined?'灯光未知':s.led_enabled?'灯光开启':'灯光关闭'}`;
+ return `${s.fan_mode==='auto'?'自动 ':s.fan_mode==='manual'?'手动 ':''}${s.fan_on?(s.fan_state==='idle'?'待机':(s.fan_mode?'':'运行 ')+number(speed)+'%'):'已停止'} · ${s.led_enabled===undefined?'灯光未知':s.led_enabled?'灯光开启':'灯光关闭'}`;
 }
