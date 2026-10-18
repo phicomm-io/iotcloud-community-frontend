@@ -279,3 +279,12 @@ pre{overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;bac
 .co2-empty .scale b{display:none}
 .metrics.with-co2 .label{min-width:0;overflow-wrap:anywhere}
 .metrics.with-co2 .badge{max-width:100%;white-space:normal;overflow-wrap:anywhere}
+
+/* Consistent title and badge rows regardless of label length or language. */
+.metrics .metric-head{display:grid;grid-template-rows:auto auto;justify-items:start;align-content:start;gap:6px;min-height:66px}
+.metrics .metric-head .label{line-height:20px;min-width:0;overflow-wrap:anywhere}
+.metrics .metric-head .badge{justify-self:start;max-width:100%;white-space:normal;overflow-wrap:anywhere}
+.metrics .metric{display:flex;flex-direction:column;min-width:0}
+.metrics .metric .stat{margin-top:auto;padding-top:12px}
+.metrics .metric-head{grid-template-rows:40px auto;min-height:72px}
+.metrics .metric-head .label{align-self:start}

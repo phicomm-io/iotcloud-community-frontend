@@ -13,7 +13,7 @@ const tiles={};
 $('metrics').append(...METRICS.map(k=>{
  const value=h('span',{class:'num'}),badge=h('span',{class:'badge'}),scale=h('div');
  tiles[k]={value,badge,scale};
- return h('section',{class:'card metric'},h('div',{class:'row between'},h('span',{class:'label','data-i18n':'m.'+k},t('m.'+k)),badge),
+ return h('section',{class:'card metric'},h('div',{class:'metric-head'},h('span',{class:'label','data-i18n':'m.'+k},t('m.'+k)),badge),
   h('div',{class:'stat'},value,h('small',{},UI.AIR[k].unit)),scale);
 }));
 // A serial number proves identification; bus initialization alone does not.
@@ -22,7 +22,7 @@ const co2Scale=h('div');
 const co2Badge=h('span',{class:'badge'});
 const co2Value=h('span',{class:'num',id:'co2Value'},'—');
 const co2Card=h('section',{class:'card metric',id:'co2Card'},
- h('div',{class:'row between'},h('div',{class:'label','data-i18n':'m.co2'},t('m.co2')),co2Badge),
+ h('div',{class:'metric-head'},h('div',{class:'label','data-i18n':'m.co2'},t('m.co2')),co2Badge),
  h('div',{class:'stat'},co2Value,h('small',{},UI.AIR.co2.unit)),co2Scale);
 co2Card.hidden=true;
 $('metrics').append(co2Card);
@@ -32,12 +32,12 @@ $('screenSeg').replaceWith(screen);
 const RANK={ok:0,warn:1,bad:2};
 function renderHome(s){
  const co2=s.scd40;
- co2Card.hidden=!(co2&&(co2.serial||co2.samples>0));
- $('metrics').classList.toggle('with-co2',!co2Card.hidden);
  if(co2?.serial&&co2.serial!==lastCo2Serial){lastCo2=null;lastCo2Serial=co2.serial;}
  const co2Fresh=co2?.ready&&co2.valid&&Number.isFinite(co2.age_ms)&&co2.age_ms<20000&&
   typeof co2.co2_ppm==='number'&&Number.isFinite(co2.co2_ppm)&&co2.co2_ppm>0;
  if(co2Fresh)lastCo2=Math.round(co2.co2_ppm);
+ co2Card.hidden=lastCo2===null;
+ $('metrics').classList.toggle('with-co2',!co2Card.hidden);
  co2Value.textContent=lastCo2===null?'—':String(lastCo2);
  co2Value.style.color=co2Fresh?'':'var(--muted)';
  const co2Grade=lastCo2===null?null:UI.grade('co2',lastCo2);

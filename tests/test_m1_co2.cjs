@@ -16,6 +16,7 @@ test('M1 CO2 identification, fresh values, expiration and old firmware',()=>{
   render();assert.equal(card.hidden,true);
   render({bus_initialized:true,ready:false,serial:'',samples:0});assert.equal(card.hidden,true);
   const sensor={serial:'f701a3073b32',samples:4,ready:true,valid:true,age_ms:100,co2_ppm:646};
+  render({...sensor,valid:false,age_ms:30000,co2_ppm:null});assert.equal(card.hidden,true,'fresh page hides expired sensor');
   render(sensor);assert.equal(card.hidden,false);assert.equal(value.textContent,'646');
   assert.equal(card.querySelectorAll('.scale i').length,3);
   for(const [ppm,cls] of [[1000,'ok'],[1001,'warn'],[1500,'warn'],[1501,'bad']]){
@@ -25,7 +26,7 @@ test('M1 CO2 identification, fresh values, expiration and old firmware',()=>{
   for(const patch of [{valid:false},{ready:false},{age_ms:20000},{co2_ppm:null},{co2_ppm:0},{co2_ppm:NaN}]){
    render({...sensor,...patch});assert.equal(card.hidden,false);assert.equal(value.textContent,'646');assert.equal(value.style.color,'var(--muted)');assert.match(card.textContent,/Outdated|已过期/);
   }
-  render({...sensor,serial:'another',valid:false,co2_ppm:null});assert.equal(value.textContent,'—');
-  render();assert.equal(card.hidden,true);
+  render({...sensor,serial:'another',valid:false,co2_ppm:null});assert.equal(value.textContent,'—');assert.equal(card.hidden,true);
+  render(sensor);render();assert.equal(card.hidden,false,'current session retains last reading even when sensor disappears');assert.match(card.textContent,/Outdated|已过期/);
  }finally{dom.window.close();}
 });
