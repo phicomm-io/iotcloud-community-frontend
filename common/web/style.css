@@ -263,3 +263,14 @@ pre{overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;bac
 @media(max-width:600px){.button-mapping{grid-template-columns:1fr auto}.button-gesture{grid-column:1/-1}.button-mapping .row{justify-content:flex-end}.button-range .button-mapping{gap:6px}}
 
 .copyright{margin-top:24px;padding:16px 0;border-top:1px solid var(--border);color:var(--muted);font-size:12px;line-height:1.8;text-align:center;overflow-wrap:anywhere}.copyright a{color:var(--accent);text-underline-offset:3px}
+
+/* Fit the optional fifth M1 reading into the existing metric area. */
+.metrics.with-co2{grid-template-columns:repeat(5,minmax(0,1fr))}
+@media(max-width:860px){
+ .metrics.with-co2{grid-template-columns:repeat(6,minmax(0,1fr));gap:10px}
+ .metrics.with-co2>.metric{grid-column:span 2;min-width:0;padding:12px}
+ .metrics.with-co2>.metric:nth-child(-n+2){grid-column:span 3}
+ .metrics.with-co2 .stat{font-size:clamp(20px,5vw,32px)}
+ .metrics.with-co2 .stat small{font-size:11px}
+ .metrics.with-co2 .row.between{flex-wrap:wrap;gap:4px}
+}

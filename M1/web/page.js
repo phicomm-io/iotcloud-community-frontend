@@ -32,6 +32,7 @@ const RANK={ok:0,warn:1,bad:2};
 function renderHome(s){
  const co2=s.scd40;
  co2Card.hidden=!(co2&&(co2.serial||co2.samples>0));
+ $('metrics').classList.toggle('with-co2',!co2Card.hidden);
  if(co2?.serial&&co2.serial!==lastCo2Serial){lastCo2=null;lastCo2Serial=co2.serial;}
  const co2Fresh=co2?.ready&&co2.valid&&Number.isFinite(co2.age_ms)&&co2.age_ms<20000&&
   typeof co2.co2_ppm==='number'&&Number.isFinite(co2.co2_ppm)&&co2.co2_ppm>0;
