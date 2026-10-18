@@ -3,6 +3,7 @@ import { reactive } from "vue";
 import {forgetLogin} from "./connectionPreferences";
 export const account = reactive({
   username: null,
+  githubLogin: "",
   mqttUsername: null,
   aliases: [],
   isAdmin: false,
@@ -22,6 +23,7 @@ export async function api(path, options = {}) {
   if (!response.ok) {
     if (response.status === 401 && !path.startsWith("/admin")) {
       account.username = null;
+      account.githubLogin = "";
       account.mqttUsername = null;
       account.aliases = [];
       account.isAdmin = false;
@@ -55,6 +57,7 @@ export async function refreshAccountRole() {
 }
 
 export function applyAccount(data) {
+  account.githubLogin = data.github_login || "";
   account.username = data.username;
   account.mqttUsername = data.mqtt_username || data.username;
   account.aliases = data.aliases || [];

@@ -94,3 +94,11 @@ URL 的 fragment 只包含 Broker 主机名、设备 TCP 端口、用户名、�
 管理员可在“账号与设备管理”页查看“注册验证码记录”，按邮箱、状态和日期范围查询发送及注册结果，并查看仍在有效期内的验证码，方便人工协助。验证码默认隐藏，过期后自动停止展示。统计按邮箱去重，区分发送失败与发送后未完成注册；SMTP 接受邮件并不代表已送达或已进入收件箱。记录从后端升级后开始，保留 90 天。
 
 独立页面回归：构建后在 `frontend` 下运行 `node tests/admin-verification.mjs`，使用隔离数据验证 Chromium/WebKit 的查询、分页、验证码展示和过期、错误处理，以及手机与桌面布局，不发送真实邮件。
+
+## GitHub 登录
+
+后端配置 GitHub OAuth App 后，登录页显示“使用 GitHub 登录”。新用户授权后选择平台用户名和初始密码，设备仍使用平台用户名及 MQTT 密码；已有账号在“设置 → 账号安全”绑定 GitHub，避免创建第二个账号。解绑需要网站当前密码，并撤销该账号网站会话。
+
+GitHub 登录支持同站点及 Pages 子路径、跨域后端、China / US 独立节点。新浏览器没有保存 MQTT 密码时，网站登录后会提示在连接设置中填写。未配置或旧后端隐藏入口，演示模式不访问 GitHub。配置步骤见后端仓库的 [GITHUB_LOGIN.md](https://github.com/phicomm-io/phicomm-community-mqtt/blob/main/docs/GITHUB_LOGIN.md)。
+
+回归：构建后在 `frontend/` 执行 `node tests/github-login.mjs`。使用隔离 GitHub/API fixture 验证 Chromium/WebKit 的注册、冲突、登录、绑定、解绑、节点隔离、跨域会话、失效请求及手机/桌面布局，不使用真实 OAuth 密钥或生产账号。
