@@ -1,4 +1,5 @@
 <script setup>
+import AdminBanner from "../components/AdminBanner.vue";
 import AdminVerificationEmails from "../components/AdminVerificationEmails.vue";
 import AdminAnalytics from "../components/AdminAnalytics.vue";
 import ThemeToggle from "../components/ThemeToggle.vue";
@@ -98,6 +99,7 @@ function bind() {
     <template v-if="account.isAdmin">
       <p class="helper-text">当前账号：{{ account.username }} · 管理员。与设备控制台、MQTT 使用同一登录账号。</p>
       <AdminAnalytics/>
+      <AdminBanner/>
       <button @click="run(async () => {})">刷新账号与设备</button>
       <section class="card">
         <h2>账号</h2>

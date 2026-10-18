@@ -102,3 +102,9 @@ URL 的 fragment 只包含 Broker 主机名、设备 TCP 端口、用户名、�
 GitHub 登录支持同站点及 Pages 子路径、跨域后端、China / US 独立节点。新浏览器没有保存 MQTT 密码时，网站登录后会提示在连接设置中填写。未配置或旧后端隐藏入口，演示模式不访问 GitHub。配置步骤见后端仓库的 [GITHUB_LOGIN.md](https://github.com/phicomm-io/phicomm-community-mqtt/blob/main/docs/GITHUB_LOGIN.md)。
 
 回归：构建后在 `frontend/` 执行 `node tests/github-login.mjs`。使用隔离 GitHub/API fixture 验证 Chromium/WebKit 的注册、冲突、登录、绑定、解绑、节点隔离、跨域会话、失效请求及手机/桌面布局，不使用真实 OAuth 密钥或生产账号。
+
+## 平台公告
+
+管理员在“账号与设备管理 → 平台公告”修改正文、按钮文字、跳转链接和启用状态，并预览效果。默认公告为空；启用后在登录页和控制台显示。China / US 分别保存，关闭公告仍保留草稿。正文按纯文本显示，链接仅支持 HTTP/HTTPS。
+
+构建后在 `frontend/` 执行 `node tests/banner.mjs`，验证 Chromium/WebKit 的保存、刷新恢复、开关、错误恢复、安全渲染及手机/桌面布局。

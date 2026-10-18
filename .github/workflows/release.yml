@@ -43,6 +43,8 @@ jobs:
         working-directory: frontend
       - run: node tests/admin-verification.mjs
         working-directory: frontend
+      - run: node tests/banner.mjs
+        working-directory: frontend
       - run: node tests/provisioning.mjs
         working-directory: frontend
       - uses: actions/upload-artifact@v4
