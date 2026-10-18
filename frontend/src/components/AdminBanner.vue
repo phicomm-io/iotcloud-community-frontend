@@ -3,7 +3,7 @@ import {onMounted,reactive,ref} from 'vue';
 import {api} from '../account';
 import {refreshBanner} from '../banner';
 import BannerView from './BannerView.vue';
-const form=reactive({enabled:false,text:'',url:'',label:''}),loading=ref(true),loaded=ref(false),busy=ref(false),error=ref(''),message=ref('');
+const form=reactive({enabled:false,audience:'before_login',text:'',url:'',label:''}),loading=ref(true),loaded=ref(false),busy=ref(false),error=ref(''),message=ref('');
 async function load(){loading.value=true;try{Object.assign(form,await api('/admin/banner'));loaded.value=true;error.value='';}catch(e){error.value=e.message;}finally{loading.value=false;}}
 async function save(){busy.value=true;error.value='';message.value='';try{Object.assign(form,await api('/admin/banner',{method:'PUT',body:JSON.stringify(form)}));await refreshBanner();message.value='平台公告已保存';}catch(e){error.value=e.message;}finally{busy.value=false;}}
 onMounted(load);
@@ -11,12 +11,13 @@ onMounted(load);
 <template>
  <section class="card admin-banner" aria-labelledby="admin-banner-title">
   <h2 id="admin-banner-title">平台公告</h2>
-  <p class="help">在登录页和控制台顶部展示文字及链接。当前节点独立配置，保存后立即生效，已打开的页面会在一分钟内更新。</p>
+  <p class="help">选择在登录前或登录后展示。用户可忽略本次公告、延后 24 小时提醒，或不再显示此条公告。当前节点独立配置，已打开的页面会在一分钟内更新。</p>
   <p v-if="error" role="alert" class="error">{{error}}</p>
   <button v-if="loading" type="button" disabled>正在加载公告…</button>
   <button v-else-if="!loaded" type="button" @click="load">重新加载公告</button>
   <form v-if="loaded" @submit.prevent="save">
    <label class="banner-toggle"><input v-model="form.enabled" type="checkbox"/>显示平台公告</label>
+   <label>展示时机<select v-model="form.audience"><option value="before_login">登录前公告</option><option value="after_login">登录后公告</option></select></label>
    <label>公告正文<textarea v-model="form.text" maxlength="300" rows="3" :required="form.enabled" placeholder="填写公告或交流群信息"/></label>
    <div class="banner-fields"><label>链接地址（可选）<input v-model="form.url" type="url" maxlength="1000" :required="!!form.label" placeholder="https://"/></label><label>按钮文字<input v-model="form.label" maxlength="40" :required="!!form.url" placeholder="例如：加入 QQ 群"/></label></div>
    <div class="banner-preview"><p class="help">预览</p><BannerView :banner="form"/><p v-if="!form.enabled||!form.text" class="help">公告已关闭或尚未填写正文。</p></div>

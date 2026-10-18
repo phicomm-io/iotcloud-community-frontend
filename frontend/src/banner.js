@@ -1,7 +1,8 @@
 import {reactive} from 'vue';
 import {api} from './account';
 
-export const banner = reactive({enabled:false, text:'', url:'', label:''});
+export const banner = reactive({enabled:false, audience:'before_login', text:'', url:'', label:''});
+let requestID=0;
 export function safeBannerURL(value) {
  try {
   if (typeof value !== 'string' || /[\s\\\u0000-\u001f\u007f]/.test(value)) return '';
@@ -10,8 +11,10 @@ export function safeBannerURL(value) {
  } catch { return ''; }
 }
 export async function refreshBanner() {
+ const id=++requestID;
  try {
   const data = await api('/banner');
-  Object.assign(banner, {enabled:data.enabled === true, text:typeof data.text === 'string' ? data.text : '', url:safeBannerURL(data.url), label:typeof data.label === 'string' ? data.label : ''});
- } catch { banner.enabled = false; }
+  if(id!==requestID)return;
+  Object.assign(banner, {enabled:data.enabled === true, audience:data.audience==='after_login'?'after_login':'before_login', text:typeof data.text === 'string' ? data.text : '', url:safeBannerURL(data.url), label:typeof data.label === 'string' ? data.label : ''});
+ } catch { if(id===requestID)banner.enabled = false; }
 }
