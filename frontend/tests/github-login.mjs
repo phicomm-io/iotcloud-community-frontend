@@ -21,7 +21,9 @@ async function fixture(browser,width,{enabled=true,existing=true,failStart=false
   const request=route.request(),url=new URL(request.url()),path=url.pathname;
   if(url.origin==='https://github.com'){
    assert.equal(url.pathname,'/login/oauth/authorize');assert.equal(url.searchParams.size,1);
-   return route.fulfill({status:302,headers:{Location:base+'#/github?ticket='+url.searchParams.get('state')}});
+   // WebKit's interception API cannot fulfill redirects. Navigate from a mock
+   // authorization document so both engines still exercise a full cross-site return.
+   return route.fulfill({contentType:'text/html',body:'<script>location.replace('+JSON.stringify(base+'#/github?ticket='+url.searchParams.get('state'))+')</script>'});
   }
   if(path==='/iotcloud/config.json')return route.fulfill({json:{apiOrigin:backendOrigin===origin?'':backendOrigin}});
   if(path==='/api/auth/github/status')return route.fulfill({json:{enabled:state.enabled}});
