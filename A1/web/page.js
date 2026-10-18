@@ -77,7 +77,7 @@ function renderAuto(){
  const fresh=peers.filter(p=>p.fresh).length;
  const meta=h('p',{class:'help'},t('a1.auto_peers',{n:peers.length,f:fresh})+' · '+peers.map(p=>String(p.transport||'mqtt').toUpperCase()).join('/'));
  const avg=bindingStatus.average||{};
- const readings=h('div',{class:'fields'},...[["temperature","°C"],["humidity","%"],["pm25","µg/m³"],["formaldehyde","mg/m³"]].map(([key,unit])=>h('div',{class:'field'},h('span',{},t('average.'+key)),h('b',{},avg.valid&&Number.isFinite(avg[key])?Number(avg[key]).toFixed(key==='formaldehyde'?3:1)+' '+unit:'—'))));
+ const readings=h('div',{class:'fields'},...[["temperature","°C"],["humidity","%"],["pm25","µg/m³"],["formaldehyde","mg/m³"],...(avg.co2_supported?[["co2","ppm"]]:[])].map(([key,unit])=>h('div',{class:'field'},h('span',{},t('average.'+key)),h('b',{},(key==='co2'?avg.co2_valid:avg.valid)&&Number.isFinite(avg[key])?Number(avg[key]).toFixed(key==='co2'?0:key==='formaldehyde'?3:1)+' '+unit:'—'))));
  if(st==='disabled'){c.replaceChildren(head,meta,readings,h('a',{class:'btn',href:'#settings/linkage',style:'margin-top:12px'},h('span',{},t('a1.auto_enable'))));return;}
  // replaceChildren() stringifies null, so build the list explicitly.
  const rows=[head,readings];
@@ -291,8 +291,10 @@ async function showBinding(){
 async function showLinkage(){
  const m=await api('/linkage/config'),page=document.querySelector('[data-settings-page="linkage"]');
  const modern=UI.caps?.actions?.includes('fan.mode.set');
+ try{bindingStatus=await api('/binding/status');}catch{}
+ const supportsCO2=Object.hasOwn(m,'target_co2')&&(bindingStatus.average?.co2_supported||(m.metrics&4));
  const draw=()=>{
-  const choose=seg([[1,'PM2.5'],[2,()=>t('m.formaldehyde')],[3,'link.both']],v=>{m.metrics=v;draw();});choose.set(m.metrics);
+  const choose=seg([[1,'PM2.5'],[2,()=>t('m.formaldehyde')],[3,'link.both'],...(supportsCO2?[[4,()=> 'CO₂'],[5,()=> 'PM2.5 + CO₂'],[6,()=>t('m.formaldehyde')+' + CO₂'],[7,'link.all']]:[])],v=>{m.metrics=v;draw();});choose.set(m.metrics);
   const modes=seg([[0,'link.mode.0'],[1,'link.mode.1'],[2,'link.mode.2']],v=>{m.mode=v;draw();});modes.set(m.mode);
   const detail=[],gate=[];
   const supportsGate=Object.hasOwn(m,'hysteresis_enabled');
@@ -302,6 +304,8 @@ async function showLinkage(){
    if(m.metrics&1)detail.push(field('low_pm','auto.low_pm',{min:0,unit:'µg/m³'}),field('high_pm','auto.high_pm',{min:0,unit:'µg/m³'}));
    if(m.metrics&2)detail.push(field('low_hcho','auto.low_hcho',{min:0,step:.001,unit:'mg/m³'}),field('high_hcho','auto.high_hcho',{min:0,step:.001,unit:'mg/m³'}));
   }
+  if(m.mode===1&&(m.metrics&4))detail.push(field('low_co2','auto.low_co2',{min:0,max:65535,unit:'ppm'}),field('high_co2','auto.high_co2',{min:1,max:65535,unit:'ppm'}));
+  if(supportsCO2)detail.push(info('link.co2_help'));
   if(supportsGate){
    const toggle=flag(m,'hysteresis_enabled','auto.hysteresis','auto.hysteresis_help');
    toggle.querySelector('input').addEventListener('change',draw);
@@ -309,12 +313,14 @@ async function showLinkage(){
    if(m.hysteresis_enabled){
     if(m.metrics&1)gate.push(field('target_pm','auto.target_pm',{min:.01,max:5000,unit:'µg/m³'}),field('on_pm','auto.start_pm',{min:0,max:5000,unit:'µg/m³'}));
     if(m.metrics&2)gate.push(field('target_hcho','auto.target_hcho',{min:.001,max:10,step:.001,unit:'mg/m³'}),field('on_hcho','auto.start_hcho',{min:0,max:10,step:.001,unit:'mg/m³'}));
+    if(m.metrics&4)gate.push(field('target_co2','auto.target_co2',{min:1,max:65535,unit:'ppm'}),field('on_co2','auto.start_co2',{min:1,max:65535,unit:'ppm'}));
     gate.push(info('auto.hysteresis_detail'));
    }
   }
   if(m.mode===2){
    if(!m.hysteresis_enabled&&(m.metrics&1))detail.push(field('target_pm','link.pid_pm',{min:.01,unit:'µg/m³'}));
    if(!m.hysteresis_enabled&&(m.metrics&2))detail.push(field('target_hcho','link.pid_hcho',{min:.001,step:.001,unit:'mg/m³'}));
+   if(!m.hysteresis_enabled&&(m.metrics&4))detail.push(field('target_co2','auto.target_co2',{min:1,max:65535,unit:'ppm'}));
    detail.push(h('details',{class:'more'},h('summary',{i18n:'link.pid_tune'}),h('div',{class:'fields'},['kp','ki','kd'].map(k=>h('label',{class:'field'},h('span',{},k.toUpperCase()),num(m,k,{min:0,step:.01}))))));
   }
   const range=[field('min_speed','auto.minimum',{min:modern?0:1,max:100,unit:'%'}),field('max_speed','auto.maximum',{min:1,max:100,unit:'%'})];
@@ -328,7 +334,7 @@ async function showLinkage(){
     h('label',{class:'field'},h('span',{i18n:'link.statistic'}),h('select',{onchange:e=>m.statistic=+e.target.value},[0,1,2,3,4,5].map(v=>h('option',{value:v,selected:m.statistic===v},t('link.stat.'+v))))),
     h('div',{class:'fields'},field('debounce_seconds','link.debounce',{min:0,max:3600,unit:t('unit.s')}),field('min_switch_seconds','link.min_switch',{min:0,max:3600,unit:t('unit.s')}))),
    saveBar(()=>{
-    if(m.hysteresis_enabled&&(((m.metrics&1)&&m.on_pm<=m.target_pm)||((m.metrics&2)&&m.on_hcho<=m.target_hcho)))throw new Error(t('auto.hysteresis_invalid'));
+    if(m.hysteresis_enabled&&(((m.metrics&1)&&m.on_pm<=m.target_pm)||((m.metrics&2)&&m.on_hcho<=m.target_hcho)||((m.metrics&4)&&m.on_co2<=m.target_co2)))throw new Error(t('auto.hysteresis_invalid'));
     return api('/linkage/config',m).then(saved=>{m.revision=saved.revision;return refresh();});
    }));
  };

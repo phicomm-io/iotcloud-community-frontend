@@ -63,6 +63,10 @@ const D={
 's.healthy':['Healthy','正常'],
 's.starting':['Starting','启动中'],
 's.fault':['Heartbeat timeout or watchdog error','心跳超时或看门狗错误'],
+'average.co2':['Mean CO₂','平均 CO₂'],
+'auto.target_co2':['CO₂ target / idle at','CO₂ 目标值（待机）'],'auto.start_co2':['CO₂ start threshold','CO₂ 启动阈值'],
+'auto.low_co2':['CO₂ at minimum speed','最低风速对应 CO₂'],'auto.high_co2':['CO₂ at maximum speed','最高风速对应 CO₂'],
+'link.all':['All three','三者'],'link.co2_help':['CO₂ requires a linked M1 with a CO₂ sensor. Missing or expired readings use the offline fan speed.','CO₂ 需要绑定已安装 CO₂ 传感器的 M1；读数缺失或过期时使用离线风速。'],
 'average.temperature':['Mean temperature','平均温度'],'average.humidity':['Mean humidity','平均湿度'],'average.pm25':['Mean PM2.5','平均 PM2.5'],'average.formaldehyde':['Mean formaldehyde','平均甲醛'],
 /* common */
 'btn.key_both':['Wi-Fi + power keys','Wi-Fi + 电源组合键'],
