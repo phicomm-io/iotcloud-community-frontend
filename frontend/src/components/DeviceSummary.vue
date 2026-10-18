@@ -7,6 +7,7 @@ const live=computed(()=>props.connected&&props.state?.available!==false);
 const sockets=computed(()=>socketStates(props.state));
 const knownSockets=computed(()=>live.value&&sockets.value.length===6&&sockets.value.every(v=>typeof v==='boolean'));
 const freshAir=computed(()=>live.value&&props.state?.sensor_valid&&props.state?.sensorAt&&props.now-props.state.sensorAt<=60000&&valid(props.state.pm25));
+const co2=computed(()=>{const s=props.state?.scd40;return live.value&&s?.ready&&s.valid&&s.age_ms<20000&&props.state?.sensorAt&&props.now-props.state.sensorAt<20000&&typeof s.co2_ppm==='number'?Math.round(s.co2_ppm):null;});
 const quality=computed(()=>!freshAir.value?'—':Number(props.state.pm25)>75||Number(props.state.formaldehyde)>0.1?'较差':Number(props.state.pm25)>35||Number(props.state.formaldehyde)>0.08?'一般':'良好');
 const presence=computed(()=>{
  if(!props.connected)return {label:'未连接',tone:'muted'};
@@ -26,7 +27,7 @@ function reading(v,digits=0){return live.value&&valid(v)?Number(v).toFixed(digit
   <span class="socket-info"><span class="sockets" role="img" :aria-label="sockets.map((v,i)=>`插座 ${i+1}：${!live||v===undefined?'未知':v?'开启':'关闭'}`).join('，')"><i v-for="i in 6" :key="i" :class="{on:live&&sockets[i-1]===true,unknown:!live||sockets[i-1]===undefined}"/></span></span>
  </span>
  <span v-else-if="device.model==='m1'" class="rack-body">
-  <span class="ring-mini"><span>{{quality}}</span></span><span class="sensor-copy"><span class="stat">{{freshAir?Math.round(Number(state.pm25)):'—'}}<small>μg/m³</small></span><small class="rack-detail">PM2.5</small></span>
+  <span class="ring-mini"><span>{{quality}}</span></span><span class="sensor-copy"><span class="stat">{{freshAir?Math.round(Number(state.pm25)):'—'}}<small>μg/m³</small></span><small class="rack-detail">PM2.5<span v-if="co2!==null"> · CO₂ {{co2}} ppm</span></small></span>
  </span>
  <span v-else-if="device.model==='a1'" class="rack-body"><span class="stat">{{live&&state?.fan_on!==undefined?(state.fan_on?reading(speed):'0'):'—'}}<small>%</small></span><span class="sensor-copy"><AppIcon name="fan" :size="28"/><small v-if="live&&state?.fan_mode" class="rack-detail">{{state.fan_mode==='auto'?'自动':'手动'}} · {{!state.fan_on?'关机':state.fan_state==='idle'?'待机':'运行'}}</small></span></span>
 </span>
