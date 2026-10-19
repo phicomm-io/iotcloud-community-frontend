@@ -6,6 +6,7 @@ async function command(action,params={}){
  const response=await fetch('/api/v1/command',{method:'POST',signal:controller.signal,headers:{'Content-Type':'application/json'},body:JSON.stringify(request),cache:'no-store'});
  const reply=await response.json();
  if(!response.ok||!['ok','accepted'].includes(reply.code)){const error=Error(reply.message||reply.code||('HTTP '+response.status));error.code=reply.code;throw error;}
+ if(!action.endsWith('.get'))globalThis.UI?.invalidateStatus?.();
  return reply.data||{};
  }finally{clearTimeout(timer);}
 }

@@ -149,6 +149,6 @@ UI.start({
 });
 I18N.onChange(()=>{renderPeers();const p=document.querySelector('[data-settings-page="binding"]');if(p&&!p.hidden)showBinding();});
 // The linked list is small and changes rarely; refresh it with the status.
-(async function poll(){try{bindingStatus=await api('/binding/status');renderPeers();}catch{}setTimeout(poll,4000);})();
+(async function poll(){try{if(document.hidden||($('homePage').hidden&&UI.activePage()!=='binding'&&UI.activePage()!=='linkage'))return;bindingStatus=await api('/binding/status');renderPeers();}catch{}finally{setTimeout(poll,4000);}})();
 api('/binding/config').then(c=>{binding=c;renderPeers();}).catch(e=>toast(e.message,true));
 })();

@@ -294,7 +294,7 @@ async function showBinding(){
 async function showLinkage(){
  const m=await api('/linkage/config'),page=document.querySelector('[data-settings-page="linkage"]');
  const modern=UI.caps?.actions?.includes('fan.mode.set');
- try{bindingStatus=await api('/binding/status');}catch{}
+ try{if(document.hidden||($('homePage').hidden&&UI.activePage()!=='binding'&&UI.activePage()!=='linkage'))return;bindingStatus=await api('/binding/status');}catch{}
  const supportsCO2=Object.hasOwn(m,'target_co2')&&(bindingStatus.average?.co2_supported||(m.metrics&4));
  const draw=()=>{
   const choose=seg([[1,'PM2.5'],[2,()=>t('m.formaldehyde')],[3,'link.both'],...(supportsCO2?[[4,()=> 'CO₂'],[5,()=> 'PM2.5 + CO₂'],[6,()=>t('m.formaldehyde')+' + CO₂'],[7,'link.all']]:[])],v=>{m.metrics=v;draw();});choose.set(m.metrics);
@@ -370,6 +370,6 @@ UI.start({
 });
 I18N.onChange(()=>{if(UI.state){renderAuto();for(const key of ['device','light','binding','linkage'])if(!document.querySelector('[data-settings-page="'+key+'"]').hidden&&UI.pages[key].show)UI.pages[key].show();}});
 // Keep the automatic-control summary fresh even while the home page is idle.
-(async function poll(){try{bindingStatus=await api('/binding/status');if(UI.state)renderFan(UI.state);renderAuto();}catch{}setTimeout(poll,3000);})();
+(async function poll(){try{if(document.hidden||($('homePage').hidden&&UI.activePage()!=='binding'&&UI.activePage()!=='linkage'))return;bindingStatus=await api('/binding/status');if(UI.state)renderFan(UI.state);renderAuto();}catch{}finally{setTimeout(poll,3000);}})();
 api('/light/advanced').then(a=>{advanced=a;updateRingAnimation();if(UI.state)renderLight(UI.state);}).catch(e=>toast(e.message,true));
 })();

@@ -150,7 +150,19 @@ const UI=window.UI={$,h,icon,toast,run,onSubmit,confirm:confirmDialog,switchRow,
 // Keep requested output visible until a fresh read confirms it. Polls may still
 // contain the pre-write state while the device applies an accepted command.
 let pendingControl=null;
-UI.acceptStatus=s=>{UI.confirmed=s;UI.state=pendingControl?{...s,...pendingControl}:s;return UI.state;};
+// Partial reads retain slow fields; null explicitly invalidates a measurement.
+UI.acceptStatus=(s,partial=false)=>{
+ const merged=partial?{...UI.confirmed,...s}:s;
+ if(partial&&s.scd40&&UI.confirmed?.scd40)merged.scd40={...UI.confirmed.scd40,...s.scd40};
+ UI.confirmed=merged;UI.state=pendingControl?{...merged,...pendingControl}:merged;return UI.state;
+};
+let fullGeneration=1,loadedGeneration=0,lastFullAt=0;
+UI.invalidateStatus=()=>{fullGeneration++;};
+UI.activePage=()=>/^settings\/([a-z]+)$/.exec(UI.embeddedRoute??location.hash.slice(1))?.[1]||null;
+UI.statusParams=()=>{
+ const page=UI.activePage(),ttl=page==='diagnostics'?5000:['network','mqtt','device','firmware'].includes(page)?10000:30000;
+ return UI.caps?.status_views?.includes('live')&&loadedGeneration===fullGeneration&&Date.now()-lastFullAt<ttl?{view:'live'}:{};
+};
 UI.control=async(action,params,patch)=>{
  if(pendingControl){UI.device.onStatus?.(UI.state);throw Error(t('control.pending'));}
  pendingControl=patch;UI.controlBusy=true;
@@ -168,7 +180,7 @@ UI.control=async(action,params,patch)=>{
   }while(Date.now()<until);
   throw Error(t('control.unconfirmed')+(sendError?' · '+sendError.message:''));
  }finally{
-  pendingControl=null;UI.controlBusy=false;UI.state=last||UI.confirmed||UI.state;render();
+  pendingControl=null;UI.controlBusy=false;UI.state=UI.confirmed||UI.state;render();
  }
 };
 function header(dev){
@@ -217,7 +229,7 @@ function showRoute(){
  document.querySelectorAll('[data-settings-page]').forEach(p=>{p.hidden=p.dataset.settingsPage!==page;});
  document.querySelectorAll('.tabs a').forEach(a=>{const on=a.dataset.tab===(page?'settings':'home');if(on)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');});
  document.querySelectorAll('.side a').forEach(a=>{if(a.hash==='#settings/'+page)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');});
- if(page&&!UI.state)load().then(()=>afterShow(page));else afterShow(page);
+ if(page)UI.reload({full:true}).then(()=>afterShow(page));else afterShow(page);
 }
 const showingPages=new Set();
 async function afterShow(page){
@@ -527,21 +539,24 @@ function lockHome(){if(!UI.embedded)return;for(const el of document.querySelecto
 function unlockHome(){for(const [el,disabled] of lockedControls)el.disabled=disabled;lockedControls.clear();}
 async function load(){
  try{
-  const raw=await command('status.get');failures=0;lastSuccess=Date.now();unlockHome();
+  const params=UI.statusParams(),generation=fullGeneration;
+  const raw=await command('status.get',params);failures=0;lastSuccess=Date.now();unlockHome();
+  if(!params.view&&!raw.ota_mode){lastFullAt=Date.now();loadedGeneration=generation;}
   if(raw.ota_active&&raw.ota_mode){UI.pages.firmware?.status(raw);return raw;}
-  const s=UI.acceptStatus(raw);
+  const s=UI.acceptStatus(raw,params.view==='live');
   $('title').textContent=UI.device.model+' '+(s.name||'');
   renderChips(s);renderBanners(s,false);
   if(!initialized){for(const p of Object.values(UI.pages))if(p.init)p.init(s);initialized=true;}
-  for(const p of Object.values(UI.pages))if(p.status)p.status(s);
+  for(const [key,p] of Object.entries(UI.pages))if(p.status&&(key===UI.activePage()||key.startsWith('slot_')&&UI.activePage()==='device'))p.status(s);
   if(UI.device.onStatus)UI.device.onStatus(s);
   return raw;
  }catch(e){if(++failures>=3&&(!lastSuccess||Date.now()-lastSuccess>=30000)){lockHome();renderBanners(null,true);}return null;}
 }
 function pollLoad(){if(!loading)loading=load().finally(()=>{loading=null;});return loading;}
 let stopped=false;window.addEventListener('pagehide',()=>stopped=true);
-async function refresh(){if(stopped)return;await pollLoad();if(!stopped)setTimeout(refresh,UI.device.interval||2000);}
-UI.reload=async()=>{if(loading)await loading;return pollLoad();};
+async function refresh(){if(stopped)return;if(!document.hidden||!initialized)await pollLoad();if(!stopped)setTimeout(refresh,UI.activePage()?(UI.activePage()==='diagnostics'?5000:10000):(UI.device.interval||2000));}
+UI.reload=async({full=false}={})=>{if(full)UI.invalidateStatus();if(loading)await loading;return pollLoad();};
+document.addEventListener('visibilitychange',()=>{if(UI.device&&!document.hidden&&!stopped)UI.reload({full:true});});
 UI.showRoute=showRoute;
 UI.start=async dev=>{
  UI.device=dev;lockHome();
