@@ -1,4 +1,5 @@
 <script setup>
+import DeviceConnection from './DeviceConnection.vue';
 import GitHubAccount from './GitHubAccount.vue';
 import {ref,computed} from 'vue';
 import {account} from '../account';
@@ -8,12 +9,12 @@ import AppIcon from './AppIcon.vue';
 import ProvisionDevice from './ProvisionDevice.vue';
 import NodeSelector from './NodeSelector.vue';
 const demoMode=import.meta.env.VITE_DEMO==='1';
-const props=defineProps({initialSection:{type:String,default:'connection'},connection:Object,deviceBroker:Object,connected:Boolean,busy:Boolean,thirdParty:Boolean,devices:Array,states:Object,addForm:Object,deviceName:Function,now:Number});
-const emit=defineEmits(['mode-change','connect','disconnect','add','remove','password','mqtt-password','install','home','refresh','rename']);
-const section=ref(props.initialSection),showPassword=ref(false),adding=ref(false),currentPassword=ref(''),newPassword=ref(''),mqttCurrent=ref(''),mqttNew=ref('');
-const sections=computed(()=>[{id:'connection',title:'MQTT 连接',description:'服务器与连接凭据',icon:'cloud'},{id:'devices',title:'设备管理',description:'设备列表与添加',icon:'plug'},...(account.username?[{id:'account',title:'账号安全',description:'账号信息与密码',icon:'shield'}]:[])]);
-const online=computed(()=>props.devices.filter(d=>props.connected&&props.states[deviceKey(d)]?.available===true).length);
-function status(d){return !props.connected?'未连接':props.states[deviceKey(d)]?.available===true?'在线':props.states[deviceKey(d)]?.available===false?'离线':'状态未知';}
+const props=defineProps({localMode:Boolean,devicePreferences:Object,lanConnections:Object,initialSection:{type:String,default:'connection'},connection:Object,deviceBroker:Object,connected:Boolean,busy:Boolean,thirdParty:Boolean,devices:Array,states:Object,addForm:Object,deviceName:Function,now:Number});
+const emit=defineEmits(['device-connection','mode-change','connect','disconnect','add','remove','password','mqtt-password','install','home','refresh','rename']);
+const section=ref(props.localMode?'devices':props.initialSection),showPassword=ref(false),adding=ref(false),currentPassword=ref(''),newPassword=ref(''),mqttCurrent=ref(''),mqttNew=ref('');
+const sections=computed(()=>[...(!props.localMode?[{id:'connection',title:'MQTT 连接',description:'服务器与连接凭据',icon:'cloud'}]:[]),{id:'devices',title:'设备管理',description:'设备列表与添加',icon:'plug'},...(!props.localMode&&account.username?[{id:'account',title:'账号安全',description:'账号信息与密码',icon:'shield'}]:[])]);
+const online=computed(()=>props.devices.filter(d=>(props.connected||props.states[deviceKey(d)]?.lan_connected)&&props.states[deviceKey(d)]?.available===true).length);
+function status(d){return props.states[deviceKey(d)]?.lan_connected?'内网已连接':!props.connected?'未连接':props.states[deviceKey(d)]?.available===true?'在线':props.states[deviceKey(d)]?.available===false?'离线':'状态未知';}
 </script>
 <template>
 <div class="settings-heading"><div><p class="eyebrow">偏好与管理</p><h1>设置</h1><p class="help">管理连接、设备与账号，让每一台设备保持就绪。</p></div><button class="btn" @click="emit('home')">返回首页<AppIcon name="arrow" :size="16"/></button></div>
@@ -26,7 +27,7 @@ function status(d){return !props.connected?'未连接':props.states[deviceKey(d)
 <section v-if="!demoMode" class="card settings-card install-settings-entry"><header class="settings-card-heading"><div><h2>添加到桌面</h2><p class="help">点桌面图标，快捷打开 IotCloud。随时查看安装方式。</p></div><button class="btn" type="button" @click="emit('install')">添加到桌面</button></header></section>
 <template v-if="section==='connection'">
 <section v-if="!demoMode" class="card settings-card"><header class="settings-card-heading"><div><h2>平台节点</h2><p class="help">切换节点将重新加载页面，使用目标节点的登录状态。</p></div></header><NodeSelector/></section>
-<ProvisionDevice :connection="connection" :broker="deviceBroker"/>
+<ProvisionDevice v-if="!localMode" :connection="connection" :broker="deviceBroker"/>
 <section class="card settings-card">
 <header class="settings-card-heading"><span class="settings-icon"><AppIcon name="cloud" :size="23"/></span><div><h2>MQTT 连接</h2><p class="help">选择服务器，建立设备与平台之间的连接。</p></div><span class="badge" :class="connected?'ok':''">{{busy?'连接中':connected?'已连接':'未连接'}}</span></header>
 <div v-if="account.username" class="settings-block"><div class="field-title"><h3>连接方式</h3><p class="help">使用平台服务，或连接自己的 MQTT 服务器。</p></div><div class="broker-options" role="radiogroup" aria-label="连接模式"><button type="button" role="radio" :aria-checked="!thirdParty" :disabled="busy" @click="!thirdParty||emit('mode-change',false)"><AppIcon name="cloud"/><span><b>平台 Broker</b><small>使用当前账号连接</small></span><span class="choice-dot"></span></button><button type="button" role="radio" :aria-checked="thirdParty" :disabled="busy" @click="thirdParty||emit('mode-change',true)"><AppIcon name="settings"/><span><b>第三方 Broker</b><small>使用自己的服务器</small></span><span class="choice-dot"></span></button></div></div>
@@ -39,14 +40,14 @@ function status(d){return !props.connected?'未连接':props.states[deviceKey(d)
 <div class="settings-tip"><AppIcon name="signal" :size="20"/><div><b>连接之后</b><p>使用相同 MQTT 账号的 TMCP 设备会自动出现在设备列表中。也可以前往设备管理手动添加。</p><button class="btn ghost" @click="section='devices'">查看设备管理<AppIcon name="arrow" :size="15"/></button></div></div>
 </template>
 <template v-else-if="section==='devices'">
-<ProvisionDevice :connection="connection" :broker="deviceBroker"/>
+<ProvisionDevice v-if="!localMode" :connection="connection" :broker="deviceBroker"/>
 <section class="card settings-card">
 <header class="settings-card-heading"><span class="settings-icon"><AppIcon name="plug" :size="23"/></span><div><h2>设备管理</h2><p class="help">在这里查看和管理当前{{thirdParty?'浏览器':'账号'}}的设备。</p></div><span class="badge">{{devices.length}} 台</span></header>
-<div class="device-toolbar"><span class="help">{{online}} 台在线 · {{devices.length}} 台设备</span><div><button class="btn" @click="emit('refresh')" aria-label="刷新设备列表">刷新</button><button class="btn primary" :aria-expanded="adding" @click="adding=!adding"><AppIcon :name="adding?'close':'plus'" :size="17"/>{{adding?'取消添加':'添加设备'}}</button></div></div>
+<div class="device-toolbar"><span class="help">{{online}} 台在线 · {{devices.length}} 台设备</span><div><button class="btn" @click="emit('refresh')" aria-label="刷新设备列表">刷新</button><button v-if="!localMode" class="btn primary" :aria-expanded="adding" @click="adding=!adding"><AppIcon :name="adding?'close':'plus'" :size="17"/>{{adding?'取消添加':'添加设备'}}</button></div></div>
 <form v-if="adding" class="add-device-panel" @submit.prevent="emit('add')"><h3>添加设备</h3><label>MAC 地址<input v-model="addForm.mac" aria-label="MAC 地址" required placeholder="AABBCCDDEEFF" maxlength="17" spellcheck="false"/><small class="help">填写设备的 12 位 MAC 地址，也支持冒号或短横线分隔。</small></label><div class="settings-fields"><label>型号<select aria-label="型号" v-model="addForm.model"><option value="tc1">TC1 智能插排</option><option value="m1">M1 空气质量检测器</option><option value="a1">A1 空气净化器</option></select></label><label v-if="addForm.model==='tc1'">协议<select v-model="addForm.version"><option value="v2">TMCP</option><option value="v1">Legacy</option></select></label><div v-else class="protocol-note"><span class="help">协议</span><span class="badge">TMCP</span></div></div><div class="add-device-actions"><button class="btn primary">确认添加</button></div></form>
-<div v-if="devices.length" class="managed-device-list"><div v-for="d in devices" :key="deviceKey(d)" class="managed-device"><DeviceSummary :device="d" :state="states[deviceKey(d)]||{}" :name="deviceName(d)" :connected="connected" :now="now"/><div class="device-row-actions"><button class="btn ghost" :aria-label="`修改 ${deviceName(d)} 的名称`" @click="emit('rename',d)"><AppIcon name="edit" :size="15"/>改名</button><details class="device-details"><summary>详情</summary><dl><div><dt>MAC 地址</dt><dd>{{d.mac}}</dd></div><div><dt>连接协议</dt><dd>{{d.version==='v1'?'Legacy':'TMCP'}}</dd></div><div><dt>状态</dt><dd>{{status(d)}}</dd></div></dl><button class="btn danger" :aria-label="`移除 ${deviceName(d)}`" @click="emit('remove',d)">移除此设备</button></details></div></div></div>
-<div v-else class="settings-empty"><AppIcon name="plug" :size="32"/><h3>还没有设备</h3><p class="help">连接后等待设备自动上线，或点击上方按钮手动添加。</p></div>
-<footer class="settings-footnote"><AppIcon name="signal" :size="17"/><span>TMCP 设备可自动发现；Legacy 仅支持 TC1。移除设备前会再次确认。</span></footer>
+<div v-if="devices.length" class="managed-device-list"><div v-for="d in devices" :key="deviceKey(d)" class="managed-device"><DeviceSummary :device="d" :state="states[deviceKey(d)]||{}" :name="deviceName(d)" :connected="connected" :now="now"/><div class="device-row-actions"><button class="btn ghost" :aria-label="`修改 ${deviceName(d)} 的名称`" @click="emit('rename',d)"><AppIcon name="edit" :size="15"/>改名</button><details class="device-details"><summary>详情</summary><dl><div><dt>MAC 地址</dt><dd>{{d.mac}}</dd></div><div><dt>连接协议</dt><dd>{{d.version==='v1'?'Legacy':'TMCP'}}</dd></div><div><dt>状态</dt><dd>{{status(d)}}</dd></div></dl><DeviceConnection v-if="d.version==='v2'" :preference="devicePreferences?.[deviceKey(d)]" :connection="lanConnections?.[deviceKey(d)]" @save="(values,done)=>emit('device-connection',d,values,done)"/><button class="btn danger" :aria-label="`移除 ${deviceName(d)}`" @click="emit('remove',d)">移除此设备</button></details></div></div></div>
+<div v-else class="settings-empty"><AppIcon name="plug" :size="32"/><h3>还没有设备</h3><p class="help">{{localMode?'在上方填写设备 IP 添加本地设备。':'连接后等待设备自动上线，或点击上方按钮手动添加。'}}</p></div>
+<footer class="settings-footnote"><AppIcon name="signal" :size="17"/><span>{{localMode?'设备通过填写的 IP 连接；可在详情中修改地址与网页密码。':'TMCP 设备可自动发现；Legacy 仅支持 TC1。'}}移除设备前会再次确认。</span></footer>
 </section>
 </template>
 <template v-else>

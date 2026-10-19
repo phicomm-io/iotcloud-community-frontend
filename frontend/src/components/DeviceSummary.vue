@@ -3,14 +3,14 @@ import {computed} from 'vue';
 import {socketStates} from '../devicePresentation';
 import AppIcon from './AppIcon.vue';
 const props=defineProps({device:Object,state:Object,name:String,connected:Boolean,now:Number});
-const live=computed(()=>props.connected&&props.state?.available!==false);
+const live=computed(()=>(props.connected||props.state?.lan_connected)&&props.state?.available!==false);
 const sockets=computed(()=>socketStates(props.state));
 const knownSockets=computed(()=>live.value&&sockets.value.length===6&&sockets.value.every(v=>typeof v==='boolean'));
 const freshAir=computed(()=>live.value&&props.state?.sensor_valid&&props.state?.sensorAt&&props.now-props.state.sensorAt<=60000&&valid(props.state.pm25));
 const co2=computed(()=>{const s=props.state?.scd40;return live.value&&s?.ready&&s.valid&&s.age_ms<20000&&props.state?.sensorAt&&props.now-props.state.sensorAt<20000&&typeof s.co2_ppm==='number'?Math.round(s.co2_ppm):null;});
 const quality=computed(()=>!freshAir.value?'—':Number(props.state.pm25)>75||Number(props.state.formaldehyde)>0.1?'较差':Number(props.state.pm25)>35||Number(props.state.formaldehyde)>0.08?'一般':'良好');
 const presence=computed(()=>{
- if(!props.connected)return {label:'未连接',tone:'muted'};
+ if(!props.connected&&!props.state?.lan_connected)return {label:'未连接',tone:'muted'};
  if(props.state?.available===false)return {label:'离线',tone:'muted'};
  const ready=props.device.model==='m1'?freshAir.value:props.device.model==='tc1'?knownSockets.value:props.state?.fan_on!==undefined;
  return ready?{label:'在线',tone:'online'}:{label:'等待数据',tone:'waiting'};

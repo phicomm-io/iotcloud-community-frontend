@@ -211,7 +211,7 @@ function buildNav(dev){
  }
 }
 function showRoute(){
- const m=/^settings\/([a-z]+)$/.exec(location.hash.slice(1));
+ const m=/^settings\/([a-z]+)$/.exec(UI.embeddedRoute??location.hash.slice(1));
  const page=m&&document.querySelector('[data-settings-page="'+m[1]+'"]')?m[1]:m?(UI.device.groups.flatMap(g=>g[1]).find(k=>UI.pages[k])||null):null;
  $('homePage').hidden=!!page;$('settingsPage').hidden=!page;
  document.querySelectorAll('[data-settings-page]').forEach(p=>{p.hidden=p.dataset.settingsPage!==page;});
@@ -219,7 +219,8 @@ function showRoute(){
  document.querySelectorAll('.side a').forEach(a=>{if(a.hash==='#settings/'+page)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');});
  if(page&&!UI.state)load().then(()=>afterShow(page));else afterShow(page);
 }
-function afterShow(page){
+const showingPages=new Set();
+async function afterShow(page){
  if(!page)return;
  const active=document.querySelector('.side a[aria-current]'),side=$('side');
  // Reveal mobile menu items without scrollIntoView scrolling the whole page.
@@ -228,7 +229,10 @@ function afterShow(page){
   if(item.left<menu.left)side.scrollLeft+=item.left-menu.left;
   else if(item.right>menu.right)side.scrollLeft+=item.right-menu.right;
  }
- const p=UI.pages[page];if(p&&p.show)p.show();
+ const p=UI.pages[page];if(!p?.show||showingPages.has(page))return;
+ const box=document.querySelector('[data-settings-page="'+page+'"]');
+ box?.querySelector('.page-load-error')?.remove();showingPages.add(page);
+ try{await p.show();}catch(e){const retry=h('button',{class:'btn',type:'button',onclick:()=>afterShow(page)},'重试');box?.prepend(h('div',{class:'banner warn page-load-error',role:'alert'},h('span',{},e.message),retry));}finally{showingPages.delete(page);}
 }
 /* Wi-Fi scan is shared: start, poll, and hand the sorted list to a callback. */
 async function scanNetworks(onList){
@@ -394,7 +398,7 @@ function firmwarePage(dev){
   const rescue=unsigned.querySelector('input').checked;
   if(rescue&&!window.confirm(t('fw.unsigned_confirm')))return;
   uploading=true;prog.value=0;
-  const xhr=new XMLHttpRequest();xhr.open('POST',rescue?'/api/v1/ota/upload-unsigned':'/api/v1/ota/upload');
+  const xhr=window.createDeviceUpload?window.createDeviceUpload():new XMLHttpRequest();xhr.open('POST',rescue?'/api/v1/ota/upload-unsigned':'/api/v1/ota/upload');
   xhr.setRequestHeader('Content-Type','application/octet-stream');xhr.timeout=310000;
   xhr.upload.onprogress=ev=>{if(ev.lengthComputable){prog.value=ev.loaded/ev.total*100;state.textContent=t('fw.uploading',{p:Math.round(ev.loaded/ev.total*100)});}};
   xhr.onload=()=>{const ok=xhr.status===202;state.textContent=ok?t('fw.verify_ok'):t('fw.failed',{e:xhr.responseText});toast(state.textContent,!ok);};
@@ -518,9 +522,12 @@ function clockCard({load,save,status}){
 
 /* ---------- Boot ---------- */
 let initialized=false,failures=0,lastSuccess=0,loading=null;
+const lockedControls=new Map();
+function lockHome(){if(!UI.embedded)return;for(const el of document.querySelectorAll('#homePage button,#homePage input,#homePage select')){if(!lockedControls.has(el))lockedControls.set(el,el.disabled);el.disabled=true;}}
+function unlockHome(){for(const [el,disabled] of lockedControls)el.disabled=disabled;lockedControls.clear();}
 async function load(){
  try{
-  const raw=await command('status.get');failures=0;lastSuccess=Date.now();
+  const raw=await command('status.get');failures=0;lastSuccess=Date.now();unlockHome();
   if(raw.ota_active&&raw.ota_mode){UI.pages.firmware?.status(raw);return raw;}
   const s=UI.acceptStatus(raw);
   $('title').textContent=UI.device.model+' '+(s.name||'');
@@ -529,20 +536,22 @@ async function load(){
   for(const p of Object.values(UI.pages))if(p.status)p.status(s);
   if(UI.device.onStatus)UI.device.onStatus(s);
   return raw;
- }catch(e){if(++failures>=3&&(!lastSuccess||Date.now()-lastSuccess>=30000))renderBanners(null,true);return null;}
+ }catch(e){if(++failures>=3&&(!lastSuccess||Date.now()-lastSuccess>=30000)){lockHome();renderBanners(null,true);}return null;}
 }
 function pollLoad(){if(!loading)loading=load().finally(()=>{loading=null;});return loading;}
-async function refresh(){await pollLoad();setTimeout(refresh,UI.device.interval||2000);}
+let stopped=false;window.addEventListener('pagehide',()=>stopped=true);
+async function refresh(){if(stopped)return;await pollLoad();if(!stopped)setTimeout(refresh,UI.device.interval||2000);}
 UI.reload=async()=>{if(loading)await loading;return pollLoad();};
+UI.showRoute=showRoute;
 UI.start=async dev=>{
- UI.device=dev;
+ UI.device=dev;lockHome();
  const first=dev.groups.flatMap(g=>g[1])[0];
  document.body.prepend(header(dev),
   h('nav',{class:'tabs','aria-label':'Main'},
    h('a',{href:'#home','data-tab':'home'},icon('home'),h('span',{i18n:'nav.home'})),
    h('a',{href:'#settings/'+first,'data-tab':'settings'},icon('sliders'),h('span',{i18n:'nav.settings'}))),
   h('div',{id:'banners'}));
- UI.caps=await command('capabilities.get').catch(()=>null);
+ UI.caps=await command('capabilities.get').catch(()=>({actions:[]}));
  const pages=$('pages');
  // Pages the framework builds for every product.
  const builders={network:wifiPage,mqtt:mqttPage,firmware:firmwarePage,diagnostics:diagnosticsPage,maintenance:maintenancePage,logs:logsPage};

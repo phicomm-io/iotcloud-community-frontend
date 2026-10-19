@@ -1,13 +1,13 @@
 import {test,expect} from '@playwright/test';
-test('product home components share platform design without device navigation',async({page})=>{
+test('product home components share platform design and expose full settings',async({page})=>{
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.addInitScript(()=>localStorage.setItem('iotcloud.devices.'+encodeURIComponent(`${location.protocol==='https:'?'wss':'ws'}://${location.host}/mqtt`)+'/',JSON.stringify(['tc1','m1','a1'].map((model,i)=>({model,mac:'aabbccddee0'+i,version:'v2'})))));
  await page.goto('/#/guest');
  for(const model of ['TC1','M1','A1']){
   await page.locator('.device-select').filter({hasText:model}).click();
   const home=page.frameLocator('iframe');
-  await expect(home.locator('p[role=status]')).toContainText('请先连接 MQTT');
-  await expect(home.locator('.topbar')).toHaveCount(0);
+  await expect(home.locator('#banners')).toContainText('连接已中断',{timeout:15000});
+  await expect(home.locator('.topbar')).toBeHidden();
   await expect(home.locator('#settingsPage')).toBeHidden();
   await expect(home.locator('#homePage')).toBeVisible();
   const buttons=home.locator('#homePage button');

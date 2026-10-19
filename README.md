@@ -113,3 +113,13 @@ GitHub 登录支持同站点及 Pages 子路径、跨域后端、China / US 独�
 构建后在 `frontend/` 执行 `node tests/banner.mjs`，验证 Chromium/WebKit 的保存、刷新恢复、开关、错误恢复、安全渲染及手机/桌面布局。
 
 A1 灯效设置支持呼吸和彩虹跑马灯的变化速度（1–10 档，默认 5）。定时任务支持 1 分钟至 24 小时的关闭倒计时，可取消及重新计时；关闭网页后继续，设备重启后取消。新控件分别由 `light_effect.get.speed` 和 `capabilities.get.schedule_countdown` 决定是否展示，旧固件不展示。回归：`NODE_PATH=frontend/node_modules node --test tests/test_a1_light_save.cjs tests/test_a1_countdown.cjs`。
+
+## 本地直连与精简固件
+
+登录页可直接填写设备内网 IPv4 和网页管理密码，无需账号即可进入 `/#/local`。独立静态版位于发布包的 `local/`，部署整目录后默认进入本地管理，不显示登录页，也不请求账号服务。源码构建：`VITE_LOCAL_ONLY=1 npm --prefix frontend run build`。官方入口：<https://phicomm-io.github.io/local/>。
+
+设备列表、地址保存在当前浏览器；网页管理密码只留在当前页面会话，刷新后需重新填写。设备需运行支持 `/api/v1/info` 和官方来源 CORS 的新版固件；HTTPS 网页访问内网 HTTP 设备还需要浏览器允许本地网络访问。
+
+普通平台在“设置 → 设备管理 → 详情”可填写每台设备的内网地址、网页密码，并选择自动连接或始终 MQTT。自动模式校验型号、MAC、认证及状态后使用内网；内网失败时读取可回退 MQTT，写入回执不明时不会自动重发。本地文件 OTA 只发往已校验的内网设备。
+
+`devices/<model>/setup.html.gz` 是 `no-frontend-resources` 固件的离线引导页，保留配网、MQTT 初始配置和管理密码设置，与完整页面共用颜色、主题和表单样式。完整设备设置仍可通过平台或本地管理页访问。

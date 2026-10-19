@@ -7,7 +7,7 @@ const route=useRoute();
 </script>
 
 <template>
-  <PlatformBanner v-if="!demoMode"/>
+  <PlatformBanner v-if="!demoMode && route.name!=='Local'"/>
   <NodeSelector v-if="!demoMode && ['Login','Register'].includes(route.name)" />
-  <RouterView />
+  <RouterView :key="route.name" />
 </template>
