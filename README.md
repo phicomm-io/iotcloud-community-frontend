@@ -108,3 +108,5 @@ GitHub 登录支持同站点及 Pages 子路径、跨域后端、China / US 独�
 管理员在“账号与设备管理 → 平台公告”修改正文、按钮文字、跳转链接和启用状态，并预览效果。默认公告为空，可选择“登录前公告”或“登录后公告”。登录前公告只显示在登录和注册页，登录后自动收起。用户可“稍后提醒”（24 小时）、“忽略”（当前标签页）或“不再显示”（此条公告），偏好按节点和账号保存在当前浏览器。更新公告正文、链接或展示时机后按新公告处理。China / US 分别保存，关闭公告仍保留草稿。正文按纯文本显示，链接仅支持 HTTP/HTTPS。
 
 构建后在 `frontend/` 执行 `node tests/banner.mjs`，验证 Chromium/WebKit 的保存、刷新恢复、开关、错误恢复、安全渲染及手机/桌面布局。
+
+A1 灯效设置支持呼吸和彩虹跑马灯的变化速度（1–10 档，默认 5）。定时任务支持 1 分钟至 24 小时的关闭倒计时，可取消及重新计时；关闭网页后继续，设备重启后取消。新控件分别由 `light_effect.get.speed` 和 `capabilities.get.schedule_countdown` 决定是否展示，旧固件不展示。回归：`NODE_PATH=frontend/node_modules node --test tests/test_a1_light_save.cjs tests/test_a1_countdown.cjs`。

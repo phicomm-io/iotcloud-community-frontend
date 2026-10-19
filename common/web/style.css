@@ -288,3 +288,14 @@ pre{overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;bac
 .metrics .metric .stat{margin-top:auto;padding-top:12px}
 .metrics .metric-head{grid-template-rows:40px auto;min-height:72px}
 .metrics .metric-head .label{align-self:start}
+
+/* Schedule rows keep the duration, action and controls readable on phones. */
+.schedule-task{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto}
+.schedule-task .grow{overflow-wrap:anywhere}
+@media(max-width:600px){
+ .schedule-task{grid-template-columns:minmax(0,1fr) auto}
+ .schedule-task .time{grid-column:1;grid-row:1}
+ .schedule-task>.badge{grid-column:2;grid-row:1}
+ .schedule-task .grow{grid-column:1/-1;grid-row:2}
+ .schedule-task>.row{grid-column:1/-1;justify-content:flex-end}
+}
