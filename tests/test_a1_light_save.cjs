@@ -10,7 +10,7 @@ test('A1 light effects can be saved repeatedly without refreshing the page',asyn
   w.fetch=async(url,options)=>{
    assert.equal(url,'/api/v1/command');const req=JSON.parse(options.body);let code='ok',data={};
    if(req.action==='light_effect.get'){
-    reads++;data={effect:0,segments:1,follow_fan:0,quality_pm:35,quality_hcho:0.08,segment:[],revision};
+    reads++;data={effect:0,speed:5,segments:1,follow_fan:0,quality_pm:35,quality_hcho:0.08,segment:[],revision};
    }else if(req.action==='light_effect.set'){
     writes.push(req.params);code=req.params.revision===revision?'accepted':'busy';
     if(code==='accepted')revision++;data={revision};
@@ -27,9 +27,10 @@ test('A1 light effects can be saved repeatedly without refreshing the page',asyn
   for(const effect of [1,2,3]){
    const radio=page.querySelector(`input[name="effect"][value="${effect}"]`);
    radio.checked=true;radio.dispatchEvent(new w.Event('change'));
+   const speed=page.querySelector('[aria-label="Animation speed"],[aria-label="变化速度"]');if([2,3].includes(effect)){assert(speed);speed.value=effect===2?2:9;speed.dispatchEvent(new w.Event('input',{bubbles:true}));}else assert.equal(speed,null);
    const save=page.querySelector('.form-actions button');save.click();
    for(let i=0;i<5;i++)await flush();
-   assert.equal(writes.at(-1).effect,effect);
+   assert.equal(writes.at(-1).effect,effect);assert.equal(writes.at(-1).speed,effect===2?2:effect===3?9:5);
    assert.equal(writes.at(-1).revision,revision-1,'each save must use the latest acknowledged revision');
    assert.equal(save.disabled,false);
   }

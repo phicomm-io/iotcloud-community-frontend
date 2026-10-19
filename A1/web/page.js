@@ -147,10 +147,11 @@ function renderRing(s){
   for(let i=0;i<N;i++)sources[i]=slotColors[slotForLed(i)];
  }else if(enabled&&brightness){
   let level=brightness*(advanced.follow_fan?followSpeed/100:1);
-  if(eff===2)level*=((1+Math.sin(now/2000))/2);
+  const animationMs=now*(advanced.speed||5)/5;
+  if(eff===2)level*=((1+Math.sin(animationMs/2000))/2);
   for(let i=0;i<N;i++){
    let rgb=color;
-   if(eff===3){const p=(Math.floor(slotForLed(i)*768/32)+Math.floor(now/30))%768;rgb=[p<256?255-p:p>512?p-512:0,p<256?p:p<512?511-p:0,p<256?0:p<512?p-256:767-p];}
+   if(eff===3){const p=(Math.floor(slotForLed(i)*768/32)+Math.floor(animationMs/30))%768;rgb=[p<256?255-p:p>512?p-512:0,p<256?p:p<512?511-p:0,p<256?0:p<512?p-256:767-p];}
    sources[i]=rgb.map(v=>v/255*level);
   }
  }
@@ -204,7 +205,7 @@ function renderLight(s){
 const EFFECTS=[0,1,2,3,4];
 async function showLight(){
  const page=document.querySelector('[data-settings-page="light"]');
- const m=clone(advanced=await api('/light/advanced'));updateRingAnimation();
+ const m=clone(advanced=await api('/light/advanced')),hasSpeed=Number.isInteger(m.speed);updateRingAnimation();
  const refreshDraft=()=>{advanced=clone(m);updateRingAnimation();if(UI.state)renderRing(UI.state);};
  page.oninput=refreshDraft;page.onchange=refreshDraft;
  const draw=()=>{
@@ -220,6 +221,8 @@ async function showLight(){
     h('div',{class:'row',style:'margin-top:12px'},['fx.low','fx.ok','fx.high'].map((k,j)=>h('label',{class:'row small'},h('input',{type:'color',value:hex(sg.colors[j]),oninput:e=>{const v=e.target.value;sg.colors[j]=[1,3,5].map(x=>parseInt(v.slice(x,x+2),16));}}),t(k)))))))
    :null;
   if(segs)segs.querySelector('.seg').set(m.segments);
+  const speedControls=[];
+  if(hasSpeed&&[2,3].includes(m.effect)){const [out,range]=slider(m,'speed',{min:1,max:10,fmt:v=>(v/5).toFixed(1)+'×'});range.setAttribute('aria-label',t('fx.speed'));speedControls.push(h('div',{class:'stack',style:'margin-top:16px'},h('div',{class:'row between'},h('span',{class:'label',i18n:'fx.speed'}),out),range,h('div',{class:'row between help'},t('fx.slow'),t('fx.fast'))));}
   const previewSpeed=h('input',{id:'previewSpeed',type:'range',min:1,max:100,step:1,value:UI.state?.fan_on?UI.state.percentage:UI.state?.requested_speed||60,'aria-label':t('a1.speed'),
    oninput:e=>{previewTarget=Number(e.target.value);$('previewSpeedValue').textContent=e.target.value+'%';renderRing(UI.state);},
    onchange:()=>run(previewSpeed,async()=>{try{await setSpeed(previewSpeed.value);}finally{previewTarget=null;renderRing(UI.state);}},null),
@@ -229,7 +232,7 @@ async function showLight(){
   page.replaceChildren(pageHead('nav.light','fx.lead'),
    h('div',{class:'ring-effect-preview'},previewRing,
     h('div',{class:'ring-preview-controls'},h('div',{class:'row between'},h('span',{class:'label',i18n:'a1.speed'}),h('b',{class:'num',id:'previewSpeedValue'},previewSpeed.value+'%')),previewSpeed)),
-   h('section',{class:'card'},h('div',{class:'card-head'},h('h2',{i18n:'fx.effect'})),opts,
+   h('section',{class:'card'},h('div',{class:'card-head'},h('h2',{i18n:'fx.effect'})),opts,...speedControls,
     h('div',{style:'margin-top:16px'},flag(m,'follow_fan','fx.follow','fx.follow_desc')),segs,
     h('details',{class:'more'},h('summary',{i18n:'common.advanced'}),h('p',{class:'help',i18n:'fx.quality_hint'}),
      h('div',{class:'fields'},h('label',{class:'field'},h('span',{i18n:'fx.quality_pm'}),num(m,'quality_pm',{unit:'µg/m³',step:0.01})),
