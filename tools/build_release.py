@@ -14,6 +14,7 @@ import tarfile
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'common/web'))
 from page import render_page
+from setup import render_setup
 
 
 def run(*args, **kwargs):
@@ -32,6 +33,8 @@ def main():
     run('git', 'diff', '--exit-code', '--', 'frontend/src/device-tokens.css')
     run('npm', '--prefix', 'frontend', 'run', 'build')
     shutil.copytree(ROOT / 'frontend/dist', out / 'platform')
+    run('npm', '--prefix', 'frontend', 'run', 'build', env=dict(os.environ, VITE_LOCAL_ONLY='1'))
+    shutil.copytree(ROOT / 'frontend/dist', out / 'local')
     env = dict(os.environ, VITE_DEMO='1')
     run('npm', '--prefix', 'frontend', 'run', 'build', env=env)
     shutil.copytree(ROOT / 'frontend/dist', out / 'demos/platform')
@@ -45,6 +48,12 @@ def main():
         with gzip.GzipFile(filename='', fileobj=compressed_page, mode='wb', compresslevel=9, mtime=0) as zipped:
             zipped.write(data)
         (device / 'index.html.gz').write_bytes(compressed_page.getvalue())
+        setup = render_setup(model)
+        (device / 'setup.html').write_bytes(setup)
+        setup_gzip = io.BytesIO()
+        with gzip.GzipFile(filename='', fileobj=setup_gzip, mode='wb', compresslevel=9, mtime=0) as zipped:
+            zipped.write(setup)
+        (device / 'setup.html.gz').write_bytes(setup_gzip.getvalue())
         adapter = (ROOT / 'common/web/demo.js').read_text().replace('__MODEL__', model)
         demo = data.decode().replace('<head>', '<head><script>' + adapter + '</script>', 1)
         dest = out / 'demos' / model
@@ -58,7 +67,7 @@ def main():
         shutil.copyfile(ROOT / name, dest)
     hashes = {str(p.relative_to(out)): hashlib.sha256(p.read_bytes()).hexdigest()
               for p in sorted(out.rglob('*')) if p.is_file()}
-    manifest = dict(schema=1, repository='phicomm-io/phicomm-community-frontend', commit=commit, files=hashes)
+    manifest = dict(schema=1, repository='phicomm-io/phicomm-community-frontend', commit=commit, features=['bootstrap-ui', 'local-console'], files=hashes)
     (out / 'manifest.json').write_text(json.dumps(manifest, indent=2, sort_keys=True) + '\n')
     archive = ROOT / 'build/frontend.tar.gz'
     # No wall-clock timestamps or machine identities in the archive.

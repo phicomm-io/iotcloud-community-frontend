@@ -37,3 +37,17 @@ window.addEventListener('storage',event=>{
  if(event.newValue==='system'||!event.newValue)delete document.documentElement.dataset.theme;
  else document.documentElement.dataset.theme=event.newValue;
 });
+// Only the host can choose the authenticated device URL. Never upload to cloud.
+(()=>{
+ const uploads=new Map();
+ window.createDeviceUpload=()=>{
+  const id=crypto.randomUUID(),xhr={upload:{},status:0,responseText:'',timeout:310000,setRequestHeader(){},open(method,path){if(method!=='POST'||!['/api/v1/ota/upload','/api/v1/ota/upload-unsigned'].includes(path))throw Error('不支持的上传');this.rescue=path.endsWith('-unsigned');},send(file){uploads.set(id,this);parent.postMessage({type:'device-upload',id,file,rescue:!!this.rescue},parent.location.origin);},abort(){parent.postMessage({type:'device-upload-abort',id},parent.location.origin);uploads.delete(id);this.onabort?.();this.onloadend?.();}};return xhr;
+ };
+ window.addEventListener('message',event=>{
+  if(event.source!==parent||event.origin!==parent.location.origin)return;
+  const xhr=uploads.get(event.data?.id);if(!xhr)return;
+  if(event.data.type==='device-upload-progress'){xhr.upload.onprogress?.({lengthComputable:true,loaded:event.data.loaded,total:event.data.total});}
+  else if(event.data.type==='device-upload-result'){uploads.delete(event.data.id);xhr.status=event.data.result.status;xhr.responseText=event.data.result.text;xhr.onload?.();xhr.onloadend?.();}
+ });
+ window.addEventListener('pagehide',()=>{for(const xhr of uploads.values())xhr.abort();});
+})();

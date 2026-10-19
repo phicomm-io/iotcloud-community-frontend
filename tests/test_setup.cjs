@@ -1,0 +1,19 @@
+const {JSDOM}=require('jsdom'),assert=require('node:assert/strict'),cp=require('node:child_process');
+const flush=()=>new Promise(r=>setImmediate(r));
+(async()=>{for(const model of ['a1','m1','tc1']){
+ const html=cp.execFileSync('python3',['-c',`import sys;sys.path.insert(0,'common/web');from setup import render_setup;sys.stdout.buffer.write(render_setup('${model}'))`],{encoding:'utf8'});
+ assert(!html.includes('@include'));assert(!html.includes('cdn.'));assert(!html.includes('window.UI'));
+ const dom=new JSDOM(html,{runScripts:'outside-only',url:'http://192.168.0.1/'}),w=dom.window,d=w.document,calls=[];let fail=false;
+ w.TextEncoder=TextEncoder;w.Response=Response;w.AbortController=AbortController;w.setTimeout=()=>0;
+ w.fetch=async(url,options)=>{const req=JSON.parse(options.body);calls.push(req);if(fail&&req.params.section==='mqtt')return {ok:false,json:async()=>({code:'busy',message:'busy'})};return {ok:true,json:async()=>({code:'ok',data:req.action==='status.get'?{device_id:'aabbccddeeff',ssid:'old',mqtt_host:'broker',mqtt_port:1883,mqtt_user:'u',mqtt_protocol:'tmcp',ap_active:true}: {}})};};
+ for(const script of d.scripts)w.eval(script.textContent);await flush();
+ d.querySelector('#ssid').value='new';d.querySelector('#wifiPassword').value='password123';d.querySelector('#adminPassword').value='admin1234';
+ await d.querySelector('#setup').onsubmit({preventDefault(){}});
+ assert.deepEqual(calls.filter(x=>x.action==='config.set').map(x=>x.params.section),['mqtt','auth','wifi']);
+ assert.match(d.querySelector('#message').textContent,/实际连接状态/);
+ calls.length=0;fail=true;await d.querySelector('#setup').onsubmit({preventDefault(){}});assert.deepEqual(calls.filter(x=>x.action==='config.set').map(x=>x.params.section),['mqtt']);assert.match(d.querySelector('#message').textContent,/busy/);
+ assert.equal(d.querySelector('#protocolField').hidden,model!=='tc1');
+ d.querySelector('#theme').value='dark';d.querySelector('#theme').onchange();assert.equal(d.documentElement.dataset.theme,'dark');
+ d.querySelector('#theme').value='system';d.querySelector('#theme').onchange();assert.equal(d.documentElement.dataset.theme,undefined);
+ dom.window.close();console.log(model+': offline setup, save order, failure boundary, protocol and appearance passed');
+}})().catch(e=>{console.error(e);process.exitCode=1;});

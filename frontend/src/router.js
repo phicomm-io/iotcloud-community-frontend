@@ -3,6 +3,7 @@ import { account, restoreAccount } from './account';
 const router = createRouter({
  history: createWebHashHistory(),
  routes: [
+  { path: '/local', name: 'Local', component: () => import('./App.vue') },
   { path: '/github', name: 'GitHub', component: () => import('./views/GitHubPage.vue') },
   { path: '/login', name: 'Login', component: () => import('./views/LoginPage.vue') },
   { path: '/', name: 'Console', component: () => import('./App.vue'), meta: { requiresAccount: true } },
@@ -13,6 +14,7 @@ const router = createRouter({
  ],
 });
 router.beforeEach(async to => {
+ if(import.meta.env.VITE_LOCAL_ONLY==='1' && to.name!=='Local')return {name:'Local'};
  if (to.meta.requiresAccount) {
   await restoreAccount();
   if (!account.username) return { name: 'Login' };
