@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import sys
 import tarfile
+import zopfli.gzip
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'common/web'))
@@ -39,15 +40,15 @@ def main():
     run('npm', '--prefix', 'frontend', 'run', 'build', env=env)
     shutil.copytree(ROOT / 'frontend/dist', out / 'demos/platform')
     for model, source in [('tc1', 'TC1/http_server/web/index.html'), ('m1', 'M1/web/index.html'), ('a1', 'A1/web/index.html')]:
-        data = render_page(ROOT / source)
+        data = render_page(ROOT / source, minify=True)
         device = out / 'devices' / model
         device.mkdir(parents=True)
         (device / 'index.html').write_bytes(data)
-        # GzipFile fixes the OS byte too (gzip.compress varies by Python version).
-        compressed_page = io.BytesIO()
-        with gzip.GzipFile(filename='', fileobj=compressed_page, mode='wb', compresslevel=9, mtime=0) as zipped:
-            zipped.write(data)
-        (device / 'index.html.gz').write_bytes(compressed_page.getvalue())
+        # Deterministic gzip, encoded only on the build host. Firmware serves it verbatim.
+        compressed_page = zopfli.gzip.compress(data, numiterations=15)
+        if gzip.decompress(compressed_page) != data:
+            raise RuntimeError(f'{model}: gzip round-trip mismatch')
+        (device / 'index.html.gz').write_bytes(compressed_page)
         setup = render_setup(model)
         (device / 'setup.html').write_bytes(setup)
         setup_gzip = io.BytesIO()

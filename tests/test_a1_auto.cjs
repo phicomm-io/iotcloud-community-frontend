@@ -1,8 +1,8 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
-const {JSDOM}=require('jsdom'),cp=require('node:child_process'),vm=require('node:vm');
+const {JSDOM}=require('jsdom'),vm=require('node:vm');
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
 test('A1 mode controls, idle state, automatic cap and manual speed remain distinct',async()=>{
- const html=cp.execFileSync('python3',['common/web/page.py','A1/web/index.html'],{encoding:'utf8'});
+ const html=require('./render_page.cjs')('A1/web/index.html');
  const dom=new JSDOM(html,{runScripts:'outside-only',url:'http://device.local'}),w=dom.window;
  try{
   w.TextEncoder=TextEncoder;w.scrollTo=()=>{};w.setTimeout=()=>0;
@@ -33,7 +33,7 @@ test('A1 mode controls, idle state, automatic cap and manual speed remain distin
  }finally{dom.window.close();}
 });
 test('A1 hysteresis settings validate and save through the shared local/platform UI',async()=>{
- const html=cp.execFileSync('python3',['common/web/page.py','A1/web/index.html'],{encoding:'utf8'});
+ const html=require('./render_page.cjs')('A1/web/index.html');
  const dom=new JSDOM(html,{runScripts:'outside-only',url:'http://device.local'}),w=dom.window;
  try{
   w.TextEncoder=TextEncoder;w.scrollTo=()=>{};w.setTimeout=()=>0;
@@ -62,5 +62,33 @@ test('A1 hysteresis settings validate and save through the shared local/platform
   assert.equal(writes.filter(r=>r.action==='linkage.set').length,count,'invalid thresholds never sent');
   delete config.hysteresis_enabled;await w.UI.pages.linkage.show();
   assert.equal(page.textContent.includes('Enable start/idle hysteresis'),false,'older firmware stays supported');
+ }finally{dom.window.close();}
+});
+test('A1 optional CO2 choices, thresholds and absent/stale capability',async()=>{
+ const html=require('./render_page.cjs')('A1/web/index.html');
+ const dom=new JSDOM(html,{runScripts:'outside-only',url:'http://device.local'}),w=dom.window;
+ try{
+  w.TextEncoder=TextEncoder;w.scrollTo=()=>{};w.setTimeout=()=>0;
+  const writes=[],config={revision:1,enabled:1,mode:1,metrics:1,hysteresis_enabled:1,target_co2:1000,on_co2:1500,low_co2:800,high_co2:2000,min_speed:0,max_speed:80,fallback_speed:23};
+  let supported=false;
+  w.fetch=async(url,options)=>{const req=JSON.parse(options.body);writes.push(req);let data={};if(req.action==='linkage.get')data={...config};if(req.action==='binding.status.get')data={average:{co2_supported:supported}};if(req.action==='linkage.set')data={revision:++config.revision};return {ok:true,json:async()=>({code:'ok',data})};};
+  const scripts=[...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m=>m[1]);
+  scripts.forEach((source,i)=>{if(i===scripts.length-1){w.UI.start=dev=>{w.UI.device=dev;w.UI.pages=dev.pages;};w.UI.reload=async()=>w.UI.state;}vm.runInContext(source,dom.getInternalVMContext());});
+  w.I18N.set('en');w.UI.caps={actions:['fan.mode.set']};
+  const page=w.document.querySelector('[data-settings-page="linkage"]');
+  const co2Button=()=>[...page.querySelectorAll('button')].find(b=>b.textContent==='CO₂');
+  await w.UI.pages.linkage.show();assert.equal(co2Button(),undefined);
+  supported=true;await w.UI.pages.linkage.show();assert.ok(co2Button());co2Button().click();
+  assert.ok(page.textContent.includes('CO₂ at minimum speed'));assert.ok(page.textContent.includes('CO₂ start threshold'));
+  const label=text=>[...page.querySelectorAll('label')].find(el=>el.textContent.includes(text));
+  const change=(title,value)=>{const el=label(title).querySelector('input');el.value=value;el.dispatchEvent(new w.Event('input'));};
+  change('CO₂ start threshold',1600);page.querySelector('.form-actions button').click();for(let i=0;i<4;i++)await flush();
+  assert.equal(writes.findLast(r=>r.action==='linkage.set').params.metrics,4);
+  assert.equal(writes.findLast(r=>r.action==='linkage.set').params.on_co2,1600);
+  const count=writes.filter(r=>r.action==='linkage.set').length;
+  change('CO₂ start threshold',900);page.querySelector('.form-actions button').click();for(let i=0;i<3;i++)await flush();
+  assert.equal(writes.filter(r=>r.action==='linkage.set').length,count);
+  supported=false;config.metrics=4;await w.UI.pages.linkage.show();assert.ok(co2Button(),'configured CO2 remains editable after sensor loss');
+  delete config.target_co2;config.metrics=1;await w.UI.pages.linkage.show();assert.equal(co2Button(),undefined,'older A1 firmware hides CO2');
  }finally{dom.window.close();}
 });
