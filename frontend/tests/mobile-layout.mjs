@@ -164,7 +164,7 @@ try{
    await expect.poll(()=>f.commands.filter(c=>c.action==='linkage.set').length).toBe(1);
    const rule=f.commands.find(c=>c.action==='linkage.set');
    assert.equal(rule.mac,f.state.devices[1].mac);assert.equal(rule.params.hysteresis_enabled,1);assert.equal(rule.params.on_pm,65);assert.equal(rule.params.target_pm,30);
-   await autoFrame.getByRole('button',{name:'返回设备控制',exact:true}).click();
+   await autoFrame.getByRole('link',{name:'首页',exact:true}).click();
    await expect(autoFrame.locator('#homePage')).toBeVisible();
    await choose(page,'TC1');
    await page.frameLocator('iframe').locator('#tiles .tile').first().click();
