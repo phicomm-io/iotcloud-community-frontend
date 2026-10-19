@@ -299,3 +299,9 @@ pre{overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;bac
  .schedule-task .grow{grid-column:1/-1;grid-row:2}
  .schedule-task>.row{grid-column:1/-1;justify-content:flex-end}
 }
+
+.binding-peer .grow{overflow-wrap:anywhere}
+@media(max-width:600px){
+ .binding-peer{flex-wrap:wrap}
+ .binding-peer>.grow{flex-basis:calc(100% - 52px)}
+}
