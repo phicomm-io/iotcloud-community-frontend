@@ -1,4 +1,5 @@
 from pathlib import Path
+import subprocess
 ROOT = Path(__file__).resolve().parents[2]
 def _source(path, name):
     """Shared fragment first, then a file sitting next to the page."""
@@ -6,7 +7,7 @@ def _source(path, name):
     if shared.is_file():
         return shared.read_text()
     return (path.parent / name).read_text()
-def render_page(path):
+def render_page(path, *, minify=False):
     path = Path(path)
     text = path.read_text()
     # The product page lists its own fragments; a name resolves to common/web
@@ -19,8 +20,14 @@ def render_page(path):
     appearance = (ROOT / "common" / "web" / "appearance.js").read_text()
     script = "<script>" + appearance + "</script>"
     text = text.replace("</head>", script + "</head>", 1) if "</head>" in text else text.replace("</html>", script + "</html>")
-    product = path.resolve().relative_to(ROOT).parts[0]
-    return text.encode("utf-8")
+    data = text.encode("utf-8")
+    if minify:
+        data = subprocess.check_output(['node', str(ROOT / 'tools/minify_device.cjs')], input=data)
+    return data
 if __name__ == "__main__":
-    import sys
-    sys.stdout.buffer.write(render_page(sys.argv[1]))
+    import argparse, sys
+    parser = argparse.ArgumentParser()
+    parser.add_argument('path', type=Path)
+    parser.add_argument('--minify', action='store_true')
+    args = parser.parse_args()
+    sys.stdout.buffer.write(render_page(args.path, minify=args.minify))

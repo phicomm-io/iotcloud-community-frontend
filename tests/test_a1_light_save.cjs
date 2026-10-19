@@ -1,8 +1,8 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
-const {JSDOM}=require('jsdom'),cp=require('node:child_process'),vm=require('node:vm');
+const {JSDOM}=require('jsdom'),vm=require('node:vm');
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
 test('A1 light effects can be saved repeatedly without refreshing the page',async()=>{
- const html=cp.execFileSync('python3',['common/web/page.py','A1/web/index.html'],{encoding:'utf8'});
+ const html=require('./render_page.cjs')('A1/web/index.html');
  const dom=new JSDOM(html,{runScripts:'outside-only',url:'http://device.local'}),w=dom.window;
  try {
   w.TextEncoder=TextEncoder;w.scrollTo=()=>{};w.setTimeout=()=>0;

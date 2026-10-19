@@ -2,7 +2,7 @@
  * schema. The pages must use /api/v1/command only, keep unsaved input while
  * navigating, escape device-supplied names, and expose the documented
  * controls (socket tiles, brightness, schedule form, OTA upload). */
-const {JSDOM}=require('jsdom'),assert=require('node:assert/strict'),cp=require('node:child_process');
+const {JSDOM}=require('jsdom'),assert=require('node:assert/strict');
 const flush=()=>new Promise(r=>setImmediate(r));
 const PAGES={M1:['network','mqtt','device','binding','schedule','night','firmware','diagnostics','logs','maintenance'],
  A1:['network','mqtt','device','light','binding','linkage','schedule','buttons','night','firmware','diagnostics','logs','maintenance'],
@@ -12,7 +12,7 @@ const ACTIONS={M1:['schedules.get','schedules.put','schedules.delete','schedules
  TC1:['schedules.get','schedules.put','schedules.delete','schedules.enable','buttons.get','buttons.set','outlet.set','indicator.set','child_lock.set','time.get','time.set']};
 (async()=>{for(const model of (process.env.WEB_TEST_MODEL?[process.env.WEB_TEST_MODEL]:['M1','A1','TC1'])){
  const path=model==='TC1'?'TC1/http_server/web/index.html':model+'/web/index.html';
- const html=cp.execFileSync('python3',['common/web/page.py',path],{encoding:'utf8'});
+ const html=require('./render_page.cjs')(path);
  const dom=new JSDOM(html,{runScripts:'outside-only',url:'http://device.local'}),w=dom.window,d=w.document,calls=[];
  const missing=[];w.console.warn=(...args)=>{if(args[0]==='i18n missing')missing.push(args[1]);};
  w.TextEncoder=require('node:util').TextEncoder;w.setTimeout=()=>0;w.confirm=()=>true;w.scrollTo=()=>{};

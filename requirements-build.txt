@@ -1,0 +1,2 @@
+# Offline gzip asset generation; never runs on the device.
+zopfli==0.2.3.post1

@@ -10,12 +10,15 @@
 | `tools/build_release.py` | 同时构建设备页面、平台与 demo |
 
 ```sh
+python3 -m pip install -r requirements-build.txt
 npm ci --prefix frontend
 npm test --prefix frontend
 python3 tests/check_web.py
 NODE_PATH=frontend/node_modules node tests/test_web.cjs
 python3 tools/build_release.py
 ```
+
+设备 Release 页面会逐段压缩内联 JS/CSS，再使用 Zopfli 生成确定性 gzip，保留脚本顺序、全局名称、全部功能和中英文。设备仅发送压缩字节，不运行压缩器。可用 `WEB_TEST_MINIFIED=1 NODE_PATH=frontend/node_modules node tests/test_web.cjs` 回归压缩版本；demo 也使用相同压缩页面。
 
 构建前必须提交所有源码改动。每个通过 CI 的 main commit 发布 `frontend-<完整40位commit>` Release，包括：
 

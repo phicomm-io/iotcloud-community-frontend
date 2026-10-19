@@ -19,6 +19,10 @@ jobs:
           node-version: '22'
           cache: npm
           cache-dependency-path: frontend/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python3 -m pip install -r requirements-build.txt
       - run: npm ci --prefix frontend
       - run: npm test --prefix frontend
       - run: python3 tests/check_web.py
@@ -28,6 +32,17 @@ jobs:
       - run: NODE_PATH=frontend/node_modules node tests/test_a1_filter.cjs
       - run: NODE_PATH=frontend/node_modules node tests/test_a1_auto.cjs
       - run: python3 -m unittest discover -s tests -p 'test_*.py'
+      - name: Test minified device pages
+        env:
+          NODE_PATH: frontend/node_modules
+          WEB_TEST_MINIFIED: '1'
+        run: |
+          node tests/test_web.cjs
+          node tests/test_a1_light_save.cjs
+          node tests/test_a1_countdown.cjs
+          node tests/test_a1_filter.cjs
+          node tests/test_a1_auto.cjs
+          node tests/test_m1_co2.cjs
       - run: python3 tools/build_release.py
       - run: npx --prefix frontend playwright install --with-deps chromium webkit
       - run: NODE_PATH=frontend/node_modules node tests/test_demos.cjs
