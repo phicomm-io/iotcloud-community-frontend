@@ -51,8 +51,12 @@ screen.dataset.control='brightness';
 $('screenSeg').replaceWith(screen);
 const RANK={ok:0,warn:1,bad:2};
 function renderHome(s){
- pressureSnapshot=s.barometer;
- pressureReceivedAt=performance.now();
+ // Optimistic controls and their final render reuse the same measurement.
+ // Only a newly decoded status object starts a new receipt-time age origin.
+ if(pressureSnapshot!==s.barometer){
+  pressureSnapshot=s.barometer;
+  pressureReceivedAt=performance.now();
+ }
  renderPressure();
  const co2=s.scd40;
  if(co2?.serial&&co2.serial!==lastCo2Serial){lastCo2=null;lastCo2Serial=co2.serial;}

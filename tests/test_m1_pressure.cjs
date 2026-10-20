@@ -1,6 +1,6 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const {JSDOM}=require('jsdom'),vm=require('node:vm');
-test('M1 pressure stays inline, follows detected model and expires without a successful poll',()=>{
+test('M1 pressure stays inline, follows detected model and expires without a successful poll',async()=>{
  const html=require('./render_page.cjs')('M1/web/index.html');
  const dom=new JSDOM(html,{runScripts:'outside-only',url:'http://device.local'}),w=dom.window;
  try{
@@ -34,8 +34,15 @@ test('M1 pressure stays inline, follows detected model and expires without a suc
   }
   render(sensor,{sensor_valid:false,sensor_received:false});
   assert.equal(row.hidden,false,'pressure is independent of the original UART sensor');
-  now+=9899;timer();assert.equal(row.hidden,false);
+  w.UI.confirmed=w.UI.state;
+  w.command=async()=>{throw Object.assign(Error('rejected'),{code:'invalid'});};
+  now+=9000;
+  await assert.rejects(w.UI.control('display.set',{brightness:25},{brightness_requested:1}),/rejected/);
+  assert.equal(row.hidden,false,'optimistic and final control renders keep an unexpired measurement');
+  now+=899;timer();assert.equal(row.hidden,false);
   now++;timer();assert.equal(row.hidden,true,'age plus elapsed time expires at 10 seconds');
+  w.UI.device.onStatus(w.UI.state);
+  assert.equal(row.hidden,true,'rendering the same measurement cannot restore stale pressure');
   render({...sensor,age_ms:0});assert.equal(row.hidden,false,'recovery displays fresh reading');
   w.dispatchEvent(new w.PageTransitionEvent('pagehide',{persisted:true}));
   assert.equal(cleared,false,'cache suspension must not permanently cancel expiry');
