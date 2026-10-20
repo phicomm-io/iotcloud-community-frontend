@@ -1,6 +1,6 @@
 <script setup>
 import {computed} from 'vue';
-import {socketStates} from '../devicePresentation';
+import {socketStates,pressureReading} from '../devicePresentation';
 import AppIcon from './AppIcon.vue';
 const props=defineProps({device:Object,state:Object,name:String,connected:Boolean,now:Number});
 const live=computed(()=>(props.connected||props.state?.lan_connected)&&props.state?.available!==false);
@@ -8,6 +8,7 @@ const sockets=computed(()=>socketStates(props.state));
 const knownSockets=computed(()=>live.value&&sockets.value.length===6&&sockets.value.every(v=>typeof v==='boolean'));
 const freshAir=computed(()=>live.value&&props.state?.sensor_valid&&props.state?.sensorAt&&props.now-props.state.sensorAt<=60000&&valid(props.state.pm25));
 const co2=computed(()=>{const s=props.state?.scd40;return live.value&&s?.ready&&s.valid&&s.age_ms<20000&&props.state?.sensorAt&&props.now-props.state.sensorAt<20000&&typeof s.co2_ppm==='number'?Math.round(s.co2_ppm):null;});
+const pressure=computed(()=>live.value?pressureReading(props.state,props.now):null);
 const quality=computed(()=>!freshAir.value?'—':Number(props.state.pm25)>75||Number(props.state.formaldehyde)>0.1?'较差':Number(props.state.pm25)>35||Number(props.state.formaldehyde)>0.08?'一般':'良好');
 const presence=computed(()=>{
  if(!props.connected&&!props.state?.lan_connected)return {label:'未连接',tone:'muted'};
@@ -27,7 +28,7 @@ function reading(v,digits=0){return live.value&&valid(v)?Number(v).toFixed(digit
   <span class="socket-info"><span class="sockets" role="img" :aria-label="sockets.map((v,i)=>`插座 ${i+1}：${!live||v===undefined?'未知':v?'开启':'关闭'}`).join('，')"><i v-for="i in 6" :key="i" :class="{on:live&&sockets[i-1]===true,unknown:!live||sockets[i-1]===undefined}"/></span></span>
  </span>
  <span v-else-if="device.model==='m1'" class="rack-body">
-  <span class="ring-mini"><span>{{quality}}</span></span><span class="sensor-copy"><span class="stat">{{freshAir?Math.round(Number(state.pm25)):'—'}}<small>μg/m³</small></span><small class="rack-detail">PM2.5<span v-if="co2!==null"> · CO₂ {{co2}} ppm</span></small></span>
+  <span class="ring-mini"><span>{{quality}}</span></span><span class="sensor-copy"><span class="stat">{{freshAir?Math.round(Number(state.pm25)):'—'}}<small>μg/m³</small></span><small class="rack-detail sensor-details"><span>PM2.5</span><span v-if="co2!==null"> · CO₂ {{co2}} ppm</span><span v-if="pressure!==null" :title="state.barometer.model"> · {{pressure.toFixed(1)}} hPa</span></small></span>
  </span>
  <span v-else-if="device.model==='a1'" class="rack-body"><span class="stat">{{live&&state?.fan_on!==undefined?(state.fan_on?reading(speed):'0'):'—'}}<small>%</small></span><span class="sensor-copy"><AppIcon name="fan" :size="28"/><small v-if="live&&state?.fan_mode" class="rack-detail">{{state.fan_mode==='auto'?'自动':'手动'}} · {{!state.fan_on?'关机':state.fan_state==='idle'?'待机':'运行'}}</small></span></span>
 </span>
@@ -37,4 +38,5 @@ function reading(v,digits=0){return live.value&&valid(v)?Number(v).toFixed(digit
 .presence-pill{flex-shrink:0;white-space:nowrap;display:inline-flex;align-items:center;justify-self:start;gap:5px;padding:2px 9px;border-radius:999px;font-size:11px;line-height:18px;font-weight:500;background:var(--surface-muted);color:var(--muted)}.presence-pill::before{content:'';width:6px;height:6px;border-radius:50%;background:currentColor}.presence-pill.online{background:var(--success-soft);color:var(--success)}.presence-pill.waiting{background:var(--warn-soft);color:var(--warn)}
 
 .tc1-body>.stat{flex:0 0 128px;text-align:right;white-space:nowrap}.tc1-body>.socket-info{flex:0 1 127px;min-width:0}
+.sensor-copy{min-width:0}.sensor-details{display:flex;flex-wrap:wrap}.sensor-details>span{white-space:nowrap}.device-summary:has(.sensor-details){grid-template-rows:24px minmax(54px,auto)}
 </style>
