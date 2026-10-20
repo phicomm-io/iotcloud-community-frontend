@@ -534,13 +534,17 @@ function clockCard({load,save,status}){
 
 /* ---------- Boot ---------- */
 let initialized=false,failures=0,lastSuccess=0,loading=null;
+let stopped=false,pollingStarted=false,pollTimer=null,pollGeneration=0;
 const lockedControls=new Map();
 function lockHome(){if(!UI.embedded)return;for(const el of document.querySelectorAll('#homePage button,#homePage input,#homePage select')){if(!lockedControls.has(el))lockedControls.set(el,el.disabled);el.disabled=true;}}
 function unlockHome(){for(const [el,disabled] of lockedControls)el.disabled=disabled;lockedControls.clear();}
 async function load(){
+ const lifecycle=pollGeneration;
  try{
   const params=UI.statusParams(),generation=fullGeneration;
-  const raw=await command('status.get',params);failures=0;lastSuccess=Date.now();unlockHome();
+  const raw=await command('status.get',params);
+  if(stopped||lifecycle!==pollGeneration)return null;
+  failures=0;lastSuccess=Date.now();unlockHome();
   if(!params.view&&!raw.ota_mode){lastFullAt=Date.now();loadedGeneration=generation;}
   if(raw.ota_active&&raw.ota_mode){UI.pages.firmware?.status(raw);return raw;}
   const s=UI.acceptStatus(raw,params.view==='live');
@@ -550,11 +554,29 @@ async function load(){
   for(const [key,p] of Object.entries(UI.pages))if(p.status&&(key===UI.activePage()||key.startsWith('slot_')&&UI.activePage()==='device'))p.status(s);
   if(UI.device.onStatus)UI.device.onStatus(s);
   return raw;
- }catch(e){if(++failures>=3&&(!lastSuccess||Date.now()-lastSuccess>=30000)){lockHome();renderBanners(null,true);}return null;}
+ }catch(e){if(!stopped&&lifecycle===pollGeneration&&++failures>=3&&(!lastSuccess||Date.now()-lastSuccess>=30000)){lockHome();renderBanners(null,true);}return null;}
 }
-function pollLoad(){if(!loading)loading=load().finally(()=>{loading=null;});return loading;}
-let stopped=false;window.addEventListener('pagehide',()=>stopped=true);
-async function refresh(){if(stopped)return;if(!document.hidden||!initialized)await pollLoad();if(!stopped)setTimeout(refresh,UI.activePage()?(UI.activePage()==='diagnostics'?5000:10000):(UI.device.interval||2000));}
+function pollLoad(){if(stopped)return Promise.resolve(null);if(!loading)loading=load().finally(()=>{loading=null;});return loading;}
+window.addEventListener('pagehide',()=>{stopped=true;pollGeneration++;clearTimeout(pollTimer);pollTimer=null;});
+async function refreshStatus(generation=pollGeneration,resuming=false){
+ if(stopped||generation!==pollGeneration)return;
+ if(!document.hidden||!initialized){
+  // An old request may settle after cache restoration. Retire it before the
+  // required full read; its former loop cannot schedule another timer.
+  if(resuming&&loading)await loading;
+  if(stopped||generation!==pollGeneration)return;
+  await pollLoad();
+ }
+ if(!stopped&&generation===pollGeneration)pollTimer=setTimeout(function refresh(){
+  if(generation===pollGeneration)pollTimer=null;
+  return refreshStatus(generation);
+ },UI.activePage()?(UI.activePage()==='diagnostics'?5000:10000):(UI.device.interval||2000));
+}
+window.addEventListener('pageshow',()=>{
+ if(!stopped)return;
+ stopped=false;UI.invalidateStatus();
+ if(pollingStarted)refreshStatus(pollGeneration,true);
+});
 UI.reload=async({full=false}={})=>{if(full)UI.invalidateStatus();if(loading)await loading;return pollLoad();};
 document.addEventListener('visibilitychange',()=>{if(UI.device&&!document.hidden&&!stopped)UI.reload({full:true});});
 UI.showRoute=showRoute;
@@ -586,6 +608,6 @@ UI.start=async dev=>{
  window.addEventListener('hashchange',showRoute);showRoute();
  I18N.apply();
  I18N.onChange(()=>{if(UI.state){renderChips(UI.state);renderBanners(UI.state,false);for(const p of Object.values(UI.pages))if(p.status)p.status(UI.state);}});
- refresh();
+ pollingStarted=true;refreshStatus();
 };
 })();
