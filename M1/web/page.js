@@ -23,8 +23,10 @@ function renderPressure(){
  else $('pressureReading').removeAttribute('title');
 }
 // Expire this optional reading even if status polling stops succeeding.
-const pressureTimer=setInterval(renderPressure,1000);
-window.addEventListener('pagehide',()=>clearInterval(pressureTimer),{once:true});
+// Browsers pause timers in the back/forward cache and resume them on restore.
+// Keep this timer, and expire immediately on pageshow even if polling fails.
+setInterval(renderPressure,1000);
+window.addEventListener('pageshow',renderPressure);
 
 /* ---------- Home: readings ---------- */
 const tiles={};

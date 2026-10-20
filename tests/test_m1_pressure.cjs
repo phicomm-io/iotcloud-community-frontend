@@ -4,9 +4,10 @@ test('M1 pressure stays inline, follows detected model and expires without a suc
  const html=require('./render_page.cjs')('M1/web/index.html');
  const dom=new JSDOM(html,{runScripts:'outside-only',url:'http://device.local'}),w=dom.window;
  try{
-  let now=100,timer;
+  let now=100,timer,cleared=false;
   w.TextEncoder=TextEncoder;w.scrollTo=()=>{};w.setTimeout=()=>0;
   w.setInterval=fn=>{timer=fn;return 1;};
+  w.clearInterval=()=>{cleared=true;};
   Object.defineProperty(w.performance,'now',{value:()=>now});
   const scripts=[...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m=>m[1]);
   scripts.forEach((source,i)=>{
@@ -36,6 +37,13 @@ test('M1 pressure stays inline, follows detected model and expires without a suc
   now+=9899;timer();assert.equal(row.hidden,false);
   now++;timer();assert.equal(row.hidden,true,'age plus elapsed time expires at 10 seconds');
   render({...sensor,age_ms:0});assert.equal(row.hidden,false,'recovery displays fresh reading');
+  w.dispatchEvent(new w.PageTransitionEvent('pagehide',{persisted:true}));
+  assert.equal(cleared,false,'cache suspension must not permanently cancel expiry');
+  now+=10000;
+  w.dispatchEvent(new w.PageTransitionEvent('pageshow',{persisted:true}));
+  assert.equal(row.hidden,true,'cache restoration expires pressure before another successful poll');
+  render({...sensor,age_ms:0});now+=10000;timer();
+  assert.equal(row.hidden,true,'periodic expiry remains active after restoration');
   render();assert.equal(row.hidden,true,'missing sensor clears last value immediately');
  }finally{dom.window.close();}
 });

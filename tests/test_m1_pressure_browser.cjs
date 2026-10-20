@@ -42,7 +42,9 @@ const server=http.createServer((req,res)=>{
    await page.screenshot({path:path.join(evidence,`${engine}-${width}-${model}.png`),fullPage:true});
   }
   failStatus=true;
+  await page.evaluate(()=>window.dispatchEvent(new PageTransitionEvent('pagehide',{persisted:true})));
   await page.clock.fastForward(11000);
+  await page.evaluate(()=>window.dispatchEvent(new PageTransitionEvent('pageshow',{persisted:true})));
   assert.equal(await page.locator('#pressureReading').isVisible(),false,'failed polls cannot keep pressure fresh');
   failStatus=false;barometer={...barometer,model:'BMP388',chip_id:0x50};
   await page.evaluate(()=>UI.reload());assert.equal(await page.locator('#pressureReading').isVisible(),true);
