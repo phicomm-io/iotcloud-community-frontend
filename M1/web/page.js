@@ -6,7 +6,25 @@ const {t}=I18N;
 const {$,h,icon,toast,run,confirm,summary,card,info,pageHead,seg,prettyMac,normalizeMac,clone}=UI;
 const METRICS=['pm25','formaldehyde','temperature','humidity'];
 const STALE_MS=15000;
+const PRESSURE_STALE_MS=10000;
 let binding={response_ids:[]},bindingStatus={peers:[]};
+let pressureSnapshot=null,pressureReceivedAt=0;
+
+function renderPressure(){
+ const b=pressureSnapshot;
+ const fresh=b?.ready===true&&b.valid===true&&['BMP388','BMP390'].includes(b.model)&&
+  typeof b.pressure_hpa==='number'&&Number.isFinite(b.pressure_hpa)&&b.pressure_hpa>=300&&b.pressure_hpa<=1250&&
+  typeof b.age_ms==='number'&&Number.isFinite(b.age_ms)&&b.age_ms>=0&&
+  b.age_ms+Math.max(0,performance.now()-pressureReceivedAt)<PRESSURE_STALE_MS;
+ $('pressureReading').hidden=!fresh;
+ $('pressureValue').textContent=fresh?b.pressure_hpa.toFixed(1):'';
+ $('pressureModel').textContent=fresh?b.model:'';
+ if(fresh)$('pressureReading').title=b.model;
+ else $('pressureReading').removeAttribute('title');
+}
+// Expire this optional reading even if status polling stops succeeding.
+const pressureTimer=setInterval(renderPressure,1000);
+window.addEventListener('pagehide',()=>clearInterval(pressureTimer),{once:true});
 
 /* ---------- Home: readings ---------- */
 const tiles={};
@@ -31,6 +49,9 @@ screen.dataset.control='brightness';
 $('screenSeg').replaceWith(screen);
 const RANK={ok:0,warn:1,bad:2};
 function renderHome(s){
+ pressureSnapshot=s.barometer;
+ pressureReceivedAt=performance.now();
+ renderPressure();
  const co2=s.scd40;
  if(co2?.serial&&co2.serial!==lastCo2Serial){lastCo2=null;lastCo2Serial=co2.serial;}
  const co2Fresh=co2?.ready&&co2.valid&&Number.isFinite(co2.age_ms)&&co2.age_ms<20000&&

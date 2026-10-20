@@ -7,6 +7,13 @@ export function socketStates(s={}){
  });
 }
 export const deviceType=d=>({tc1:'TC1 智能插排',m1:'M1 空气质量检测器',a1:'A1 空气净化器'})[d.model]||'设备';
+export function pressureReading(s={},now=Date.now()){
+ const b=s.barometer,elapsed=now-s.sensorAt;
+ return b?.ready===true&&b.valid===true&&['BMP388','BMP390'].includes(b.model)&&
+  typeof b.pressure_hpa==='number'&&Number.isFinite(b.pressure_hpa)&&b.pressure_hpa>=300&&b.pressure_hpa<=1250&&
+  typeof b.age_ms==='number'&&Number.isFinite(b.age_ms)&&b.age_ms>=0&&
+  Number.isFinite(elapsed)&&elapsed>=0&&b.age_ms+elapsed<10000?b.pressure_hpa:null;
+}
 const number=(v,digits=0)=>v!==null&&v!==undefined&&v!==''&&Number.isFinite(Number(v))?Number(v).toFixed(digits):'—';
 export function deviceSummary(d,s={},connected=false,now=Date.now()){
  if(!connected)return '尚未连接';
