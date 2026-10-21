@@ -1,6 +1,7 @@
 <script setup>
 import DeviceConnection from './DeviceConnection.vue';
 import GitHubAccount from './GitHubAccount.vue';
+import BemfaIntegration from './BemfaIntegration.vue';
 import {ref,computed} from 'vue';
 import {account} from '../account';
 import {deviceKey} from '../deviceProtocol';
@@ -12,7 +13,7 @@ const demoMode=import.meta.env.VITE_DEMO==='1';
 const props=defineProps({localMode:Boolean,devicePreferences:Object,lanConnections:Object,initialSection:{type:String,default:'connection'},connection:Object,deviceBroker:Object,connected:Boolean,busy:Boolean,thirdParty:Boolean,devices:Array,states:Object,addForm:Object,deviceName:Function,now:Number});
 const emit=defineEmits(['device-connection','mode-change','connect','disconnect','add','remove','password','mqtt-password','install','home','refresh','rename']);
 const section=ref(props.localMode?'devices':props.initialSection),showPassword=ref(false),adding=ref(false),currentPassword=ref(''),newPassword=ref(''),mqttCurrent=ref(''),mqttNew=ref('');
-const sections=computed(()=>[...(!props.localMode?[{id:'connection',title:'MQTT 连接',description:'服务器与连接凭据',icon:'cloud'}]:[]),{id:'devices',title:'设备管理',description:'设备列表与添加',icon:'plug'},...(!props.localMode&&account.username?[{id:'account',title:'账号安全',description:'账号信息与密码',icon:'shield'}]:[])]);
+const sections=computed(()=>[...(!props.localMode?[{id:'connection',title:'MQTT 连接',description:'服务器与连接凭据',icon:'cloud'}]:[]),{id:'devices',title:'设备管理',description:'设备列表与添加',icon:'plug'},...(!props.localMode&&!props.thirdParty&&!demoMode&&account.username?[{id:'bemfa',title:'巴法云',description:'小爱同学与主题映射',icon:'cloud'}]:[]),...(!props.localMode&&account.username?[{id:'account',title:'账号安全',description:'账号信息与密码',icon:'shield'}]:[])]);
 const online=computed(()=>props.devices.filter(d=>(props.connected||props.states[deviceKey(d)]?.lan_connected)&&props.states[deviceKey(d)]?.available===true).length);
 function status(d){return props.states[deviceKey(d)]?.lan_connected?'内网已连接':!props.connected?'未连接':props.states[deviceKey(d)]?.available===true?'在线':props.states[deviceKey(d)]?.available===false?'离线':'状态未知';}
 </script>
@@ -50,6 +51,7 @@ function status(d){return props.states[deviceKey(d)]?.lan_connected?'内网已�
 <footer class="settings-footnote"><AppIcon name="signal" :size="17"/><span>{{localMode?'设备通过填写的 IP 连接；可在详情中修改地址与网页密码。':'TMCP 设备可自动发现；Legacy 仅支持 TC1。'}}移除设备前会再次确认。</span></footer>
 </section>
 </template>
+<BemfaIntegration v-else-if="section==='bemfa'&&!localMode&&!thirdParty&&!demoMode&&account.username" :devices="devices" :device-name="deviceName"/>
 <template v-else>
 <GitHubAccount v-if="!demoMode"/>
 <section class="card settings-card"><header class="settings-card-heading"><div><h2>修改 MQTT 密码</h2><p class="help">默认使用注册密码。修改后请更新所有设备的 MQTT 密码，网站登录密码保持不变。</p></div></header><form @submit.prevent="emit('mqtt-password',{current:mqttCurrent,password:mqttNew})"><div class="settings-block settings-fields"><label>网站当前密码<input v-model="mqttCurrent" type="password" autocomplete="current-password" required/></label><label>新 MQTT 密码<input v-model="mqttNew" type="password" autocomplete="new-password" minlength="6" required/></label></div><footer class="settings-actions"><button class="btn primary">保存 MQTT 密码</button></footer></form></section>
