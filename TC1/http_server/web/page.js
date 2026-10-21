@@ -59,7 +59,7 @@ for(const id of ['ledEnabled','ledEnabledDevice'])$(id).onchange=e=>run(null,()=
 const powerHistory=[];
 async function pollPower(){
  try{
-  if($('homePage').hidden)return;
+  if(document.hidden||$('homePage').hidden)return;
   const p=await api('/power');
   $('watts').firstChild.textContent=Number(p.power_watts||0).toFixed(1);
   $('energy').textContent=(p.energy_kwh<1?(p.energy_kwh*1000).toFixed(1)+' Wh':p.energy_kwh.toFixed(3)+' kWh');

@@ -3,7 +3,7 @@ const {JSDOM}=require('jsdom'),vm=require('node:vm');
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
 test('A1 mode controls, idle state, automatic cap and manual speed remain distinct',async()=>{
  const html=require('./render_page.cjs')('A1/web/index.html');
- const dom=new JSDOM(html,{runScripts:'outside-only',url:'http://device.local'}),w=dom.window;
+ const dom=new JSDOM(html,{pretendToBeVisual:true,runScripts:'outside-only',url:'http://device.local'}),w=dom.window;
  try{
   w.TextEncoder=TextEncoder;w.scrollTo=()=>{};w.setTimeout=()=>0;
   const writes=[];
@@ -34,7 +34,7 @@ test('A1 mode controls, idle state, automatic cap and manual speed remain distin
 });
 test('A1 hysteresis settings validate and save through the shared local/platform UI',async()=>{
  const html=require('./render_page.cjs')('A1/web/index.html');
- const dom=new JSDOM(html,{runScripts:'outside-only',url:'http://device.local'}),w=dom.window;
+ const dom=new JSDOM(html,{pretendToBeVisual:true,runScripts:'outside-only',url:'http://device.local'}),w=dom.window;
  try{
   w.TextEncoder=TextEncoder;w.scrollTo=()=>{};w.setTimeout=()=>0;
   const writes=[],config={revision:10,enabled:1,mode:2,metrics:3,hysteresis_enabled:0,target_pm:35,on_pm:50,target_hcho:.08,on_hcho:.1,min_speed:20,max_speed:80,fallback_speed:30,statistic:0,debounce_seconds:15,min_switch_seconds:60,kp:20,ki:.02,kd:0};
@@ -66,7 +66,7 @@ test('A1 hysteresis settings validate and save through the shared local/platform
 });
 test('A1 optional CO2 choices, thresholds and absent/stale capability',async()=>{
  const html=require('./render_page.cjs')('A1/web/index.html');
- const dom=new JSDOM(html,{runScripts:'outside-only',url:'http://device.local'}),w=dom.window;
+ const dom=new JSDOM(html,{pretendToBeVisual:true,runScripts:'outside-only',url:'http://device.local'}),w=dom.window;
  try{
   w.TextEncoder=TextEncoder;w.scrollTo=()=>{};w.setTimeout=()=>0;
   const writes=[],config={revision:1,enabled:1,mode:1,metrics:1,hysteresis_enabled:1,target_co2:1000,on_co2:1500,low_co2:800,high_co2:2000,min_speed:0,max_speed:80,fallback_speed:23};

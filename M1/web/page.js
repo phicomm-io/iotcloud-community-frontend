@@ -6,7 +6,27 @@ const {t}=I18N;
 const {$,h,icon,toast,run,confirm,summary,card,info,pageHead,seg,prettyMac,normalizeMac,clone}=UI;
 const METRICS=['pm25','formaldehyde','temperature','humidity'];
 const STALE_MS=15000;
+const PRESSURE_STALE_MS=10000;
 let binding={response_ids:[]},bindingStatus={peers:[]};
+let pressureSnapshot=null,pressureReceivedAt=0;
+
+function renderPressure(){
+ const b=pressureSnapshot;
+ const fresh=b?.ready===true&&b.valid===true&&['BMP388','BMP390'].includes(b.model)&&
+  typeof b.pressure_hpa==='number'&&Number.isFinite(b.pressure_hpa)&&b.pressure_hpa>=300&&b.pressure_hpa<=1250&&
+  typeof b.age_ms==='number'&&Number.isFinite(b.age_ms)&&b.age_ms>=0&&
+  b.age_ms+Math.max(0,performance.now()-pressureReceivedAt)<PRESSURE_STALE_MS;
+ $('pressureReading').hidden=!fresh;
+ $('pressureValue').textContent=fresh?b.pressure_hpa.toFixed(1):'';
+ $('pressureModel').textContent=fresh?b.model:'';
+ if(fresh)$('pressureReading').title=b.model;
+ else $('pressureReading').removeAttribute('title');
+}
+// Expire this optional reading even if status polling stops succeeding.
+// Browsers pause timers in the back/forward cache and resume them on restore.
+// Keep this timer, and expire immediately on pageshow even if polling fails.
+setInterval(renderPressure,1000);
+window.addEventListener('pageshow',renderPressure);
 
 /* ---------- Home: readings ---------- */
 const tiles={};
@@ -31,6 +51,13 @@ screen.dataset.control='brightness';
 $('screenSeg').replaceWith(screen);
 const RANK={ok:0,warn:1,bad:2};
 function renderHome(s){
+ // Optimistic controls and their final render reuse the same measurement.
+ // Only a newly decoded status object starts a new receipt-time age origin.
+ if(pressureSnapshot!==s.barometer){
+  pressureSnapshot=s.barometer;
+  pressureReceivedAt=performance.now();
+ }
+ renderPressure();
  const co2=s.scd40;
  if(co2?.serial&&co2.serial!==lastCo2Serial){lastCo2=null;lastCo2Serial=co2.serial;}
  const co2Fresh=co2?.ready&&co2.valid&&Number.isFinite(co2.age_ms)&&co2.age_ms<20000&&
@@ -149,6 +176,6 @@ UI.start({
 });
 I18N.onChange(()=>{renderPeers();const p=document.querySelector('[data-settings-page="binding"]');if(p&&!p.hidden)showBinding();});
 // The linked list is small and changes rarely; refresh it with the status.
-(async function poll(){try{bindingStatus=await api('/binding/status');renderPeers();}catch{}setTimeout(poll,4000);})();
+(async function poll(){try{if(document.hidden||($('homePage').hidden&&UI.activePage()!=='binding'&&UI.activePage()!=='linkage'))return;bindingStatus=await api('/binding/status');renderPeers();}catch{}finally{setTimeout(poll,4000);}})();
 api('/binding/config').then(c=>{binding=c;renderPeers();}).catch(e=>toast(e.message,true));
 })();

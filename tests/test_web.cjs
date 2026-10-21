@@ -13,9 +13,9 @@ const ACTIONS={M1:['schedules.get','schedules.put','schedules.delete','schedules
 (async()=>{for(const model of (process.env.WEB_TEST_MODEL?[process.env.WEB_TEST_MODEL]:['M1','A1','TC1'])){
  const path=model==='TC1'?'TC1/http_server/web/index.html':model+'/web/index.html';
  const html=require('./render_page.cjs')(path);
- const dom=new JSDOM(html,{runScripts:'outside-only',url:'http://device.local'}),w=dom.window,d=w.document,calls=[];
+ const dom=new JSDOM(html,{pretendToBeVisual:true,runScripts:'outside-only',url:'http://device.local'}),w=dom.window,d=w.document,calls=[];
  const missing=[];w.console.warn=(...args)=>{if(args[0]==='i18n missing')missing.push(args[1]);};
- w.TextEncoder=require('node:util').TextEncoder;w.setTimeout=()=>0;w.confirm=()=>true;w.scrollTo=()=>{};
+ const pollTimers=[];w.TextEncoder=require('node:util').TextEncoder;w.setTimeout=(fn)=>{if(fn.name==='refresh')pollTimers.push(fn);return 0;};w.confirm=()=>true;w.scrollTo=()=>{};
  const state={mqtt_topic_mode:model==='TC1'?'legacy':'tmcp',name:'test <img>',device_id:'aabbccddeeff',version:'test',ip:'1.2.3.4',ssid:'home',wifi_connected:true,mqtt_status:'ready',mqtt_host:'broker',mqtt_user:'user',mqtt_port:1883,
   brightness_requested:4,brightness:255,led_enabled:true,led_always_on:true,red:1,green:2,blue:3,speed:60,percentage:60,applied_speed:60,requested_speed:60,fan_on:true,fan_ready:true,panel_ready:true,
   sensor_received:true,sensor_valid:true,age_ms:1000,temperature:25,humidity:50,formaldehyde:0.02,pm25:20,time_synced:true,timezone_minutes:480,ntp_host:'pool.ntp.org',ntp_status:'synced',ntp_synced:true,
@@ -31,6 +31,7 @@ const ACTIONS={M1:['schedules.get','schedules.put','schedules.delete','schedules
   'linkage.get':{enabled:0,mode:0,metrics:1,on_metrics:1,off_metrics:1,statistic:0,on_enabled:0,off_enabled:0,on_all:0,off_all:1,fixed_speed:60,min_speed:20,max_speed:100,debounce_seconds:15,min_switch_seconds:60,on_pm:50,off_pm:35,on_hcho:.1,off_hcho:.08,target_pm:35,target_hcho:.08,low_pm:35,high_pm:150,low_hcho:.08,high_hcho:.3,kp:20,ki:.02,kd:0,revision:1},
   'light_effect.get':{effect:0,segments:1,follow_fan:0,quality_pm:35,quality_hcho:.08,segment:[{source:0,display:2,minimum:-10,maximum:50,suitable_low:18,suitable_high:26,colors:[[0,0,255],[0,255,0],[255,0,0]]}],revision:1},
   'filter.get':{used_seconds:7200,lifetime_hours:4320,remaining_percent:99},'ota.sources.get':{sources:['github','cn','global']},'ota.check.get':{state:'up_to_date',version:'test',busy:false},'wifi.scan.get':{scanning:false,networks:[]}};
+ if(process.env.WEB_TEST_VIEWS)fixtures['capabilities.get'].status_views=['full','live'];
  let holdOutlet;
  w.fetch=async(url,o={})=>{assert.equal(url,'/api/v1/command');const req=JSON.parse(o.body);calls.push(req);
   if(req.action==='buttons.get'){const {offset=0,limit=8}=req.params;fixtures['buttons.get']={items:buttonItems.slice(offset,offset+limit),next:offset+limit,capacity:model==='A1'?102:68};}
@@ -41,9 +42,38 @@ const ACTIONS={M1:['schedules.get','schedules.put','schedules.delete','schedules
    if(holdOutlet)await holdOutlet(req);
    if(req.params.index===undefined)state.socket_states.fill(Number(req.params.on));else state.socket_states[req.params.index]=Number(req.params.on);
   }
-  return {ok:true,status:200,json:async()=>({code:req.action.endsWith('.get')?'ok':'accepted',data:fixtures[req.action]||{}})};};
+  let data=fixtures[req.action]||{};
+  if(req.action==='status.get'&&req.params.view==='live'){data={...state};delete data.ssid;delete data.free_memory;}
+  return {ok:true,status:200,json:async()=>({code:req.action.endsWith('.get')?'ok':'accepted',data})};};
  for(const match of html.matchAll(/<script>([\s\S]*?)<\/script>/g))require('node:vm').runInContext(match[1],dom.getInternalVMContext());
  for(let i=0;i<12;i++)await flush();
+ if(process.env.WEB_TEST_VIEWS){
+  const reads=()=>calls.filter(c=>c.action==='status.get');
+  assert.deepEqual(reads()[0].params,{},'first read is full');
+  await w.UI.reload();assert.equal(reads().at(-1).params.view,'live');
+  assert.equal(w.UI.state.ssid,'home','partial status retains slow fields');
+  assert.equal(w.UI.state.free_memory,30000);
+  w.UI.acceptStatus({scd40:{co2:800,crc_errors:7}},true);
+  w.UI.acceptStatus({scd40:{co2:null,valid:false}},true);
+  assert.equal(w.UI.state.scd40.co2,null,'null invalidates old sensor values');
+  assert.equal(w.UI.state.scd40.crc_errors,7,'nested diagnostics survive live merge');
+  w.UI.invalidateStatus();await w.UI.reload();assert.deepEqual(reads().at(-1).params,{});
+  w.location.hash='settings/network';w.dispatchEvent(new w.Event('hashchange'));
+  for(let i=0;i<4;i++)await flush();
+  assert.deepEqual(reads().at(-1).params,{},'page entry refreshes full fields');
+  w.location.hash='home';w.dispatchEvent(new w.Event('hashchange'));await flush();
+  await w.UI.reload();assert.equal(reads().at(-1).params.view,'live');
+  const count=reads().length;Object.defineProperty(d,'hidden',{value:true,configurable:true});
+  assert(pollTimers.length);await pollTimers.at(-1)();assert.equal(reads().length,count,'background tab skips polling');
+  Object.defineProperty(d,'hidden',{value:false,configurable:true});
+  w.document.dispatchEvent(new w.Event('visibilitychange'));
+  for(let i=0;i<4;i++)await flush();
+  assert.deepEqual(reads().at(-1).params,{},'visible tab resumes with full status');
+  const original=w.Date.now;w.Date.now=()=>original()+31000;
+  assert.deepEqual(JSON.parse(JSON.stringify(w.UI.statusParams())),{},'slow fields expire');w.Date.now=original;
+  const views=w.UI.caps.status_views;delete w.UI.caps.status_views;
+  await w.UI.reload();assert.deepEqual(reads().at(-1).params,{},'legacy firmware uses full');w.UI.caps.status_views=views;
+ }
  assert.equal(d.querySelector('#title').textContent,model+' test <img>');
  assert.equal(d.querySelector('img'),null,'device-supplied names must not be injected as markup');
  if(model==='A1')assert(d.querySelector('#autoCard').textContent.includes('25.0 °C'),'homepage displays the live M1 mean even when linkage is disabled');

@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {deviceSummary} from './devicePresentation.js';
+import {deviceSummary,pressureReading} from './devicePresentation.js';
 test('summaries prioritize useful readings and preserve unknown and offline states',()=>{
  assert.equal(deviceSummary({model:'tc1'},{power:23.5,socket_states:[true,false,true,false,false,false]},true),'23.5 W · 2 开 · 4 关');
  assert.equal(deviceSummary({model:'tc1'},{},true),'等待设备数据');
@@ -29,4 +29,20 @@ test('Legacy and TMCP numeric relay states render consistently without inventing
 test('A1 summaries retain selected mode while idle or powered off',()=>{
  assert.equal(deviceSummary({model:'a1'},{fan_on:true,fan_mode:'auto',fan_state:'idle',led_enabled:false},true),'自动 待机 · 灯光关闭');
  assert.equal(deviceSummary({model:'a1'},{fan_on:false,fan_mode:'auto',led_enabled:false},true),'自动 已停止 · 灯光关闭');
+});
+
+test('pressure uses independent freshness and rejects stale, absent and malformed readings',()=>{
+ const barometer={model:'BMP388',ready:true,valid:true,age_ms:100,pressure_hpa:1013.24};
+ const state={sensorAt:1000,barometer,sensor_valid:false};
+ assert.equal(pressureReading(state,1001),1013.24);
+ assert.equal(pressureReading({...state,barometer:{...barometer,model:'BMP390'}},1001),1013.24);
+ assert.equal(pressureReading(state,10899),1013.24);
+ assert.equal(pressureReading(state,10900),null);
+ assert.equal(pressureReading(state,999),null);
+ assert.equal(pressureReading({barometer},1001),null);
+ assert.equal(pressureReading({},1001),null);
+ for(const patch of [{valid:false},{ready:false},{model:'unknown'},{age_ms:null},{age_ms:-1},
+  {age_ms:10000},{pressure_hpa:null},{pressure_hpa:NaN},{pressure_hpa:Infinity},
+  {pressure_hpa:'1013.24'},{pressure_hpa:0},{pressure_hpa:1250.1}])
+  assert.equal(pressureReading({...state,barometer:{...barometer,...patch}},1001),null);
 });

@@ -3,7 +3,7 @@ const {JSDOM}=require('jsdom'),vm=require('node:vm');
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
 test('A1 filter rendering, lifetime edit, reset confirmation and failed writes',async()=>{
  const html=require('./render_page.cjs')('A1/web/index.html');
- const dom=new JSDOM(html,{runScripts:'outside-only',url:'http://device.local'}),w=dom.window;
+ const dom=new JSDOM(html,{pretendToBeVisual:true,runScripts:'outside-only',url:'http://device.local'}),w=dom.window;
  try{
   w.TextEncoder=TextEncoder;w.scrollTo=()=>{};w.setTimeout=()=>0;
   let confirm=false,fail=false;w.confirm=()=>confirm;
