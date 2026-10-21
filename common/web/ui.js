@@ -325,6 +325,8 @@ function mqttImportPanel(dev,fields){
 }
 function mqttPage(dev){
  const sum=h('div');
+ const dual=UI.caps?.dual_mqtt===true;
+ const enabled=dual?switchRow('mqttEnabled','mqtt.enabled','mqtt.enabled_help'):null;
  const host=h('input',{id:'mqttHost',maxLength:dev.mqttHostMax||127,placeholder:t('mqtt.host_ph')});
  const port=h('input',{id:'mqttPort',type:'number',min:1,max:65535,required:true,value:'1883'});
  const user=h('input',{id:'mqttUser',maxLength:63,autocomplete:'off'});
@@ -332,7 +334,7 @@ function mqttPage(dev){
  const protocol=dev.model==='TC1'?h('select',{id:'mqttMode'},h('option',{value:'tmcp'},'TMCP (v2)'),h('option',{value:'legacy'},'Legacy (v1)')):null;
  const clear=switchRow('clearMqttPassword','mqtt.clear','mqtt.clear_desc');
  const imported=mqttImportPanel(dev,{host,port,user,pass,protocol,clear:clear.querySelector('input')});
- const form=h('form',{id:'mqttForm',class:'stack'},
+ const form=h('form',{id:'mqttForm',class:'stack'},...(enabled?[enabled]:[]),
   h('div',{class:'fields',style:'grid-template-columns:minmax(0,3fr) minmax(90px,1fr)'},
    h('label',{class:'field'},h('span',{i18n:'mqtt.host'}),host),h('label',{class:'field'},h('span',{i18n:'mqtt.port'}),port)),
   h('div',{class:'fields'},h('label',{class:'field'},h('span',{i18n:'mqtt.user'}),user),h('label',{class:'field'},h('span',{i18n:'mqtt.password'}),pass)),
@@ -341,15 +343,44 @@ function mqttPage(dev){
  onSubmit(form,()=>{
   imported.guard?.();
   const enc=new TextEncoder();if(enc.encode(user.value).length>63||enc.encode(pass.value).length>256)throw Error(t('mqtt.too_long'));
-  return api('/mqtt/config',{host:host.value.trim(),port:Number(port.value),user:user.value,password:pass.value,clear_password:clear.querySelector('input').checked,...(protocol?{protocol:protocol.value}:{})}).then(result=>{pass.value='';imported.saved?.();return result;});
+  return api('/mqtt/config',{host:host.value.trim(),port:Number(port.value),user:user.value,password:pass.value,clear_password:clear.querySelector('input').checked,...(enabled?{enabled:enabled.querySelector('input').checked}:{}),...(protocol?{protocol:protocol.value}:{})}).then(result=>{pass.value='';imported.saved?.();return result;});
  });
  const broker=card('mqtt.broker',null,form);
  const heading=broker.querySelector('.card-head');heading.classList.add('broker-card-head');
  heading.append(h('a',{class:'btn broker-platform-link',href:'https://phicomm-io.github.io/iotcloud/#/',target:'_blank',rel:'noopener noreferrer'},h('span',{i18n:'import.platform'}),icon('external')));
- return {el:h('div',{class:'stack'},pageHead('nav.mqtt','mqtt.lead'),sum,imported,broker),
-  status(s){sum.replaceChildren(summary([['mqtt.status',!s.mqtt_host?t('state.off'):s.mqtt_connected?t('state.ready'):t('s.'+(s.mqtt_status||'connecting')),!s.mqtt_host?'':s.mqtt_connected?'ok':'warn'],
-   ['mqtt.host',s.mqtt_host?s.mqtt_host+':'+s.mqtt_port:'—'],['mqtt.mode',t(s.mqtt_topic_mode==='legacy'?'mqtt.mode_legacy':'mqtt.mode_tmcp')],['mqtt.user',s.mqtt_user||'—']]));},
-  init(s){if(protocol)protocol.value=s.mqtt_protocol||s.mqtt_topic_mode||'tmcp';host.value=s.mqtt_host||'';port.value=s.mqtt_port||1883;user.value=s.mqtt_user||'';imported.activate?.();}};
+ const bemfa=dual?bemfaCard(dev):null;
+ return {el:h('div',{class:'stack'},pageHead('nav.mqtt','mqtt.lead'),sum,imported,broker,...(bemfa?[bemfa.el]:[])),
+  status(s){sum.replaceChildren(summary([['mqtt.status',s.mqtt_enabled===false||!s.mqtt_host?t('state.off'):s.mqtt_connected?t('state.ready'):t('s.'+(s.mqtt_status||'connecting')),s.mqtt_enabled===false||!s.mqtt_host?'':s.mqtt_connected?'ok':'warn'],
+   ['mqtt.host',s.mqtt_host?s.mqtt_host+':'+s.mqtt_port:'—'],['mqtt.mode',t(s.mqtt_topic_mode==='legacy'?'mqtt.mode_legacy':'mqtt.mode_tmcp')],['mqtt.user',s.mqtt_user||'—'],...(dual?[['bemfa.status',!s.bemfa_enabled?t('state.off'):s.bemfa_connected?t('state.ready'):t('s.'+(s.bemfa_status||'disconnected')),s.bemfa_connected?'ok':'']]:[])]));},
+  async init(s){if(enabled)enabled.querySelector('input').checked=s.mqtt_enabled!==false;if(protocol)protocol.value=s.mqtt_protocol||s.mqtt_topic_mode||'tmcp';host.value=s.mqtt_host||'';port.value=s.mqtt_port||1883;user.value=s.mqtt_user||'';imported.activate?.();if(bemfa)await bemfa.load();}};
+}
+function bemfaCard(dev){
+ const enabled=switchRow('bemfaEnabled','bemfa.enabled');
+ const app=h('input',{id:'bemfaAppId',maxLength:64,autocomplete:'off'});
+ const secret=h('input',{id:'bemfaSecret',type:'password',maxLength:128,autocomplete:'new-password',placeholder:t('bemfa.secret_hint')});
+ const clear=switchRow('clearBemfaSecret','bemfa.clear','bemfa.clear_help');
+ const n=dev.model==='TC1'?6:2;
+ const topics=Array.from({length:n},(_,i)=>h('input',{id:'bemfaTopic'+i,maxLength:63,autocomplete:'off',spellcheck:false}));
+ const fields=h('fieldset',{class:'stack',disabled:true,style:'border:0;padding:0;margin:0;min-width:0'},enabled,
+  h('label',{class:'field'},h('span',{i18n:'bemfa.app_id'}),app),
+  h('label',{class:'field'},h('span',{i18n:'bemfa.secret'}),secret),clear,
+  ...topics.map((input,i)=>h('label',{class:'field'},n===6?h('span',{},t('bemfa.outlet',{n:i+1})):h('span',{i18n:i?'bemfa.light':'bemfa.fan'}),input)),
+  ...(n===2?[info('bemfa.fan_help')]:[]),
+  h('div',{class:'form-actions'},h('button',{class:'btn primary',type:'submit'},h('span',{i18n:'common.save'}))));
+ const loading=h('p',{class:'muted','aria-live':'polite'},t('bemfa.loading'));
+ const form=h('form',{id:'bemfaForm',class:'stack'},info('bemfa.help'),loading,fields);
+ let savedKey=false;
+ onSubmit(form,()=>{
+  const values={enabled:enabled.querySelector('input').checked,app_id:app.value.trim(),secret_key:secret.value,clear_secret:clear.querySelector('input').checked,topics:topics.map(x=>x.value.trim())};
+  const active=values.topics.filter(Boolean),bytes=new TextEncoder();
+  if(bytes.encode(values.app_id).length>64||bytes.encode(values.secret_key).length>128||new Set(active).size!==active.length||values.topics.some((x,i)=>x&&(!/^[A-Za-z0-9_]+$/.test(x)||x.length>63||x.length<4||!x.endsWith(n===6?'001':i?'002':'003')))||values.enabled&&(!values.app_id||!active.length||values.clear_secret||!(values.secret_key||savedKey)))throw Error(t('bemfa.invalid'));
+  return api('/bemfa/config',values).then(result=>{if(values.clear_secret)savedKey=false;else if(values.secret_key)savedKey=true;secret.value='';clear.querySelector('input').checked=false;return result;});
+ });
+ return {el:card('bemfa.title',null,form),async load(){
+  try{const c=await command('config.get'),b=c.bemfa;if(!b)throw Error('missing Bemfa configuration');enabled.querySelector('input').checked=!!b.enabled;app.value=b.app_id||'';savedKey=!!b.secret_key_set;topics.forEach((x,i)=>x.value=b.topics?.[i]||'');secret.value='';loading.hidden=true;fields.disabled=false;}
+  catch{loading.textContent=t('bemfa.load_error');fields.disabled=true;}
+ }};
+
 }
 function firmwarePage(dev){
  const online=h('section',{class:'card stack',hidden:!UI.caps?.actions?.includes('ota.sources.get')});

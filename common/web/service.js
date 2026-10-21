@@ -21,11 +21,12 @@ async function api(path,data){
  if(direct[path]){if(['/light','/light/config'].includes(path)&&data.brightness!==undefined)data={...data,brightness:Math.round(data.brightness*100/255)};return command(direct[path],data);}
  if(path==='/display/brightness')return command('display.set',{brightness:data.level*25});
  if(path==='/socket'){for(let index=0;index<data.states.length;index++)await command('outlet.set',{index,on:!!data.states[index]});return {};}
- const sections={'/wifi/config':'wifi','/mqtt/config':'mqtt','/deviceName':'device','/auth/password':'auth','/socketNames':'socket','/mqtt/report/freq':'report','/power/coefficient':'meter','/ntp/config':'ntp'};
+ const sections={'/wifi/config':'wifi','/mqtt/config':'mqtt','/bemfa/config':'bemfa','/deviceName':'device','/auth/password':'auth','/socketNames':'socket','/mqtt/report/freq':'report','/power/coefficient':'meter','/ntp/config':'ntp'};
  if(sections[path]){
   let values={...data};
   if(path==='/power/coefficient')values={coefficient_x100:Number(data)};
   if(path==='/mqtt/config'){delete values.topic_mode;delete values.clear_password;if(data.clear_password)values.password='';else if(!values.password)delete values.password;}
+  if(path==='/bemfa/config'){delete values.clear_secret;if(data.clear_secret)values.secret_key='';else if(!values.secret_key)delete values.secret_key;}
   if(path==='/wifi/config'){delete values.open_network;if(data.open_network)values.password='';else if(!values.password)delete values.password;}
   return command('config.set',{section:sections[path],values});
  }

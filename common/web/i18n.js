@@ -4,6 +4,25 @@
 (()=>{
 'use strict';
 const D={
+'mqtt.enabled':['Enable primary MQTT','启用原 MQTT 服务'],
+'mqtt.enabled_help':['IotCloud, Home Assistant and MQTT automations use this connection.','IotCloud、Home Assistant 和 MQTT 联动使用此连接。'],
+'bemfa.title':['Bemfa voice control','巴法语音控制'],
+'bemfa.enabled':['Enable Bemfa MQTT','启用巴法 MQTT'],
+'bemfa.help':['Create the matching topics in your Bemfa account, then link that account in Mi Home. Blank topics disable individual mappings. Both MQTT connections can be enabled independently; local HTTP remains available.','先在自己的巴法账号中创建对应主题，再到米家关联该账号。主题留空可停用该项映射。两路 MQTT 可独立开启，本地 HTTP 始终可用。'],
+'bemfa.app_id':['AppID','AppID'],
+'bemfa.secret':['SecretKey','SecretKey'],
+'bemfa.secret_hint':['Leave blank to keep the saved key','留空保留已保存的密钥'],
+'bemfa.clear':['Clear saved SecretKey','清除已保存的 SecretKey'],
+'bemfa.clear_help':['Disable Bemfa before clearing its key.','清除密钥前请先关闭巴法服务。'],
+'bemfa.outlet':['Outlet {n} topic (ends in 001)','插孔 {n} 主题（以 001 结尾）'],
+'bemfa.fan':['Fan topic (ends in 003)','风扇主题（以 003 结尾）'],
+'bemfa.light':['Ring light topic (ends in 002)','灯环主题（以 002 结尾）'],
+'bemfa.fan_help':['Gears 1–4 map to 20/50/75/100%. Auto mode adjusts the current speed ceiling. Ring light supports power and brightness.','1–4 档对应 20/50/75/100%。自动模式下调整当前风速上限；灯环支持开关和亮度。'],
+'bemfa.invalid':['Check credentials and topic suffixes; topics must be unique and use letters, digits or underscores.','请检查账号、密钥和主题后缀；主题不能重复，仅可使用英文字母、数字和下划线。'],
+'bemfa.status':['Bemfa status','巴法状态'],
+'bemfa.loading':['Reading Bemfa settings…','正在读取巴法配置…'],
+'bemfa.load_error':['Could not read Bemfa settings. Reload before editing.','读取巴法配置失败，请刷新后再修改。'],
+
 'auto.mode':['Operating mode','运行模式'],'auto.auto':['Auto','自动'],'auto.manual':['Manual','手动'],
 'auto.toggle':['Toggle auto/manual','切换自动／手动模式'],'auto.idle':['Idle','待机'],
 'auto.minimum':['Minimum speed','最低风速'],'auto.maximum':['Maximum speed','最高风速'],
