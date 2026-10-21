@@ -1,16 +1,19 @@
 // Transform each inline fragment separately: preserve script order and globals.
 const fs = require('node:fs');
 const esbuild = require('../frontend/node_modules/esbuild');
+const terser = require('../frontend/node_modules/terser');
 
 function minifyDevice(html) {
   return html.replace(/(<script\b[^>]*>)([\s\S]*?)(<\/script\s*>)/gi,
     (_, open, code, close) => {
       if (/\bsrc\s*=/i.test(open)) return open + code + close;
-      return open + esbuild.transformSync(code, {
-        loader: 'js', charset: 'utf8', target: 'es2020',
-        minifyWhitespace: true, minifySyntax: true, minifyIdentifiers: true,
-        legalComments: 'inline'
-      }).code + close;
+      // Keep global names and script boundaries: product scripts consume them.
+      // Extra compression runs only on the build host, with safe transforms.
+      const result = terser.minify_sync(code, {
+        ecma: 2020, compress: { passes: 3 }, mangle: true,
+        format: { ascii_only: false, comments: /^!/ }
+      });
+      return open + result.code + close;
     }).replace(/(<style\b[^>]*>)([\s\S]*?)(<\/style\s*>)/gi,
       (_, open, css, close) => open + esbuild.transformSync(css, {
         loader: 'css', charset: 'utf8', minify: true,
