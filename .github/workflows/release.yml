@@ -25,6 +25,8 @@ jobs:
       - run: python3 -m pip install -r requirements-build.txt
       - run: npm ci --prefix frontend
       - run: npm test --prefix frontend
+      - run: node tests/test_command_queue.cjs
+      - run: NODE_PATH=frontend/node_modules node tests/test_status_refresh.cjs
       - run: python3 tests/check_web.py
       - run: NODE_PATH=frontend/node_modules node tests/test_setup.cjs
       - run: NODE_PATH=frontend/node_modules node tests/test_web.cjs

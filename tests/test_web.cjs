@@ -182,9 +182,9 @@ const ACTIONS={M1:['schedules.get','schedules.put','schedules.delete','schedules
   assert(calls.some(r=>r.action==='outlet.set'&&r.params.index===0&&r.params.on===false),'a socket tile must toggle one socket');
   assert.equal(d.querySelector('#socket1').disabled,false,'another socket stays usable while the first command is pending');
   d.querySelector('#socket1').click();await flush();
-  await w.UI.reload();
+  const pendingReload=w.UI.reload();await flush();
   for(const id of ['socket0','socket1'])assert.equal(d.querySelector('#'+id).getAttribute('aria-pressed'),'false','stale status must not overwrite pending socket output');
-  for(const release of releases)release();holdOutlet=null;
+  for(const release of releases)release();holdOutlet=null;await pendingReload;
   for(let i=0;i<4;i++)await flush();
   for(const id of ['socket0','socket1'])assert.equal(d.querySelector('#'+id).disabled,false,'acknowledged sockets become usable again');
   w.location.hash='settings/buttons';w.dispatchEvent(new w.Event('hashchange'));await flush();

@@ -157,7 +157,7 @@ UI.acceptStatus=(s,partial=false)=>{
  UI.confirmed=merged;UI.state=pendingControl?{...merged,...pendingControl}:merged;return UI.state;
 };
 let fullGeneration=1,loadedGeneration=0,lastFullAt=0;
-UI.invalidateStatus=()=>{fullGeneration++;};
+UI.invalidateStatus=({live=false}={})=>{if(!live)fullGeneration++;};
 UI.activePage=()=>/^settings\/([a-z]+)$/.exec(UI.embeddedRoute??location.hash.slice(1))?.[1]||null;
 UI.statusParams=()=>{
  const page=UI.activePage(),ttl=page==='diagnostics'?5000:['network','mqtt','device','firmware'].includes(page)?10000:30000;
@@ -171,10 +171,10 @@ UI.control=async(action,params,patch)=>{
  let sendError,last;
  const matches=s=>s&&Object.entries(patch).every(([k,v])=>Object.hasOwn(s,k)&&(Array.isArray(v)?Array.isArray(s[k])&&v.length===s[k].length&&v.every((x,i)=>!!x===!!s[k][i]):typeof v==='boolean'?!!s[k]===v:s[k]===v));
  try{
-  try{await command(action,params);}catch(e){sendError=e;if(e.code&&!['timeout','offline'].includes(e.code))throw e;}
+  try{await command(action,params,{live:true});}catch(e){sendError=e;if(e.code&&!['timeout','offline'].includes(e.code))throw e;}
   const until=Date.now()+20000;
   do{
-   last=await UI.reload();
+   last=await UI.reload({live:true});
    if(matches(last))return last;
    await new Promise(resolve=>setTimeout(resolve,750));
   }while(Date.now()<until);
@@ -569,12 +569,11 @@ let stopped=false,pollingStarted=false,pollTimer=null,pollGeneration=0;
 const lockedControls=new Map();
 function lockHome(){if(!UI.embedded)return;for(const el of document.querySelectorAll('#homePage button,#homePage input,#homePage select')){if(!lockedControls.has(el))lockedControls.set(el,el.disabled);el.disabled=true;}}
 function unlockHome(){for(const [el,disabled] of lockedControls)el.disabled=disabled;lockedControls.clear();}
-async function load(){
+async function load(params,generation,epoch,background){
  const lifecycle=pollGeneration;
  try{
-  const params=UI.statusParams(),generation=fullGeneration;
-  const raw=await command('status.get',params);
-  if(stopped||lifecycle!==pollGeneration)return null;
+  const raw=await command('status.get',params,{background});
+  if(stopped||lifecycle!==pollGeneration||epoch!==(command.epoch?.()||0)||generation!==fullGeneration)return null;
   failures=0;lastSuccess=Date.now();unlockHome();
   if(!params.view&&!raw.ota_mode){lastFullAt=Date.now();loadedGeneration=generation;}
   if(raw.ota_active&&raw.ota_mode){UI.pages.firmware?.status(raw);return raw;}
@@ -585,18 +584,29 @@ async function load(){
   for(const [key,p] of Object.entries(UI.pages))if(p.status&&(key===UI.activePage()||key.startsWith('slot_')&&UI.activePage()==='device'))p.status(s);
   if(UI.device.onStatus)UI.device.onStatus(s);
   return raw;
- }catch(e){if(!stopped&&lifecycle===pollGeneration&&++failures>=3&&(!lastSuccess||Date.now()-lastSuccess>=30000)){lockHome();renderBanners(null,true);}return null;}
+ }catch(e){if(!['cancelled','superseded'].includes(e.code)&&!stopped&&lifecycle===pollGeneration&&epoch===(command.epoch?.()||0)&&++failures>=3&&(!lastSuccess||Date.now()-lastSuccess>=30000)){lockHome();renderBanners(null,true);}return null;}
 }
-function pollLoad(){if(stopped)return Promise.resolve(null);if(!loading)loading=load().finally(()=>{loading=null;});return loading;}
-window.addEventListener('pagehide',()=>{stopped=true;pollGeneration++;clearTimeout(pollTimer);pollTimer=null;});
+function pollLoad({background=false,live=false}={}){
+ if(stopped)return Promise.resolve(null);
+ const params=live&&UI.confirmed&&UI.caps?.status_views?.includes('live')?{view:'live'}:UI.statusParams();
+ const generation=fullGeneration,epoch=command.epoch?.()||0;
+ if(loading){
+  if(loading.generation===generation&&loading.epoch===epoch&&(params.view||!loading.params.view))return loading.promise;
+  return loading.promise.then(()=>pollLoad({background,live}));
+ }
+ const current=loading={generation,epoch,params};
+ current.promise=load(params,generation,epoch,background).finally(()=>{if(loading===current)loading=null;});
+ return current.promise;
+}
+window.addEventListener('pagehide',()=>{stopped=true;pollGeneration++;command.cancelBackground?.();clearTimeout(pollTimer);pollTimer=null;});
 async function refreshStatus(generation=pollGeneration,resuming=false){
  if(stopped||generation!==pollGeneration)return;
  if(!document.hidden||!initialized){
   // An old request may settle after cache restoration. Retire it before the
   // required full read; its former loop cannot schedule another timer.
-  if(resuming&&loading)await loading;
+  if(resuming&&loading)await loading.promise;
   if(stopped||generation!==pollGeneration)return;
-  await pollLoad();
+  await pollLoad({background:true});
  }
  if(!stopped&&generation===pollGeneration)pollTimer=setTimeout(function refresh(){
   if(generation===pollGeneration)pollTimer=null;
@@ -608,7 +618,14 @@ window.addEventListener('pageshow',()=>{
  stopped=false;UI.invalidateStatus();
  if(pollingStarted)refreshStatus(pollGeneration,true);
 });
-UI.reload=async({full=false}={})=>{if(full)UI.invalidateStatus();if(loading)await loading;return pollLoad();};
+let fullReload=null;
+UI.reload=({full=false,live=false}={})=>{
+ if(full&&fullReload)return fullReload;
+ if(full)UI.invalidateStatus();
+ const promise=pollLoad({live});
+ if(full){fullReload=promise;promise.finally(()=>{if(fullReload===promise)fullReload=null;});}
+ return promise;
+};
 document.addEventListener('visibilitychange',()=>{if(UI.device&&!document.hidden&&!stopped)UI.reload({full:true});});
 UI.showRoute=showRoute;
 UI.start=async dev=>{
