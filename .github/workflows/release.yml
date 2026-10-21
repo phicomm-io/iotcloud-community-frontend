@@ -59,6 +59,8 @@ jobs:
       - run: BROWSER=webkit NODE_PATH=frontend/node_modules node tests/test_m1_pressure_browser.cjs
       - run: BROWSER=webkit NODE_PATH=frontend/node_modules node tests/test_interaction_layout.cjs
       - run: npm run build --prefix frontend
+      - run: node tests/bemfa-cloud.mjs
+        working-directory: frontend
       - run: node tests/mobile-layout.mjs
         working-directory: frontend
       - run: node tests/static-webapp.mjs
