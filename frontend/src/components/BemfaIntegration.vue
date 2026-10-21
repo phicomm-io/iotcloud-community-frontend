@@ -8,7 +8,7 @@ const selected=ref(''),channel=ref(0),topic=ref('');
 const supported=computed(()=>props.devices.filter(d=>d.version==='v2'&&d.status==='active'&&['tc1','a1'].includes(d.model)));
 const device=computed(()=>supported.value.find(d=>deviceKey(d)===selected.value));
 const channels=computed(()=>device.value?.model==='tc1'?Array.from({length:6},(_,i)=>({value:i,label:`插孔 ${i+1} · 插座（001）`})):[{value:0,label:'风扇（003）'},{value:1,label:'灯环（002）'}]);
-const statusText=computed(()=>({disabled:'未启用',configuration_error:'配置不可用，请检查设备映射并重新保存',connecting:'正在连接巴法云',connected:'巴法云已连接',disconnected:'巴法云连接中断，正在重试',device_offline:'设备尚未就绪，请检查平台连接',device_rejected:'设备未接受指令，请检查设备状态',device_timeout:'设备响应超时，请检查设备连接',busy:'请求繁忙，请稍后重试'}[status.value]||'配置待生效'));
+const statusText=computed(()=>({disabled:'未启用',configuration_error:'配置不可用，请检查设备映射并重新保存',connecting:'正在连接巴法云',subscription_error:'主题订阅失败，请检查巴法云主题后重新保存',connected:'巴法云已连接',disconnected:'巴法云连接中断，正在重试',device_offline:'设备尚未就绪，请检查平台连接',device_rejected:'设备未接受指令，请检查设备状态',device_timeout:'设备响应超时，请检查设备连接',busy:'请求繁忙，请稍后重试'}[status.value]||'配置待生效'));
 function name(d){return props.deviceName?.(d)||`${d.model.toUpperCase()} · ${d.mac}`;}
 function label(m){return `${name(m.device)} · ${m.device.model==='tc1'?`插孔 ${m.channel+1}`:m.channel===0?'风扇':'灯环'}`;}
 function apply(data){enabled.value=!!data.enabled;keySet.value=!!data.key_set;mappings.value=data.mappings||[];status.value=data.status;key.value='';loaded.value=true;}
