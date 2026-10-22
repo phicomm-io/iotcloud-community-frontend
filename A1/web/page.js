@@ -256,23 +256,20 @@ async function showBinding(){
   const del=h('button',{type:'button',class:'btn ghost icon','aria-label':t('common.delete')},icon('trash'));
   del.onclick=async()=>{if(await confirm({title:t('bind.remove_q'),body:t('bind.remove_body',{m:prettyMac(p.mac)}),ok:t('common.delete'),danger:true})){m.peers.splice(i,1);run(del,save);}};
   return h('div',{class:'item binding-peer'},icon('air'),h('div',{class:'grow'},h('b',{class:'num'},'M1 · '+prettyMac(p.mac)),h('span',{},s.ip||p.ip||t('bind.ip_auto'))),
-   h('span',{class:'badge'},String(s.transport||'mqtt').toUpperCase()),
+   h('span',{class:'badge'},String(s.transport||'offline').toUpperCase()),
    h('span',{class:'badge '+(s.pending?'warn':s.fresh?'ok':'bad')},t(s.pending?'bind.pending':s.fresh?'bind.fresh':'bind.stale')),probe,del);});
  const mac=h('input',{placeholder:'B0:F8:93:28:64:B6',maxLength:17,required:true,autocomplete:'off'});
  const ip=h('input',{placeholder:t('bind.ip_ph'),maxLength:15});
  const opts={force_mqtt:false,recovery:true,timeout_ms:1000,recovery_seconds:60};
  const add=h('form',{class:'subcard stack'},h('h3',{i18n:'bind.add'}),
   h('div',{class:'fields'},h('label',{class:'field'},h('span',{i18n:'bind.mac'}),mac),h('label',{class:'field'},h('span',{i18n:'bind.ip'}),ip)),
-  h('details',{class:'more'},h('summary',{i18n:'common.advanced'}),flag(opts,'force_mqtt','bind.force','bind.force_desc'),flag(opts,'recovery','bind.recovery','bind.recovery_desc'),
+  h('details',{class:'more'},h('summary',{i18n:'common.advanced'}),flag(opts,'recovery','bind.recovery','bind.recovery_desc'),
    h('div',{class:'fields'},h('label',{class:'field'},h('span',{i18n:'bind.timeout'}),num(opts,'timeout_ms',{unit:'ms',min:100})),
     h('label',{class:'field'},h('span',{i18n:'bind.recovery_s'}),num(opts,'recovery_seconds',{unit:t('unit.s'),min:5})))),
   h('div',{class:'form-actions'},h('button',{class:'btn primary',type:'submit',disabled:m.peers.length>=capacity},icon('plus'),h('span',{},t('bind.add_btn')))));
  onSubmit(add,()=>{const id=normalizeMac(mac.value);if(!id)throw Error(t('bind.bad_mac'));
   if(m.peers.some(p=>p.mac===id))throw Error(t('bind.dup'));if(m.peers.length>=capacity)throw Error(t('common.max',{n:capacity}));
-  m.peers.push({mac:id,ip:ip.value.trim(),kind:1,confirmed:false,...opts});return save();},'bind.added');
- const ids=m.response_ids.length?h('div',{class:'banner info',style:'display:block'},h('b',{},t('bind.ids_title')),h('p',{class:'small',style:'margin:4px 0 8px'},t('bind.ids_body')),
-  ...m.response_ids.map(id=>h('div',{class:'row'},h('code',{class:'grow num'},id),
-   h('button',{type:'button',class:'btn ghost icon','aria-label':t('common.copy'),onclick:()=>{if(navigator.clipboard)navigator.clipboard.writeText(id);toast(t('common.copied'));}},icon('copy'))))):null;
+  m.peers.push({mac:id,ip:ip.value.trim(),kind:1,...opts});return save();},'bind.added');
  // Purifier group stays collapsed: it is only used with several A1 units.
  const members=h('div',{class:'list'},m.members.map((mb,i)=>h('div',{class:'item'},icon('fan'),
   h('div',{class:'grow'},h('b',{class:'num'},'A1 · '+prettyMac(mb.mac)),h('span',{},mb.ip||t('bind.ip_auto'))),
@@ -288,7 +285,7 @@ async function showBinding(){
   saveBar(save));
  page.replaceChildren(pageHead('nav.binding','bind.lead'),
   h('section',{class:'card'},h('div',{class:'card-head'},h('h2',{i18n:'bind.sensors'}),h('span',{class:'badge'},m.peers.length+' / '+capacity)),
-   peerItems.length?h('div',{class:'list'},peerItems):h('div',{class:'empty'},t('bind.empty')),ids,add,info('bind.hint')),group);
+   peerItems.length?h('div',{class:'list'},peerItems):h('div',{class:'empty'},t('bind.empty')),add,info('bind.hint')),group);
 }
 
 /* ---------- Settings: automatic control rules ---------- */
