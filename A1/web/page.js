@@ -148,10 +148,10 @@ function renderRing(s){
  }else if(enabled&&brightness){
   let level=brightness*(advanced.follow_fan?followSpeed/100:1);
   const animationMs=now*(advanced.speed||5)/5;
-  if(eff===2)level*=((1+Math.sin(animationMs/2000))/2);
+  if(eff===2||eff===5)level*=((1+Math.sin(animationMs/2000))/2);
   for(let i=0;i<N;i++){
    let rgb=color;
-   if(eff===3){const p=(Math.floor(slotForLed(i)*768/32)+Math.floor(animationMs/30))%768;rgb=[p<256?255-p:p>512?p-512:0,p<256?p:p<512?511-p:0,p<256?0:p<512?p-256:767-p];}
+   if(eff===3||eff===5){const p=((eff===3?Math.floor(slotForLed(i)*768/32):0)+Math.floor(animationMs/30))%768;rgb=[p<256?255-p:p>512?p-512:0,p<256?p:p<512?511-p:0,p<256?0:p<512?p-256:767-p];}
    sources[i]=rgb.map(v=>v/255*level);
   }
  }
@@ -192,7 +192,7 @@ function updateRingAnimation(){
   if(!document.hidden&&(ramping||lightPage&&!lightPage.hidden)&&!ringPolling&&performance.now()-ringPolledAt>=(ramping?200:500)){
    ringPolling=true;ringPolledAt=performance.now();UI.reload().finally(()=>{ringPolling=false;});
   }
-  if(advanced.effect===2||advanced.effect===3||previewTarget!==null)renderRing(UI.state);
+  if(advanced.effect===2||advanced.effect===3||advanced.effect===5||previewTarget!==null)renderRing(UI.state);
  },50);
 }
 function renderLight(s){
@@ -202,7 +202,7 @@ function renderLight(s){
 }
 
 /* ---------- Settings: light effects ---------- */
-const EFFECTS=[0,1,2,3,4];
+const EFFECTS=[0,1,2,3,4,5];
 async function showLight(){
  const page=document.querySelector('[data-settings-page="light"]');
  const m=clone(advanced=await api('/light/advanced')),hasSpeed=Number.isInteger(m.speed);updateRingAnimation();
@@ -222,7 +222,7 @@ async function showLight(){
    :null;
   if(segs)segs.querySelector('.seg').set(m.segments);
   const speedControls=[];
-  if(hasSpeed&&[2,3].includes(m.effect)){const [out,range]=slider(m,'speed',{min:1,max:10,fmt:v=>(v/5).toFixed(1)+'×'});range.setAttribute('aria-label',t('fx.speed'));speedControls.push(h('div',{class:'stack',style:'margin-top:16px'},h('div',{class:'row between'},h('span',{class:'label',i18n:'fx.speed'}),out),range,h('div',{class:'row between help'},t('fx.slow'),t('fx.fast'))));}
+  if(hasSpeed&&[2,3,5].includes(m.effect)){const [out,range]=slider(m,'speed',{min:1,max:10,fmt:v=>(v/5).toFixed(1)+'×'});range.setAttribute('aria-label',t('fx.speed'));speedControls.push(h('div',{class:'stack',style:'margin-top:16px'},h('div',{class:'row between'},h('span',{class:'label',i18n:'fx.speed'}),out),range,h('div',{class:'row between help'},t('fx.slow'),t('fx.fast'))));}
   const previewSpeed=h('input',{id:'previewSpeed',type:'range',min:1,max:100,step:1,value:UI.state?.fan_on?UI.state.percentage:UI.state?.requested_speed||60,'aria-label':t('a1.speed'),
    oninput:e=>{previewTarget=Number(e.target.value);$('previewSpeedValue').textContent=e.target.value+'%';renderRing(UI.state);},
    onchange:()=>run(previewSpeed,async()=>{try{await setSpeed(previewSpeed.value);}finally{previewTarget=null;renderRing(UI.state);}},null),
