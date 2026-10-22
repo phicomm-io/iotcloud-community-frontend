@@ -7,7 +7,7 @@ const {$,h,icon,toast,run,confirm,summary,card,info,pageHead,seg,prettyMac,norma
 const METRICS=['pm25','formaldehyde','temperature','humidity'];
 const STALE_MS=15000;
 const PRESSURE_STALE_MS=10000;
-let binding={response_ids:[]},bindingStatus={peers:[]};
+let bindingStatus={peers:[]};
 let pressureSnapshot=null,pressureReceivedAt=0;
 
 function renderPressure(){
@@ -94,56 +94,25 @@ function renderHome(s){
  $('freshText').textContent=stale?t('m1.stale'):t('m1.updated',{n:Math.max(0,Math.round(s.age_ms/1000))});
  if(document.activeElement&&document.activeElement.parentNode!==screen)screen.set(s.brightness_requested);
 }
-function renderPeers(){
- const ids=binding.response_ids||[],peers=bindingStatus.peers||[];
- const ready=peers.filter(p=>p.session_ready).length;
- const head=h('div',{class:'card-head'},
-  h('div',{},h('h2',{i18n:'m1.linked'}),h('p',{class:'help',i18n:'m1.linked_desc'})),
-  h('span',{class:'badge '+(ready?'ok':'')},ready+' / '+ids.length));
- if(!ids.length){
-  $('peerCard').replaceChildren(head,h('div',{class:'empty'},h('p',{},t('m1.linked_empty')),
-   h('a',{class:'btn',href:'#settings/binding',style:'margin-top:12px'},icon('link'),h('span',{},t('m1.allow_btn')))));
-  return;
- }
- const rows=ids.map(id=>{
-  const a1=id.split(':')[0],p=peers.find(x=>x.mac===a1)||{};
-  return h('div',{class:'item binding-peer'},icon('fan'),
-   h('div',{class:'grow'},h('b',{class:'num'},'A1 · '+prettyMac(a1)),h('span',{},p.ip||'—')),
-   h('span',{class:'badge '+(p.session_ready?'ok':'warn')},t(p.session_ready?'m1.session_ok':'m1.session_wait')));
- });
- $('peerCard').replaceChildren(head,h('div',{class:'list'},rows));
+function peerSessionRows(){
+ const peers=bindingStatus.peers||[];
+ return peers.map(p=>h('div',{class:'item binding-peer'},icon('fan'),
+  h('div',{class:'grow'},h('b',{class:'num'},'A1 · '+prettyMac(p.mac)),h('span',{},p.ip||'—')),
+  h('span',{class:'badge ok'},t('m1.session_ok'))));
 }
-
-
-/* ---------- Settings: linkage permission ---------- */
+function renderPeers(){
+ const rows=peerSessionRows(),capacity=Number(bindingStatus.max_sessions)||4;
+ const head=h('div',{class:'card-head'},h('div',{},h('h2',{i18n:'m1.linked'}),h('p',{class:'help',i18n:'m1.linked_desc'})),
+  h('span',{class:'badge '+(rows.length?'ok':'')},rows.length+' / '+capacity));
+ $('peerCard').replaceChildren(head,rows.length?h('div',{class:'list'},rows):h('div',{class:'empty'},t('m1.linked_empty')));
+}
+/* Session status is read-only; sources are configured on each A1. */
 async function showBinding(){
- const page=document.querySelector('[data-settings-page="binding"]');
- const [cfg,status]=await Promise.all([api('/binding/config'),api('/binding/status').catch(()=>({peers:[]}))]);
- binding=cfg;bindingStatus=status;
- const save=()=>api('/binding/config',{response_ids:binding.response_ids}).then(showBinding);
- const own=String((UI.state&&UI.state.device_id)||'').toLowerCase();
- const input=h('input',{placeholder:'b0f893303134:'+(own||'b0f8932864b6'),maxLength:25,autocomplete:'off',spellcheck:false});
- const ids=(binding.response_ids||[]).slice(),capacity=Number(cfg.max_peers)||4;
- const add=h('form',{class:'subcard stack'},h('h3',{i18n:'m1.allow_add'}),
-  h('label',{class:'field'},h('span',{i18n:'m1.pair_id'}),
-   h('div',{class:'row'},h('div',{class:'grow'},input),h('button',{class:'btn primary',type:'submit',disabled:ids.length>=capacity},icon('plus'),h('span',{},t('common.add'))))),
-  h('p',{class:'help',i18n:'m1.pair_help'}));
- UI.onSubmit(add,()=>{
-  const parts=input.value.trim().split(':'),a1=normalizeMac(parts[0]||''),m1=normalizeMac(parts[1]||'');
-  if(!a1||!m1)throw Error(t('m1.pair_bad'));
-  if(own&&m1!==own)throw Error(t('m1.pair_other'));
-  const id=a1+':'+m1;if(ids.includes(id))throw Error(t('bind.dup'));
-  if(ids.length>=capacity)throw Error(t('common.max',{n:capacity}));
-  binding.response_ids=ids.concat([id]);return save();},'bind.added');
- page.replaceChildren(pageHead('nav.permission','m1.perm_lead'),
-  h('section',{class:'card'},h('div',{class:'card-head'},h('h2',{i18n:'m1.allowed'}),h('span',{class:'badge'},ids.length+' / '+capacity)),
-   ids.length?h('div',{class:'list'},ids.map((id,i)=>{const a1=id.split(':')[0],p=(bindingStatus.peers||[]).find(x=>x.mac===a1)||{};
-    return h('div',{class:'item binding-peer'},icon('fan'),h('div',{class:'grow'},h('b',{class:'num'},'A1 · '+prettyMac(a1)),h('span',{class:'num'},id)),
-     h('span',{class:'badge '+(p.session_ready?'ok':'warn')},t(p.session_ready?'m1.session_ok':'m1.session_wait')),
-     h('button',{type:'button',class:'btn ghost icon','aria-label':t('common.delete'),onclick:ev=>{
-      const rest=ids.slice();rest.splice(i,1);
-      run(ev.currentTarget,async()=>{await api('/binding/config',{response_ids:rest});await showBinding();},'common.deleted');}},icon('trash')));}))
-   :h('div',{class:'empty'},t('m1.allowed_empty')),add,info('m1.perm_hint')));
+ bindingStatus=await api('/binding/status');renderPeers();
+ const rows=peerSessionRows(),capacity=Number(bindingStatus.max_sessions)||4;
+ document.querySelector('[data-settings-page="binding"]').replaceChildren(pageHead('nav.permission','m1.perm_lead'),
+  h('section',{class:'card'},h('div',{class:'card-head'},h('h2',{i18n:'m1.linked'}),h('span',{class:'badge'},rows.length+' / '+capacity)),
+   rows.length?h('div',{class:'list'},rows):h('div',{class:'empty'},t('m1.linked_empty')),info('m1.perm_hint')));
 }
 
 /* ---------- Boot ---------- */
@@ -177,5 +146,5 @@ UI.start({
 I18N.onChange(()=>{renderPeers();const p=document.querySelector('[data-settings-page="binding"]');if(p&&!p.hidden)showBinding();});
 // The linked list is small and changes rarely; refresh it with the status.
 (async function poll(){try{if(document.hidden||($('homePage').hidden&&UI.activePage()!=='binding'&&UI.activePage()!=='linkage'))return;bindingStatus=await api('/binding/status');renderPeers();}catch{}finally{setTimeout(poll,4000);}})();
-api('/binding/config').then(c=>{binding=c;renderPeers();}).catch(e=>toast(e.message,true));
+renderPeers();
 })();
