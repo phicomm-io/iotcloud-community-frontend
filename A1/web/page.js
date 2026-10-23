@@ -327,7 +327,7 @@ async function showLinkage(fresh=false){
   const range=[field('min_speed','auto.minimum',{min:modern?0:1,max:100,unit:'%'}),field('max_speed','auto.maximum',{min:1,max:100,unit:'%'})];
   if(modern)range.push(field('fallback_speed','auto.fallback',{min:0,max:100,unit:'%'}));
   page.replaceChildren(pageHead(fresh?'fresh.auto':'nav.linkage',fresh?'fresh.auto_help':modern?'auto.help':'link.lead'),
-   h('section',{class:'card stack'},fresh?info('fresh.auto_help'):flag(m,'enabled','link.enable','auto.mode_help'),
+   h('section',{class:'card stack'},fresh?h('a',{class:'btn',href:'#'},t('auto.mode')+' · '+t(UI.state?.fresh_air_mode==='auto'?'auto.auto':'auto.manual')):flag(m,'enabled','link.enable','auto.mode_help'),
     h('div',{class:'fields'},range),modern?info(fresh?'fresh.range_help':'auto.range_help'):null),
    h('section',{class:'card stack'},h('h2',{i18n:'link.speed'}),choose,modes,h('div',{class:'fields'},detail)),
    supportsGate?h('section',{class:'card stack'},h('h2',{i18n:'auto.hysteresis_title'}),h('div',{class:'fields'},gate)):null,
@@ -335,6 +335,7 @@ async function showLinkage(fresh=false){
     h('label',{class:'field'},h('span',{i18n:'link.statistic'}),h('select',{onchange:e=>m.statistic=+e.target.value},[0,1,2,3,4,5].map(v=>h('option',{value:v,selected:m.statistic===v},t('link.stat.'+v))))),
     h('div',{class:'fields'},field('debounce_seconds','link.debounce',{min:0,max:3600,unit:t('unit.s')}),field('min_switch_seconds','link.min_switch',{min:0,max:3600,unit:t('unit.s')}))),
    saveBar(()=>{
+    if(m.min_speed>m.max_speed||((m.metrics&1)&&m.low_pm>=m.high_pm)||((m.metrics&2)&&m.low_hcho>=m.high_hcho)||((m.metrics&4)&&m.low_co2>=m.high_co2))throw Error(t('auto.range_invalid'));
     if(m.hysteresis_enabled&&(((m.metrics&1)&&m.on_pm<=m.target_pm)||((m.metrics&2)&&m.on_hcho<=m.target_hcho)||((m.metrics&4)&&m.on_co2<=m.target_co2)))throw new Error(t('auto.hysteresis_invalid'));
     return (fresh?command('fresh_air.linkage.set',m):api('/linkage/config',m)).then(saved=>{m.revision=saved.revision;return refresh();});
    }));
