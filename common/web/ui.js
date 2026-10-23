@@ -589,6 +589,7 @@ UI.start=async dev=>{
    h('a',{href:'#settings/'+first,'data-tab':'settings'},icon('sliders'),h('span',{i18n:'nav.settings'}))),
   h('div',{id:'banners'}));
  UI.caps=await command('capabilities.get').catch(()=>({actions:[]}));
+ if(dev.capabilities)dev.capabilities(UI.caps);
  const pages=$('pages');
  // Pages the framework builds for every product.
  const builders={network:wifiPage,mqtt:mqttPage,firmware:firmwarePage,diagnostics:diagnosticsPage,maintenance:maintenancePage,logs:logsPage};

@@ -289,11 +289,11 @@ async function showBinding(){
 }
 
 /* ---------- Settings: automatic control rules ---------- */
-async function showLinkage(){
- const m=await api('/linkage/config'),page=document.querySelector('[data-settings-page="linkage"]');
+async function showLinkage(fresh=false){
+ const m=await (fresh?command('fresh_air.linkage.get',{}):api('/linkage/config')),page=document.querySelector('[data-settings-page="'+(fresh?'freshauto':'linkage')+'"]');
  const modern=UI.caps?.actions?.includes('fan.mode.set');
- try{if(document.hidden||($('homePage').hidden&&UI.activePage()!=='binding'&&UI.activePage()!=='linkage'))return;bindingStatus=await api('/binding/status');}catch{}
- const supportsCO2=Object.hasOwn(m,'target_co2')&&(bindingStatus.average?.co2_supported||(m.metrics&4));
+ try{bindingStatus=await api('/binding/status');}catch{}
+ const supportsCO2=Object.hasOwn(m,'target_co2')&&(fresh||bindingStatus.average?.co2_supported||(m.metrics&4));
  const draw=()=>{
   const choose=seg([[1,'PM2.5'],[2,()=>t('m.formaldehyde')],[3,'link.both'],...(supportsCO2?[[4,()=> 'CO₂'],[5,()=> 'PM2.5 + CO₂'],[6,()=>t('m.formaldehyde')+' + CO₂'],[7,'link.all']]:[])],v=>{m.metrics=v;draw();});choose.set(m.metrics);
   const modes=seg([[0,'link.mode.0'],[1,'link.mode.1'],[2,'link.mode.2']],v=>{m.mode=v;draw();});modes.set(m.mode);
@@ -326,9 +326,9 @@ async function showLinkage(){
   }
   const range=[field('min_speed','auto.minimum',{min:modern?0:1,max:100,unit:'%'}),field('max_speed','auto.maximum',{min:1,max:100,unit:'%'})];
   if(modern)range.push(field('fallback_speed','auto.fallback',{min:0,max:100,unit:'%'}));
-  page.replaceChildren(pageHead('nav.linkage',modern?'auto.help':'link.lead'),
-   h('section',{class:'card stack'},flag(m,'enabled','link.enable','auto.mode_help'),
-    h('div',{class:'fields'},range),modern?info('auto.range_help'):null),
+  page.replaceChildren(pageHead(fresh?'fresh.auto':'nav.linkage',fresh?'fresh.auto_help':modern?'auto.help':'link.lead'),
+   h('section',{class:'card stack'},fresh?info('fresh.auto_help'):flag(m,'enabled','link.enable','auto.mode_help'),
+    h('div',{class:'fields'},range),modern?info(fresh?'fresh.range_help':'auto.range_help'):null),
    h('section',{class:'card stack'},h('h2',{i18n:'link.speed'}),choose,modes,h('div',{class:'fields'},detail)),
    supportsGate?h('section',{class:'card stack'},h('h2',{i18n:'auto.hysteresis_title'}),h('div',{class:'fields'},gate)):null,
    h('section',{class:'card stack'},h('h2',{i18n:'common.advanced'}),
@@ -336,10 +336,51 @@ async function showLinkage(){
     h('div',{class:'fields'},field('debounce_seconds','link.debounce',{min:0,max:3600,unit:t('unit.s')}),field('min_switch_seconds','link.min_switch',{min:0,max:3600,unit:t('unit.s')}))),
    saveBar(()=>{
     if(m.hysteresis_enabled&&(((m.metrics&1)&&m.on_pm<=m.target_pm)||((m.metrics&2)&&m.on_hcho<=m.target_hcho)||((m.metrics&4)&&m.on_co2<=m.target_co2)))throw new Error(t('auto.hysteresis_invalid'));
-    return api('/linkage/config',m).then(saved=>{m.revision=saved.revision;return refresh();});
+    return (fresh?command('fresh_air.linkage.set',m):api('/linkage/config',m)).then(saved=>{m.revision=saved.revision;return refresh();});
    }));
  };
  draw();
+}
+
+/* Accessory controls are admitted by the device capability, including cloud embeds. */
+let freshCard;
+function renderFresh(s){
+ if(!UI.caps?.fresh_air)return;
+ if(!freshCard){freshCard=h('section',{class:'card stack',id:'freshAirCard'});$('autoCard').before(freshCard);}
+ const busy=UI.controlBusy||s.ota_active||s.reboot_pending;
+ const control=(params,patch)=>run(null,()=>UI.control('fresh_air.set',params,patch),null);
+ const on=h('input',{type:'checkbox',checked:s.fresh_air_requested_on,disabled:busy,onchange:e=>control({on:e.target.checked},{fresh_air_requested_on:e.target.checked})});
+ const mode=seg([['manual','auto.manual'],['auto','auto.auto']],v=>control({mode:v},{fresh_air_mode:v}),{full:true});mode.set(s.fresh_air_mode);
+ mode.querySelectorAll('button').forEach(b=>b.disabled=busy);
+ const input=h('input',{type:'range',min:0,max:100,value:s.fresh_air_requested_speed,disabled:busy||s.fresh_air_mode==='auto','aria-label':t('fresh.speed')});
+ const value=h('b',{},s.fresh_air_requested_speed+'%');input.oninput=()=>value.textContent=input.value+'%';
+ input.onchange=()=>control({speed:+input.value},{fresh_air_requested_speed:+input.value});
+ // Do not replace a slider while the user is dragging it.
+ if(freshCard.contains(document.activeElement)&&document.activeElement.type==='range')return;
+ freshCard.replaceChildren(h('div',{class:'card-head'},h('h2',{i18n:'fresh.title'}),h('label',{class:'row'},h('span',{i18n:'fresh.enable'}),on)),mode,
+  h('label',{class:'field'},h('span',{i18n:'fresh.speed'}),input,value),
+  h('p',{class:'help'},t('fresh.status',{target:s.fresh_air_target,applied:s.fresh_air_speed,duty:(s.fresh_air_pwm_milli/1000).toFixed(1),hz:(s.fresh_air_fb_millihz/1000).toFixed(1)})),
+  h('p',{class:'help'},t('fresh.reason.'+(s.fresh_air_limit_reason||0))+(s.fresh_air_fallback?' · '+t('auto.no_sensor'):'')),
+  h('div',{class:'row'},h('a',{class:'btn',href:'#settings/freshair'},t('fresh.settings')),h('a',{class:'btn',href:'#settings/freshauto'},t('fresh.auto'))));
+}
+async function showFresh(){
+ const m=await command('fresh_air.config.get',{}),page=document.querySelector('[data-settings-page="freshair"]');
+ const draw=()=>{
+  const field=(key,label,options={})=>h('label',{class:'field'},h('span',{},t(label)),num(m,key,options));
+  const coupling=seg([[0,'fresh.cap'],[1,'fresh.boost']],v=>{m.coupling=v;draw();});coupling.set(m.coupling);
+  const presets=seg([[0,'fresh.high'],[1,'fresh.low']],v=>{m.active_low=!!v;m.a=v?-1:1;m.b=v?100:0;draw();});
+  const preview=h('p',{class:'help'});
+  const update=()=>preview.textContent=t('fresh.preview')+' '+[0,25,50,75,100].map(v=>v+'% → '+(v?Math.max(m.pwm_min,Math.min(m.pwm_max,m.a*v+m.b)):m.active_low?100:0).toFixed(1)+'%').join(' · ');
+  const fields=h('div',{class:'fields'},field('a','fresh.a',{step:'any'}),field('b','fresh.b',{step:'any'}),field('pwm_min','fresh.min',{min:0,max:100,step:'any'}),field('pwm_max','fresh.max',{min:0,max:100,step:'any'}));
+  fields.addEventListener('input',update);
+  page.replaceChildren(pageHead('fresh.settings','fresh.help'),h('section',{class:'card stack'},coupling,
+   field(m.coupling?'boost_ratio':'cap_ratio',m.coupling?'fresh.boost_ratio':'fresh.cap_ratio',{min:m.coupling?1:0,max:m.coupling?500:100,unit:'%'}),info('fresh.coupling_help')),
+   h('section',{class:'card stack'},h('h2',{i18n:'fresh.mapping'}),presets,flag(m,'active_low','fresh.off_high','fresh.off_help'),fields,preview,info('fresh.mapping_help')),
+   saveBar(async()=>{if(![m.a,m.b,m.pwm_min,m.pwm_max].every(Number.isFinite)||m.pwm_min<0||m.pwm_min>m.pwm_max||m.pwm_max>100)throw Error(t('fresh.invalid'));
+    const {revision,coupling,cap_ratio,boost_ratio,active_low,a,b,pwm_min,pwm_max}=m;
+    const saved=await command('fresh_air.config.set',{revision,coupling,cap_ratio,boost_ratio,active_low:!!active_low,a,b,pwm_min,pwm_max});m.revision=saved.revision;await refresh();}));
+  page.addEventListener('change',update,{once:true});update();
+ };draw();
 }
 
 /* ---------- Boot ---------- */
@@ -351,6 +392,7 @@ const clock=UI.clockCard({
 $('clockCard').replaceWith(clock.el);
 
 UI.start({
+ capabilities(caps){if(caps.fresh_air){this.groups[1][1].push('freshair');this.groups[2][1].push('freshauto');this.nav.freshair='fresh.settings';this.nav.freshauto='fresh.auto';this.pages.freshair={show:showFresh};this.pages.freshauto={show:()=>showLinkage(true)};}},
  model:'A1',kindKey:'kind.a1',icon:'fan',mqttHostMax:127,factoryReset:true,
  otaName:'phicomm_a1.ota.bin.signed',haHintKey:'mqtt.ha_a1',otaHintKey:'fw.hint_a1',buttonHintKey:'sys.hint_a1',
  scheduleLead:'sch.lead_a1',interval:2000,hasButtons:true,
@@ -364,7 +406,7 @@ UI.start({
   ['diag.c_fan',s.fan_ready&&!s.hardware_errors?'ok':'bad',s.hardware_errors?t('diag.errors',{n:s.hardware_errors}):t('state.ok')],
   ['diag.c_storage',s.save_error?'bad':'ok',s.save_error||t('state.ok')]],
  chips:s=>s.child_lock?[h('span',{class:'chip'},icon('lock'),h('b',{},t('a1.child_lock')))]:[],
- onStatus:s=>{renderFan(s);renderLight(s);renderFilter(s);}
+ onStatus:s=>{renderFan(s);renderLight(s);renderFilter(s);renderFresh(s);}
 });
 I18N.onChange(()=>{if(UI.state){renderAuto();for(const key of ['device','light','binding','linkage'])if(!document.querySelector('[data-settings-page="'+key+'"]').hidden&&UI.pages[key].show)UI.pages[key].show();}});
 // Keep the automatic-control summary fresh even while the home page is idle.
