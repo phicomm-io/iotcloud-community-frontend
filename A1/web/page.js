@@ -359,7 +359,7 @@ function renderFresh(s){
  if(freshCard.contains(document.activeElement)&&document.activeElement.type==='range')return;
  freshCard.replaceChildren(h('div',{class:'card-head'},h('h2',{i18n:'fresh.title'}),h('label',{class:'row'},h('span',{i18n:'fresh.enable'}),on)),mode,
   h('label',{class:'field'},h('span',{i18n:'fresh.speed'}),input,value),
-  h('p',{class:'help'},t('fresh.status',{target:s.fresh_air_target,applied:s.fresh_air_speed,duty:(s.fresh_air_pwm_milli/1000).toFixed(1),hz:(s.fresh_air_fb_millihz/1000).toFixed(1)})),
+  h('p',{class:'help'},t('fresh.status',{target:s.fresh_air_target,applied:s.fresh_air_speed,duty:(s.fresh_air_pwm_milli/1000).toFixed(1),rpm:s.fresh_air_rpm})),
   h('p',{class:'help'},t('fresh.reason.'+(s.fresh_air_limit_reason||0))+(s.fresh_air_fallback?' · '+t('auto.no_sensor'):'')),
   h('div',{class:'row'},h('a',{class:'btn',href:'#settings/freshair'},t('fresh.settings')),h('a',{class:'btn',href:'#settings/freshauto'},t('fresh.auto'))));
 }
@@ -376,9 +376,10 @@ async function showFresh(){
   page.replaceChildren(pageHead('fresh.settings','fresh.help'),h('section',{class:'card stack'},coupling,
    field(m.coupling?'boost_ratio':'cap_ratio',m.coupling?'fresh.boost_ratio':'fresh.cap_ratio',{min:m.coupling?1:0,max:m.coupling?500:100,unit:'%'}),info('fresh.coupling_help')),
    h('section',{class:'card stack'},h('h2',{i18n:'fresh.mapping'}),presets,flag(m,'active_low','fresh.off_high','fresh.off_help'),fields,preview,info('fresh.mapping_help')),
-   saveBar(async()=>{if(![m.a,m.b,m.pwm_min,m.pwm_max].every(Number.isFinite)||m.pwm_min<0||m.pwm_min>m.pwm_max||m.pwm_max>100)throw Error(t('fresh.invalid'));
-    const {revision,coupling,cap_ratio,boost_ratio,active_low,a,b,pwm_min,pwm_max}=m;
-    const saved=await command('fresh_air.config.set',{revision,coupling,cap_ratio,boost_ratio,active_low:!!active_low,a,b,pwm_min,pwm_max});m.revision=saved.revision;await refresh();}));
+   h('section',{class:'card'},field('pulses_per_rev','fresh.ppr',{min:1,max:255,step:1})),
+   saveBar(async()=>{if(!Number.isInteger(m.pulses_per_rev)||m.pulses_per_rev<1||m.pulses_per_rev>255||![m.a,m.b,m.pwm_min,m.pwm_max].every(Number.isFinite)||m.pwm_min<0||m.pwm_min>m.pwm_max||m.pwm_max>100)throw Error(t('fresh.invalid'));
+    const {revision,coupling,cap_ratio,boost_ratio,active_low,a,b,pwm_min,pwm_max,pulses_per_rev}=m;
+    const saved=await command('fresh_air.config.set',{revision,coupling,cap_ratio,boost_ratio,active_low:!!active_low,a,b,pwm_min,pwm_max,pulses_per_rev});m.revision=saved.revision;await refresh();}));
   page.addEventListener('change',update,{once:true});update();
  };draw();
 }

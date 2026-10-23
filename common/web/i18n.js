@@ -4,6 +4,7 @@
 (()=>{
 'use strict';
 const D={
+"fresh.ppr":["Feedback pulses per revolution", "每转反馈脉冲数"],
 "fresh.title":["Fresh air fan", "新风风机"],
 "fresh.enable":["Enable fresh air", "启用新风"],
 "fresh.speed":["Remembered manual speed", "记忆的手动风速"],
@@ -11,7 +12,7 @@ const D={
 "fresh.auto":["Fresh air automatic rules", "新风自动策略"],
 "fresh.auto_help":["Independent rules using the bound M1 sensors. Select auto on the fresh air card to activate.", "使用已绑定 M1 传感器的独立策略，在新风卡片切换到自动模式后生效。"],
 "fresh.range_help":["Offline speed is clamped to this range. Primary fan and night limits still take priority.", "离线风速受此范围约束，原风机及夜间上限仍优先。"],
-"fresh.status":["Target {target}% · Applied {applied}% · PWM {duty}% · Feedback {hz} Hz", "目标 {target}% · 实际输出 {applied}% · PWM {duty}% · 反馈 {hz} Hz"],
+"fresh.status":["Target {target}% · Applied {applied}% · PWM {duty}% · Measured {rpm} rpm", "目标 {target}% · 实际输出 {applied}% · PWM {duty}% · 实测 {rpm} rpm"],
 "fresh.reason.0":["No coupling limit", "未受联动限制"],
 "fresh.reason.1":["Primary power is off", "原风机关机，新风停止"],
 "fresh.reason.2":["Ramping or limited by primary fan", "调速中或受原风机约束"],
