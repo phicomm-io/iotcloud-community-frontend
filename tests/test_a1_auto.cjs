@@ -76,9 +76,9 @@ test('A1 optional CO2 choices, thresholds and absent/stale capability',async()=>
   scripts.forEach((source,i)=>{if(i===scripts.length-1){w.UI.start=dev=>{w.UI.device=dev;w.UI.pages=dev.pages;};w.UI.reload=async()=>w.UI.state;}vm.runInContext(source,dom.getInternalVMContext());});
   w.I18N.set('en');w.UI.caps={actions:['fan.mode.set']};
   const page=w.document.querySelector('[data-settings-page="linkage"]');
-  const co2Button=()=>[...page.querySelectorAll('button')].find(b=>b.textContent==='CO₂');
+  const co2Button=()=>[...page.querySelectorAll('label')].find(b=>b.textContent==='CO₂')?.querySelector('input');
   await w.UI.pages.linkage.show();assert.equal(co2Button(),undefined);
-  supported=true;await w.UI.pages.linkage.show();assert.ok(co2Button());co2Button().click();
+  supported=true;await w.UI.pages.linkage.show();assert.ok(co2Button());co2Button().click();[...page.querySelectorAll('label')].find(b=>b.textContent==='PM2.5').querySelector('input').click();
   assert.ok(page.textContent.includes('CO₂ at minimum speed'));assert.ok(page.textContent.includes('CO₂ start threshold'));
   const label=text=>[...page.querySelectorAll('label')].find(el=>el.textContent.includes(text));
   const change=(title,value)=>{const el=label(title).querySelector('input');el.value=value;el.dispatchEvent(new w.Event('input'));};

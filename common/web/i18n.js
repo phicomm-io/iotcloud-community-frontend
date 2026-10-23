@@ -4,6 +4,7 @@
 (()=>{
 'use strict';
 const D={
+"fresh.independent":["Independent speed", "独立调速"],
 "auto.range_invalid":["Check speed limits and sensor thresholds.", "请检查风速范围和传感器阈值。"],
 "fresh.ppr":["Feedback pulses per revolution", "每转反馈脉冲数"],
 "fresh.title":["Fresh air fan", "新风风机"],

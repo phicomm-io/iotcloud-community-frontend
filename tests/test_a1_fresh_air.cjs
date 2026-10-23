@@ -12,6 +12,7 @@ test('Fresh air capability, mapping preview, revisions and independent automatic
   w.fetch=async(url,options)=>{const r=JSON.parse(options.body);writes.push(r);let data={linkage_status:'disabled',effect:0};
    if(r.action==='fresh_air.config.get')data={...mapping};
    if(r.action==='fresh_air.config.set'){assert.equal(r.params.revision,mapping.revision);Object.assign(mapping,r.params);mapping.revision++;data={...mapping};}
+   if(r.action==='linkage.get')data={...policy};
    if(r.action==='fresh_air.linkage.get')data={...policy};
    if(r.action==='fresh_air.linkage.set'){assert.equal(r.params.revision,policy.revision);Object.assign(policy,r.params);policy.revision++;data={...policy};}
    return {ok:true,json:async()=>({code:'ok',data})};};
@@ -20,9 +21,11 @@ test('Fresh air capability, mapping preview, revisions and independent automatic
   await flush();w.I18N.set('en');const dev=w.UI.device;
   dev.capabilities({actions:[]});assert.equal(dev.pages.freshair,undefined);
   w.UI.caps={fresh_air:true,actions:['fan.mode.set']};dev.capabilities(w.UI.caps);
-  for(const key of ['freshair','freshauto']){const box=w.document.createElement('div');box.dataset.settingsPage=key;w.document.body.append(box);}
+  for(const key of ['freshair','linkage']){const box=w.document.createElement('div');box.dataset.settingsPage=key;w.document.body.append(box);}
   await dev.pages.freshair.show();let page=w.document.querySelector('[data-settings-page="freshair"]');
   assert.match(page.textContent,/25% → 25.0%/);
+  [...page.querySelectorAll('button')].find(b=>b.textContent==='Independent speed').click();assert.ok(!page.textContent.includes('Fresh air ≤'));
+
   [...page.querySelectorAll('button')].find(b=>b.textContent.includes('Active-low preset')).click();
   assert.match(page.textContent,/0% → 100.0%/);assert.match(page.textContent,/25% → 75.0%/);
   const edit=(label,value)=>{const input=[...page.querySelectorAll('label')].find(l=>l.textContent.includes(label)).querySelector('input');input.value=value;input.dispatchEvent(new w.Event('input',{bubbles:true}));};
@@ -31,8 +34,12 @@ test('Fresh air capability, mapping preview, revisions and independent automatic
   const saved=writes.findLast(r=>r.action==='fresh_air.config.set');assert.equal(saved.params.pulses_per_rev,4);assert.equal(saved.params.a,-.5);assert.equal(saved.params.pwm_max,80);assert.equal(saved.params.active_low,true);assert.equal(saved.params.on,undefined);
   edit('Offset b',90);page.querySelector('.form-actions button').click();for(let i=0;i<4;i++)await flush();assert.equal(mapping.revision,3);
   const n=writes.length;edit('Minimum high duty',90);page.querySelector('.form-actions button').click();for(let i=0;i<4;i++)await flush();assert.equal(writes.length,n);
-  await dev.pages.freshauto.show();page=w.document.querySelector('[data-settings-page="freshauto"]');assert.match(page.textContent,/CO₂/);
-  page.querySelector('.form-actions button').click();for(let i=0;i<4;i++)await flush();assert.ok(writes.some(r=>r.action==='fresh_air.linkage.set'));assert.ok(!writes.some(r=>r.action==='linkage.set'));
+  await dev.pages.linkage.show();assert.equal(w.document.querySelectorAll('[data-auto-fan]').length,2);page=w.document.querySelector('[data-auto-fan="fresh"]');assert.match(page.textContent,/CO₂/);
+  const metrics=[...page.querySelectorAll('input[type="checkbox"]')];assert.equal(metrics.length,3);
+  for(const box of metrics){if(!box.checked){box.checked=true;box.dispatchEvent(new w.Event('change'));}}
+  page=w.document.querySelector('[data-auto-fan="fresh"]');
+
+  page.querySelector('.form-actions button').click();for(let i=0;i<4;i++)await flush();assert.equal(writes.findLast(r=>r.action==='fresh_air.linkage.set').params.metrics,7);assert.ok(!writes.some(r=>r.action==='linkage.set'));
   w.UI.state={red:0,green:0,blue:255,brightness:255,requested_speed:60,percentage:0,applied_speed:0,fan_on:false,fan_mode:'manual',panel_ready:true,fresh_air_mode:'manual',fresh_air_requested_speed:60,fresh_air_requested_on:true,fresh_air_target:60,fresh_air_speed:0,fresh_air_pwm_milli:100000,fresh_air_rpm:0,fresh_air_limit_reason:1};
   dev.onStatus(w.UI.state);assert.match(w.document.getElementById('freshAirCard').textContent,/Primary power is off/);
   const calls=[];w.UI.control=async(a,p,patch)=>calls.push({a,p,patch});

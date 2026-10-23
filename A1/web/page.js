@@ -289,13 +289,21 @@ async function showBinding(){
 }
 
 /* ---------- Settings: automatic control rules ---------- */
-async function showLinkage(fresh=false){
- const m=await (fresh?command('fresh_air.linkage.get',{}):api('/linkage/config')),page=document.querySelector('[data-settings-page="'+(fresh?'freshauto':'linkage')+'"]');
- const modern=UI.caps?.actions?.includes('fan.mode.set');
+async function showLinkage(){
+ const page=document.querySelector('[data-settings-page="linkage"]');
  try{bindingStatus=await api('/binding/status');}catch{}
+ page.replaceChildren();
+ for(const fresh of UI.caps?.fresh_air?[false,true]:[false]){
+  const section=h('section',{class:'stack','data-auto-fan':fresh?'fresh':'primary'});page.append(section);
+  await showFanRules(fresh,section);
+ }
+}
+async function showFanRules(fresh,page){
+ const m=await (fresh?command('fresh_air.linkage.get',{}):api('/linkage/config'));
+ const modern=UI.caps?.actions?.includes('fan.mode.set');
  const supportsCO2=Object.hasOwn(m,'target_co2')&&(fresh||bindingStatus.average?.co2_supported||(m.metrics&4));
  const draw=()=>{
-  const choose=seg([[1,'PM2.5'],[2,()=>t('m.formaldehyde')],[3,'link.both'],...(supportsCO2?[[4,()=> 'CO₂'],[5,()=> 'PM2.5 + CO₂'],[6,()=>t('m.formaldehyde')+' + CO₂'],[7,'link.all']]:[])],v=>{m.metrics=v;draw();});choose.set(m.metrics);
+  const choose=h('div',{class:'fields'},[[1,'PM2.5'],[2,t('m.formaldehyde')],...(supportsCO2?[[4,'CO₂']]:[])].map(([bit,label])=>h('label',{class:'row'},h('input',{type:'checkbox',checked:!!(m.metrics&bit),onchange:e=>{const next=e.target.checked?m.metrics|bit:m.metrics&~bit;if(!next){e.target.checked=true;return;}m.metrics=next;draw();}}),label)));
   const modes=seg([[0,'link.mode.0'],[1,'link.mode.1'],[2,'link.mode.2']],v=>{m.mode=v;draw();});modes.set(m.mode);
   const detail=[],gate=[];
   const supportsGate=Object.hasOwn(m,'hysteresis_enabled');
@@ -362,20 +370,20 @@ function renderFresh(s){
   h('label',{class:'field'},h('span',{i18n:'fresh.speed'}),input,value),
   h('p',{class:'help'},t('fresh.status',{target:s.fresh_air_target,applied:s.fresh_air_speed,duty:(s.fresh_air_pwm_milli/1000).toFixed(1),rpm:s.fresh_air_rpm})),
   h('p',{class:'help'},t('fresh.reason.'+(s.fresh_air_limit_reason||0))+(s.fresh_air_fallback?' · '+t('auto.no_sensor'):'')),
-  h('div',{class:'row'},h('a',{class:'btn',href:'#settings/freshair'},t('fresh.settings')),h('a',{class:'btn',href:'#settings/freshauto'},t('fresh.auto'))));
+  h('div',{class:'row'},h('a',{class:'btn',href:'#settings/freshair'},t('fresh.settings')),h('a',{class:'btn',href:'#settings/linkage'},t('fresh.auto'))));
 }
 async function showFresh(){
  const m=await command('fresh_air.config.get',{}),page=document.querySelector('[data-settings-page="freshair"]');
  const draw=()=>{
   const field=(key,label,options={})=>h('label',{class:'field'},h('span',{},t(label)),num(m,key,options));
-  const coupling=seg([[0,'fresh.cap'],[1,'fresh.boost']],v=>{m.coupling=v;draw();});coupling.set(m.coupling);
+  const coupling=seg([[2,'fresh.independent'],[0,'fresh.cap'],[1,'fresh.boost']],v=>{m.coupling=v;draw();});coupling.set(m.coupling);
   const presets=seg([[0,'fresh.high'],[1,'fresh.low']],v=>{m.active_low=!!v;m.a=v?-1:1;m.b=v?100:0;draw();});
   const preview=h('p',{class:'help'});
   const update=()=>preview.textContent=t('fresh.preview')+' '+[0,25,50,75,100].map(v=>v+'% → '+(v?Math.max(m.pwm_min,Math.min(m.pwm_max,m.a*v+m.b)):m.active_low?100:0).toFixed(1)+'%').join(' · ');
   const fields=h('div',{class:'fields'},field('a','fresh.a',{step:'any'}),field('b','fresh.b',{step:'any'}),field('pwm_min','fresh.min',{min:0,max:100,step:'any'}),field('pwm_max','fresh.max',{min:0,max:100,step:'any'}));
   fields.addEventListener('input',update);
   page.replaceChildren(pageHead('fresh.settings','fresh.help'),h('section',{class:'card stack'},coupling,
-   field(m.coupling?'boost_ratio':'cap_ratio',m.coupling?'fresh.boost_ratio':'fresh.cap_ratio',{min:m.coupling?1:0,max:m.coupling?500:100,unit:'%'}),info('fresh.coupling_help')),
+   m.coupling===2?null:field(m.coupling?'boost_ratio':'cap_ratio',m.coupling?'fresh.boost_ratio':'fresh.cap_ratio',{min:m.coupling?1:0,max:m.coupling?500:100,unit:'%'}),info('fresh.coupling_help')),
    h('section',{class:'card stack'},h('h2',{i18n:'fresh.mapping'}),presets,flag(m,'active_low','fresh.off_high','fresh.off_help'),fields,preview,info('fresh.mapping_help')),
    h('section',{class:'card'},field('pulses_per_rev','fresh.ppr',{min:1,max:255,step:1})),
    saveBar(async()=>{if(!Number.isInteger(m.pulses_per_rev)||m.pulses_per_rev<1||m.pulses_per_rev>255||![m.a,m.b,m.pwm_min,m.pwm_max].every(Number.isFinite)||m.pwm_min<0||m.pwm_min>m.pwm_max||m.pwm_max>100)throw Error(t('fresh.invalid'));
@@ -394,7 +402,7 @@ const clock=UI.clockCard({
 $('clockCard').replaceWith(clock.el);
 
 UI.start({
- capabilities(caps){if(caps.fresh_air){this.groups[1][1].push('freshair');this.groups[2][1].push('freshauto');this.nav.freshair='fresh.settings';this.nav.freshauto='fresh.auto';this.pages.freshair={show:showFresh};this.pages.freshauto={show:()=>showLinkage(true)};}},
+ capabilities(caps){if(caps.fresh_air){this.groups[1][1].push('freshair');this.nav.freshair='fresh.settings';this.pages.freshair={show:showFresh};}},
  model:'A1',kindKey:'kind.a1',icon:'fan',mqttHostMax:127,factoryReset:true,
  otaName:'phicomm_a1.ota.bin.signed',haHintKey:'mqtt.ha_a1',otaHintKey:'fw.hint_a1',buttonHintKey:'sys.hint_a1',
  scheduleLead:'sch.lead_a1',interval:2000,hasButtons:true,
