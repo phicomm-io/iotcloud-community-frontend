@@ -17,11 +17,13 @@
     "vue-router": "^4.6.4"
   },
   "devDependencies": {
+    "@babel/parser": "8.0.8",
     "@playwright/test": "^1.64.0",
     "@vitejs/plugin-vue": "^6.0.10",
     "esbuild": "0.28.2",
     "jsdom": "^30.1.2",
     "mqtt-packet": "9.0.2",
+    "terser": "5.51.2",
     "vite": "^7.3.7"
   }
 }
