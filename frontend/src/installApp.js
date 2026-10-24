@@ -1,5 +1,6 @@
 import {shallowReactive} from 'vue';
 import {isStandalone, installationPlatform, readInstallPreference, saveInstallPreference} from './installation.js';
+import {createStandaloneViewport} from './standaloneViewport.js';
 
 export const installation = shallowReactive({standalone: false, installed: false, platform: 'desktop', prompt: null});
 let registered = false;
@@ -8,10 +9,12 @@ export function registerInstallPrompt() {
   if (registered || import.meta.env.VITE_DEMO === '1') return;
   registered = true;
   installation.installed = readInstallPreference().installed === true;
+  const viewport = createStandaloneViewport();
   const update = () => {
     installation.standalone = isStandalone();
     installation.platform = installationPlatform();
     if (installation.standalone && !installation.installed) confirmInstallation();
+    viewport(installation.standalone);
   };
   update();
   const displayMode = window.matchMedia('(display-mode: standalone)');
