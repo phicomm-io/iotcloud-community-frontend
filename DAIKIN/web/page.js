@@ -1,11 +1,10 @@
 (()=>{
 'use strict';
 const {$,h,run}=UI,{t}=I18N;
-const metrics=[['pm25','µg/m³'],['co2','ppm'],['temperature','°C'],['humidity','%'],['tvoc','ppb'],['formaldehyde','mg/m³']];
-const tiles=Object.fromEntries(metrics.map(([key,unit])=>{const el=SensorUI.tile(key,unit);$('metrics').append(el.card);el.card.hidden=key==='formaldehyde';return [key,el];}));
-const pm25Label=h('span',{class:'eyebrow',i18n:'m.pm25'}),pm10Value=h('b',{class:'num'},'—');
-const pm10Row=h('div',{class:'particle-secondary','data-sensor':'pm10',hidden:true},h('span',{i18n:'m.pm10'}),pm10Value,h('small',{},'µg/m³'));
-tiles.pm25.stat.before(pm25Label);tiles.pm25.scale.before(pm10Row);pm25Label.hidden=true;
+const metrics=[['pm25','µg/m³'],['pm10','µg/m³'],['co2','ppm'],['temperature','°C'],['humidity','%'],['tvoc','ppb'],['formaldehyde','mg/m³']];
+const optional=key=>key==='formaldehyde'||key==='pm10';
+const tiles=Object.fromEntries(metrics.map(([key,unit])=>{const el=SensorUI.tile(key,unit);$('metrics').append(el.card);el.card.hidden=optional(key);return [key,el];}));
+tiles.tvoc.card.append(h('small',{class:'metric-reference',i18n:'m.tvoc_reference'}));
 let snapshot=null,receivedAt=0,status={peers:[]};
 function fresh(field,elapsed){return field?.valid===true&&typeof field.value==='number'&&Number.isFinite(field.value)&&typeof field.age_ms==='number'&&field.age_ms+elapsed<20000;}
 function renderIndicators(s,elapsed){
@@ -23,16 +22,12 @@ function render(s){
  if(snapshot!==s){snapshot=s;receivedAt=performance.now();}
  const elapsed=Math.max(0,performance.now()-receivedAt),grades={};let count=0;
  for(const [key] of metrics){
-  const field=s.sensors?.[key],el=tiles[key];el.card.hidden=key==='formaldehyde'&&!field;
+  const field=s.sensors?.[key],el=tiles[key];el.card.hidden=optional(key)&&!field;
   const valid=fresh(field,elapsed);
   grades[key]=SensorUI.reading(el,key,field?.value,valid);if(valid)count++;
   if(key==='co2'&&!valid&&s.co2_warmup_seconds_remaining>elapsed/1000)el.badge.textContent=t('daikin.warmup',{n:Math.ceil(s.co2_warmup_seconds_remaining-elapsed/1000)});
  }
- const pm10=s.sensors?.pm10,hasPm10=!!pm10;
- pm10Row.hidden=pm25Label.hidden=!hasPm10;
- tiles.pm25.label.dataset.i18n=hasPm10?'daikin.particles':'m.pm25';tiles.pm25.label.textContent=t(tiles.pm25.label.dataset.i18n);
- pm10Value.textContent=fresh(pm10,elapsed)?Number(pm10.value).toFixed(0):'—';
- const ranked=['pm25','formaldehyde','co2'].filter(k=>grades[k]),rank={ok:0,warn:1,bad:2};
+ const ranked=['pm25','pm10','formaldehyde','co2','tvoc'].filter(k=>grades[k]),rank={ok:0,warn:1,bad:2};
  const worst=ranked.reduce((a,k)=>!a||rank[grades[k].cls]>rank[grades[a].cls]?k:a,null),level=worst?grades[worst].cls:'';
  $('verdict').dataset.level=level;
  $('overall').textContent=t(!worst?'m1.no_data':level==='bad'?'m1.v_poor':level==='warn'?'m1.v_fair':'m1.v_good');

@@ -8,7 +8,6 @@ const D={
 'daikin.indicator':['Air quality indicators','空气质量指示灯'],
 'daikin.indicator_hint':['Light up when a reading crosses its threshold.','读数超过阈值时点亮对应指示灯。'],
 'daikin.measurements':['Sensor readings','传感器读数'],
-'daikin.particles':['Particulates','颗粒物'],
 'm.pm10':['PM10','PM10'],
 'daikin.light_disabled':['Disabled','已关闭'],
 'daikin.light_on':['Triggered','已触发'],
@@ -17,6 +16,10 @@ const D={
 'daikin.wifi_lost':['Wi-Fi disconnected · the separate network warning light is on.','Wi-Fi 未连接 · 独立的网络警告灯亮起。'],
 'daikin.warmup':['Warming up ({n}s)','预热中（剩余 {n} 秒）'],
 'm.tvoc':['TVOC','TVOC'],
+'m.tvoc_reference':['Reference ≤300 ppb','建议参考 ≤300 ppb'],
+'air.tvoc.reference':['Within reference','参考范围内'],
+'air.tvoc.ventilate':['Ventilate','建议通风'],
+'air.pm10.excellent':['Excellent','优'],'air.pm10.good':['Good','良'],'air.pm10.light':['Light pollution','轻度污染'],'air.pm10.moderate':['Moderate pollution','中度污染'],'air.pm10.heavy':['Heavy pollution','重度污染'],'air.pm10.severe':['Severe pollution','严重污染'],
 
 "fresh.independent":["Independent speed", "独立调速"],
 "auto.range_invalid":["Check speed limits and sensor thresholds.", "请检查风速范围和传感器阈值。"],
