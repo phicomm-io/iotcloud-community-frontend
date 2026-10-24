@@ -4,7 +4,8 @@ const {$,h,run}=UI,{t}=I18N;
 const metrics=[['pm25','µg/m³'],['pm10','µg/m³'],['co2','ppm'],['temperature','°C'],['humidity','%'],['tvoc','ppb'],['formaldehyde','mg/m³']];
 const optional=key=>key==='formaldehyde'||key==='pm10';
 const tiles=Object.fromEntries(metrics.map(([key,unit])=>{const el=SensorUI.tile(key,unit);$('metrics').append(el.card);el.card.hidden=optional(key);return [key,el];}));
-tiles.tvoc.card.append(h('small',{class:'metric-reference',i18n:'m.tvoc_reference'}));
+const tvocHeading=h('div',{class:'label'});tiles.tvoc.label.before(tvocHeading);
+tvocHeading.append(tiles.tvoc.label,h('small',{class:'metric-reference',i18n:'m.tvoc_reference'}));
 let snapshot=null,receivedAt=0,status={peers:[]};
 function fresh(field,elapsed){return field?.valid===true&&typeof field.value==='number'&&Number.isFinite(field.value)&&typeof field.age_ms==='number'&&field.age_ms+elapsed<20000;}
 function renderIndicators(s,elapsed){
