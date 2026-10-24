@@ -6,6 +6,15 @@
 const D={
 'daikin.kind':['Air quality monitor','空气质量检测仪'],
 'daikin.indicator':['Air quality indicators','空气质量指示灯'],
+'daikin.indicator_hint':['Light up when a reading crosses its threshold.','读数超过阈值时点亮对应指示灯。'],
+'daikin.measurements':['Sensor readings','传感器读数'],
+'daikin.particles':['Particulates','颗粒物'],
+'m.pm10':['PM10','PM10'],
+'daikin.light_disabled':['Disabled','已关闭'],
+'daikin.light_on':['Triggered','已触发'],
+'daikin.light_idle':['Below threshold','未触发'],
+'daikin.wifi_ok':['Wi-Fi connected · the separate network warning light is off.','Wi-Fi 已连接 · 独立的网络警告灯熄灭。'],
+'daikin.wifi_lost':['Wi-Fi disconnected · the separate network warning light is on.','Wi-Fi 未连接 · 独立的网络警告灯亮起。'],
 'daikin.warmup':['Warming up ({n}s)','预热中（剩余 {n} 秒）'],
 'm.tvoc':['TVOC','TVOC'],
 

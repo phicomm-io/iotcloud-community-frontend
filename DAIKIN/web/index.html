@@ -7,14 +7,17 @@
 </head>
 <body>
 <main id="homePage" class="home">
- <!-- Verdict first, then the four readings, then the one control. -->
  <section class="card verdict" id="verdict">
-  <div class="grow"><div class="eyebrow" data-i18n="m1.overall"></div><div class="stat" id="overall">—</div><p class="help" id="overallWhy"></p><p class="help" id="pressureReading" hidden><span data-i18n="m1.pressure"></span> <span class="num" id="pressureValue"></span> hPa · <span id="pressureModel"></span></p></div>
+  <div class="grow"><div class="eyebrow" data-i18n="m1.overall"></div><div class="stat" id="overall">—</div><p class="help" id="overallWhy"></p></div>
   <div class="fresh"><span class="dot live" id="freshDot"></span><span id="freshText" class="help"></span></div>
  </section>
- <div class="metrics" id="metrics"></div>
+ <div class="metrics sensor-metrics" id="metrics" tabindex="0" data-i18n-aria="daikin.measurements"></div>
  <div class="grid">
-  <section class="card"><div class="card-head"><h2 data-i18n="daikin.indicator"></h2><input id="indicator" type="checkbox" data-i18n-aria="daikin.indicator"></div></section>
+  <section class="card">
+   <label class="switch"><div class="text"><b data-i18n="daikin.indicator"></b><span data-i18n="daikin.indicator_hint"></span></div><input id="indicator" type="checkbox"></label>
+   <div class="indicator-lights" id="indicatorLights"></div>
+   <p class="help indicator-wifi" id="indicatorWifi"></p>
+  </section>
   <section class="card" id="peerCard"></section>
  </div>
 </main>

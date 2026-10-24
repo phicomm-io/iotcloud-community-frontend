@@ -288,6 +288,18 @@ pre{overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;bac
 .metrics .metric .stat{margin-top:auto;padding-top:12px}
 .metrics .metric-head{grid-template-rows:40px auto;min-height:72px}
 .metrics .metric-head .label{align-self:start}
+.metrics.sensor-metrics{grid-template-columns:none;grid-auto-flow:column;grid-auto-columns:minmax(166px,1fr);overflow-x:auto;padding-bottom:4px;scrollbar-width:thin}
+.particle-secondary{display:flex;align-items:baseline;gap:6px;padding:8px 0;margin-bottom:10px;border-top:1px solid var(--border);font-size:12px;color:var(--muted)}
+.particle-secondary .num{margin-left:auto;font-size:20px;color:var(--text)}
+.particle-secondary small{font-size:10px}
+.indicator-lights{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:18px}
+.indicator-light{display:flex;flex-direction:column;gap:8px;min-width:0;padding:12px;background:var(--surface-muted);border-radius:var(--radius-s)}
+.indicator-light .row{gap:6px;align-items:baseline;font-size:13px}
+.indicator-light .dot{flex:none}
+.indicator-light .row b{overflow-wrap:anywhere}
+.indicator-state{font-size:12px}
+.indicator-light small{margin-top:auto;color:var(--muted);font-size:11px}
+.indicator-wifi{margin:14px 0 0;font-size:12px}
 
 /* Schedule rows keep the duration, action and controls readable on phones. */
 .schedule-task{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto}

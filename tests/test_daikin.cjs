@@ -13,12 +13,22 @@ test('DAIKIN uses shared metric scales, optional HCHO and expiring live data',()
   w.UI.device.onStatus(state);
   const card=key=>w.document.querySelector(`[data-sensor="${key}"]`);
   assert.equal(card('formaldehyde').hidden,true);
+  assert.equal(card('pm10').hidden,true,'PM10 is optional and shares the particulate card');
+  assert.equal(w.document.querySelector('[data-indicator="formaldehyde"]'),null);
   assert.match(card('co2').textContent,/Warming up/);
   assert.ok(card('temperature').querySelector('.scale'));
   assert.equal(card('tvoc').querySelector('.scale'),null,'ppb has no invented mass conversion or rating');
+  w.UI.device.onStatus({...state,indicator_enabled:true,sensors:{...state.sensors,pm10:{valid:true,value:32,age_ms:100},tvoc:{valid:true,value:301,age_ms:100}}});
+  assert.equal(card('pm10').hidden,false);assert.equal(card('pm10').querySelector('.num').textContent,'32');
+  assert.equal(card('pm10').closest('.card'),card('pm25'));
+  assert.equal(w.document.querySelectorAll('.metrics>.metric:not([hidden])').length,5,'PM10 does not add a card');
+  assert.equal(w.document.querySelector('[data-indicator="tvoc"]').dataset.active,'true');
   now+=20000;for(const fn of ticks)fn();assert.equal(card('pm25').querySelector('.num').textContent,'—');
+  assert.equal(card('pm10').querySelector('.num').textContent,'—');
+  assert.equal(w.document.querySelector('[data-indicator="tvoc"]').dataset.active,'false');
   w.UI.device.onStatus({...state,sensors:{...state.sensors,formaldehyde:{valid:true,value:.012,age_ms:0}}});
   assert.equal(card('formaldehyde').hidden,false);assert.equal(card('formaldehyde').querySelector('.num').textContent,'0.012');
+  assert.ok(w.document.querySelector('[data-indicator="formaldehyde"]'));assert.equal(w.document.querySelector('[data-indicator="tvoc"]'),null);
   assert.equal(w.UI.device.otaName,'phicomm_daikin.ota.bin.signed');
  }finally{dom.window.close();}
 });

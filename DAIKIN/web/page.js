@@ -3,16 +3,35 @@
 const {$,h,run}=UI,{t}=I18N;
 const metrics=[['pm25','µg/m³'],['co2','ppm'],['temperature','°C'],['humidity','%'],['tvoc','ppb'],['formaldehyde','mg/m³']];
 const tiles=Object.fromEntries(metrics.map(([key,unit])=>{const el=SensorUI.tile(key,unit);$('metrics').append(el.card);el.card.hidden=key==='formaldehyde';return [key,el];}));
+const pm25Label=h('span',{class:'eyebrow',i18n:'m.pm25'}),pm10Value=h('b',{class:'num'},'—');
+const pm10Row=h('div',{class:'particle-secondary','data-sensor':'pm10',hidden:true},h('span',{i18n:'m.pm10'}),pm10Value,h('small',{},'µg/m³'));
+tiles.pm25.stat.before(pm25Label);tiles.pm25.scale.before(pm10Row);pm25Label.hidden=true;
 let snapshot=null,receivedAt=0,status={peers:[]};
+function fresh(field,elapsed){return field?.valid===true&&typeof field.value==='number'&&Number.isFinite(field.value)&&typeof field.age_ms==='number'&&field.age_ms+elapsed<20000;}
+function renderIndicators(s,elapsed){
+ const voc=s.sensors?.formaldehyde?'formaldehyde':'tvoc';
+ $('indicatorLights').replaceChildren(...[['pm25',50,'µg/m³'],['co2',1000,'ppm'],[voc,voc==='tvoc'?300:.1,voc==='tvoc'?'ppb':'mg/m³']].map(([key,threshold,unit])=>{
+  const field=s.sensors?.[key],valid=fresh(field,elapsed),active=!!s.indicator_enabled&&valid&&field.value>threshold;
+  return h('div',{class:'indicator-light','data-indicator':key,'data-active':String(active)},
+   h('div',{class:'row'},h('span',{class:'dot '+(active?'warn':'')}),h('b',{},key==='co2'?'CO₂':t('m.'+key))),
+   h('span',{class:'indicator-state'},t(!s.indicator_enabled?'daikin.light_disabled':!valid?'m1.no_data':active?'daikin.light_on':'daikin.light_idle')),
+   h('small',{},'> '+threshold+' '+unit));
+ }));
+ $('indicatorWifi').textContent=t(s.wifi_connected?'daikin.wifi_ok':'daikin.wifi_lost');
+}
 function render(s){
  if(snapshot!==s){snapshot=s;receivedAt=performance.now();}
  const elapsed=Math.max(0,performance.now()-receivedAt),grades={};let count=0;
  for(const [key] of metrics){
   const field=s.sensors?.[key],el=tiles[key];el.card.hidden=key==='formaldehyde'&&!field;
-  const valid=field?.valid===true&&typeof field.value==='number'&&Number.isFinite(field.value)&&typeof field.age_ms==='number'&&field.age_ms+elapsed<20000;
+  const valid=fresh(field,elapsed);
   grades[key]=SensorUI.reading(el,key,field?.value,valid);if(valid)count++;
   if(key==='co2'&&!valid&&s.co2_warmup_seconds_remaining>elapsed/1000)el.badge.textContent=t('daikin.warmup',{n:Math.ceil(s.co2_warmup_seconds_remaining-elapsed/1000)});
  }
+ const pm10=s.sensors?.pm10,hasPm10=!!pm10;
+ pm10Row.hidden=pm25Label.hidden=!hasPm10;
+ tiles.pm25.label.dataset.i18n=hasPm10?'daikin.particles':'m.pm25';tiles.pm25.label.textContent=t(tiles.pm25.label.dataset.i18n);
+ pm10Value.textContent=fresh(pm10,elapsed)?Number(pm10.value).toFixed(0):'—';
  const ranked=['pm25','formaldehyde','co2'].filter(k=>grades[k]),rank={ok:0,warn:1,bad:2};
  const worst=ranked.reduce((a,k)=>!a||rank[grades[k].cls]>rank[grades[a].cls]?k:a,null),level=worst?grades[worst].cls:'';
  $('verdict').dataset.level=level;
@@ -21,6 +40,7 @@ function render(s){
  $('overallWhy').textContent=t(!count?'m1.stale_hint':'m1.all_ok');if(why.length)$('overallWhy').textContent=why.join(' · ');
  $('freshDot').className='dot '+(count?'ok live':'bad');$('freshText').textContent=t(count?'m1.updated':'m1.stale',{n:Math.floor(elapsed/1000)});
  $('indicator').checked=!!s.indicator_enabled;
+ renderIndicators(s,elapsed);
 }
 function renderPeers(){
  const rows=SensorUI.peers(status),count=(status.peers||[]).filter(p=>p.session_ready).length;

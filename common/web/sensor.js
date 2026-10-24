@@ -3,15 +3,15 @@ window.SensorUI=(()=>{
  const {h}=UI,{t}=I18N;
  function tile(key,unit){
   const value=h('span',{class:'num'},'—'),badge=h('span',{class:'badge'}),scale=h('div');
-  const card=h('section',{class:'card metric','data-sensor':key},
-   h('div',{class:'metric-head'},h('span',{class:'label','data-i18n':'m.'+key},t('m.'+key)),badge),
-   h('div',{class:'stat'},value,h('small',{},unit)),scale);
-  return {card,value,badge,scale};
+  const label=h('span',{class:'label','data-i18n':'m.'+key},t('m.'+key)),stat=h('div',{class:'stat'},value,h('small',{},unit));
+  const card=h('section',{class:'card metric','data-sensor':key},h('div',{class:'metric-head'},label,badge),stat,scale);
+  return {card,value,badge,scale,label,stat};
  }
  function reading(el,key,value,valid){
   const grade=valid&&UI.AIR[key]?UI.grade(key,value):null;
   el.value.textContent=valid?Number(value).toFixed(key==='formaldehyde'?3:key==='temperature'?1:0):'—';
   el.badge.className='badge '+(valid&&grade?grade.cls:'');
+  el.badge.hidden=valid&&!grade;
   el.badge.textContent=valid?(grade?t(grade.key):''):t('m1.no_data');
   el.scale.replaceChildren(...(grade&&valid?[UI.airScale(key,value)]:[]));
   return valid?grade:null;
