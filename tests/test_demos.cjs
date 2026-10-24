@@ -39,7 +39,9 @@ const server=http.createServer((req,res)=>{let file=path.resolve(root,'.'+new UR
    await frame.locator('body').evaluate(()=>new Promise((resolve,reject)=>{let n=0;const check=()=>{if(UI.state.filter.used_seconds===0)resolve();else if(++n>100)reject(Error('platform filter reset failed'));else setTimeout(check,50);};check();}));
   }
   else if(model==='daikin'){
-   await page.locator('[data-sensor="pm25"] .num').waitFor({state:'visible'});
+   await page.locator('[data-sensor="pm25"] > .stat > .num').waitFor({state:'visible'});
+   assert.equal(await page.locator('[data-sensor="pm10"] .num').textContent(),'28');
+   assert.equal(await page.locator('.metrics > .metric:visible').count(),5);
    assert.equal(await page.locator('[data-sensor="formaldehyde"]').isVisible(),false);
    await page.locator('[data-sensor="temperature"] .scale').waitFor({state:'visible'});
    await page.evaluate(()=>{location.hash='settings/firmware';});
