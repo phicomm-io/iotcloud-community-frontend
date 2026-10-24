@@ -30,7 +30,7 @@ const server=http.createServer((req,res)=>{let file=path.resolve(root,'.'+new UR
   }
   if(model==='platform'){
    await page.waitForSelector('.device-select');assert.equal(await page.locator('.device-select').count(),4);for(const b of await page.locator('.device-select').all())await b.click();
-   await page.locator('.device-select').filter({hasText:'A1'}).click();
+   await page.locator('.device-select').nth(2).click();
    const frame=page.frameLocator('iframe.device-home');
    await frame.locator('#filterCard').waitFor({state:'visible'});
    await frame.locator('#filterCard summary').click();await frame.locator('#filterLifetime').fill('6000');await frame.locator('#filterSave').click();
