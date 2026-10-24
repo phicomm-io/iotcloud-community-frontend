@@ -358,6 +358,18 @@ function mqttPage(dev){
   init(s){if(protocol)protocol.value=s.mqtt_protocol||s.mqtt_topic_mode||'tmcp';host.value=s.mqtt_host||'';port.value=s.mqtt_port||1883;user.value=s.mqtt_user||'';imported.activate?.();}};
 }
 function firmwarePage(dev){
+ const comparison=h('a',{id:'otaCompare',class:'btn',target:'_blank',rel:'noopener noreferrer'},h('span',{i18n:'fw.compare'}),icon('external'));
+ let identity=null,targetVersion=null;
+ function comparisonLink(){
+  const path=I18N.lang==='en'?'guides/en/release-log.html':'guides/release-log.html';
+  const link=new URL(path,'https://phicomm-io.github.io/');link.searchParams.set('view','compare');
+  const model=identity?.model||UI.caps?.model,variant=identity?.firmware_variant||UI.caps?.firmware_variant;
+  if(model&&variant&&identity?.version){
+   for(const [key,value] of Object.entries({model,variant,from:identity.version,...(targetVersion?{to:targetVersion}:{})}))link.searchParams.set(key,value);
+  }
+  comparison.href=link.href;
+ }
+ I18N.onChange(comparisonLink);comparisonLink();
  const online=h('section',{class:'card stack',hidden:!UI.caps?.actions?.includes('ota.sources.get')});
  if(!online.hidden){
   const sources=h('div',{class:'row',id:'otaSources'}),latest=h('p',{class:'help'});
@@ -371,13 +383,14 @@ function firmwarePage(dev){
   I18N.onChange(translate);
   async function poll(){
    const data=await command('ota.check.get');last=data;
+   targetVersion=['available','up_to_date'].includes(data.state)?data.version:null;comparisonLink();
    latest.textContent=t('fw.check_'+data.state)+(data.version?' · '+data.version:'')+(data.error?' · '+data.error:'');
    install.hidden=!data.version||data.state==='failed';notes.hidden=!data.release_log;
    if(data.busy||data.state==='checking')timer=setTimeout(()=>poll().catch(e=>{latest.textContent=e.message;busy(false);}),1000);
    else busy(false);
   }
   async function check(source){
-   if(timer)clearTimeout(timer);busy(true);install.hidden=notes.hidden=notesText.hidden=true;
+   if(timer)clearTimeout(timer);busy(true);install.hidden=notes.hidden=notesText.hidden=true;targetVersion=null;comparisonLink();
    try{await command('ota.check',{source});latest.textContent=t('fw.check_checking');timer=setTimeout(()=>poll().catch(e=>{latest.textContent=e.message;busy(false);}),500);}
    catch(e){busy(false);throw e;}
   }
@@ -427,9 +440,9 @@ function firmwarePage(dev){
  });
  onSubmit(urlForm,()=>api('/ota',{url:url.value}),'fw.url_started');
  const fileLabel=fileForm.querySelector('.field>span');I18N.onChange(()=>{fileLabel.textContent=t('fw.file',{m:dev.model});});
- return {el:h('div',{class:'stack'},pageHead('nav.firmware','fw.lead'),sum,online,
+ return {el:h('div',{class:'stack'},pageHead('nav.firmware','fw.lead'),sum,card('fw.compare_title',null,h('p',{class:'help',i18n:'fw.compare_help'}),comparison),online,
   card('fw.install',null,picker,h('div',{style:'margin-top:16px'},fileForm,urlForm),h('div',{class:'stack',style:'margin-top:20px'},prog,state,cancel),info(dev.otaHintKey))),
-  status(s){sum.replaceChildren(summary([['fw.version',h('span',{class:'num'},s.version||'—')],['fw.state',t('s.'+(s.ota_state||'idle'))],s.ota_error?['fw.error',h('span',{class:'badge bad'},s.ota_error)]:null]));
+  status(s){identity=s;comparisonLink();sum.replaceChildren(summary([['fw.version',h('span',{class:'num'},s.version||'—')],['fw.state',t('s.'+(s.ota_state||'idle'))],s.ota_error?['fw.error',h('span',{class:'badge bad'},s.ota_error)]:null]));
    cancel.hidden=!s.ota_active||s.ota_mode==='committing';
    if(s.ota_active){prog.value=s.ota_progress;state.textContent=t('fw.progress',{p:s.ota_progress});}}};
 }

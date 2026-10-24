@@ -98,6 +98,23 @@ const ACTIONS={M1:['schedules.get','schedules.put','schedules.delete','schedules
   assert.equal(ring.dataset.feedbackSource,'pwm');assert.equal(ring.dataset.feedbackSpeed,'20');
  }
  assert(!d.querySelector('#spark')?.innerHTML.includes('NaN'),'single-point power chart must remain finite');
+ const beforeComparison=calls.length,firmwarePage=w.UI.pages.firmware;
+ const compareState={...state,model:model.toLowerCase(),version:'0.9.23-abc123',firmware_variant:model==='A1'?'fresh-air':'full'};
+ firmwarePage.status(compareState);
+ let comparison=new URL(d.querySelector('#otaCompare').href);
+ assert.equal(comparison.origin,'https://phicomm-io.github.io');
+ assert.equal(comparison.searchParams.get('from'),'0.9.23-abc123','preserve actual firmware source suffix');
+ assert.equal(comparison.searchParams.get('variant'),compareState.firmware_variant);
+ assert.equal(comparison.searchParams.get('model'),model.toLowerCase());
+ assert.equal([...comparison.searchParams.keys()].some(k=>['ip','password','mac','device_id'].includes(k)),false);
+ w.I18N.set('en');comparison=new URL(d.querySelector('#otaCompare').href);assert.equal(comparison.pathname,'/guides/en/release-log.html');
+ firmwarePage.status({...compareState,version:'0.9.24-abc123-dirty'});
+ assert.equal(new URL(d.querySelector('#otaCompare').href).searchParams.get('from'),'0.9.24-abc123-dirty','unknown builds remain explicit');
+ firmwarePage.status({version:'v2'});comparison=new URL(d.querySelector('#otaCompare').href);
+ assert.equal(comparison.searchParams.has('from'),false,'missing identity opens manual selection without guessing full');
+ assert.equal(calls.length,beforeComparison,'the comparison entry does not request info, notes, OTA or external resources');
+ w.I18N.set('zh');firmwarePage.status(state);
+
  if(model==='TC1')assert.equal(d.querySelector('#mqttMode').options.length,2);else assert.equal(d.querySelector('#mqttMode'),null,'M1/A1 only support TMCP');
  assert.equal(d.querySelector('#mqttHost').maxLength,127);
  if(model==='A1'){
