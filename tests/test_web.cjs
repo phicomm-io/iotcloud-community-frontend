@@ -124,6 +124,23 @@ const ACTIONS={M1:['schedules.get','schedules.put','schedules.delete','schedules
  w.I18N.set('zh');firmwarePage.status(state);
 
  if(model==='TC1')assert.equal(d.querySelector('#mqttMode').options.length,2);else assert.equal(d.querySelector('#mqttMode'),null,'M1/A1 only support TMCP');
+ if(model==='TC1'){
+  const input=d.querySelector('#coef'),form=d.querySelector('#coefForm');
+  const writes=()=>calls.filter(r=>r.action==='config.set'&&r.params.section==='meter');
+  assert.deepEqual([...input.list.options].map(o=>o.value),['1710','1395']);
+  assert.match(input.list.options[1].textContent,/BL0937B.*1395.*13.95/);
+  assert.doesNotMatch(input.list.textContent,/参考值|reference/i);
+  for(const value of ['1395','1710','1823']){
+   const before=writes().length;input.value=value;input.dispatchEvent(new w.Event('input',{bubbles:true}));
+   await w.UI.reload();assert.equal(input.value,value,'status polling preserves the coefficient draft');
+   assert.equal(writes().length,before,'choosing or typing must not save automatically');
+   form.requestSubmit();await flush();
+   assert.equal(writes().length,before+1);assert.equal(writes().at(-1).params.values.coefficient_x100,Number(value));
+  }
+  const before=writes().length;
+  for(const value of ['',99,10001,1395.5]){input.value=value;assert.equal(input.checkValidity(),false);form.requestSubmit();await flush();}
+  assert.equal(writes().length,before,'invalid coefficients must not reach the device');
+ }
  assert.equal(d.querySelector('#mqttHost').maxLength,127);
  if(model==='A1'){
   w.location.hash='settings/light';w.dispatchEvent(new w.Event('hashchange'));await flush();

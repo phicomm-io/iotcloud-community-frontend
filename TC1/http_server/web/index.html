@@ -57,8 +57,10 @@
     <details class="more"><summary data-i18n="tc1.calibration"></summary>
      <div class="banner warn"><span data-i18n="tc1.coef_warn"></span></div>
      <form id="coefForm" class="field"><span data-i18n="tc1.coef"></span>
-      <div class="row"><span class="input-unit grow"><input id="coef" type="number" min="100" max="10000" required><em>×0.01</em></span>
-       <button class="btn" type="submit" data-i18n="common.save"></button></div></form>
+      <div class="row"><span class="input-unit grow"><input id="coef" type="number" list="coefPresets" min="100" max="10000" step="1" required><em>×0.01</em></span>
+       <button class="btn" type="submit" data-i18n="common.save"></button></div>
+      <datalist id="coefPresets"><option value="1710" data-i18n="tc1.coef_bl0937"></option><option value="1395" data-i18n="tc1.coef_bl0937b"></option></datalist>
+      <p class="help" data-i18n="tc1.coef_help"></p></form>
     </details>
    </section>
    <div data-slot="auth"></div>
