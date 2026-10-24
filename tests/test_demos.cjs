@@ -44,6 +44,18 @@ const server=http.createServer((req,res)=>{let file=path.resolve(root,'.'+new UR
    assert.equal(await page.locator('.metrics > .metric:visible').count(),5);
    assert.equal(await page.locator('[data-sensor="formaldehyde"]').isVisible(),false);
    await page.locator('[data-sensor="temperature"] .scale').waitFor({state:'visible'});
+   for(const width of [1280,390])for(const lang of ['en','zh-CN']){
+    await page.setViewportSize({width,height:900});
+    const layout=await page.evaluate(lang=>{
+     I18N.set(lang);const s=structuredClone(UI.state);
+     for(const key of ['pm25','pm10','co2'])s.sensors[key].value=10000;
+     s.sensors.tvoc.value=65535;s.sensors.formaldehyde={valid:true,value:1.234,age_ms:0};UI.device.onStatus(s);
+     const cards=[...document.querySelectorAll('.metrics>.metric')].filter(c=>!c.hidden);
+     return {tops:cards.map(c=>c.getBoundingClientRect().top),overflow:document.documentElement.scrollWidth>innerWidth,contained:cards.every(c=>c.scrollWidth<=c.clientWidth+1)};
+    },lang);
+    assert.equal(layout.tops.length,6);assert.equal(new Set(layout.tops).size,1);assert.equal(layout.overflow,false);assert.equal(layout.contained,true,'large readings remain inside each card');
+   }
+   await page.evaluate(()=>{I18N.set('zh-CN');UI.device.onStatus(UI.state);});
    await page.evaluate(()=>{location.hash='settings/firmware';});
    assert.equal(await page.locator('#otaSources').isVisible(),false);
   }
