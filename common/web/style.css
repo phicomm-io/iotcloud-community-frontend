@@ -291,7 +291,8 @@ pre{overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;bac
 .metrics.sensor-metrics{grid-template-columns:none;grid-auto-flow:column;grid-auto-columns:minmax(150px,1fr);overflow-x:auto;padding-bottom:4px;scrollbar-width:thin}
 .sensor-metrics .stat{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px;font-size:36px}
 .sensor-metrics .stat small{margin-left:0}
-.metric-reference{display:block;color:var(--muted);font-size:11px;line-height:16px}
+.sensor-metrics .metric-head .badge{width:110px;height:22px;justify-content:center;white-space:nowrap;overflow-wrap:normal;font-size:9px;padding:2px 4px}
+.metric-reference{display:block;color:var(--muted);font-size:10px;font-weight:400;line-height:16px;white-space:nowrap}
 .indicator-lights{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:18px}
 .indicator-light{display:flex;flex-direction:column;gap:8px;min-width:0;padding:12px;background:var(--surface-muted);border-radius:var(--radius-s)}
 .indicator-light .row{gap:6px;align-items:baseline;font-size:13px}
