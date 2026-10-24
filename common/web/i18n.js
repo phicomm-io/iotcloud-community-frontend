@@ -4,6 +4,11 @@
 (()=>{
 'use strict';
 const D={
+'daikin.kind':['Air quality monitor','空气质量检测仪'],
+'daikin.indicator':['Air quality indicators','空气质量指示灯'],
+'daikin.warmup':['Warming up ({n}s)','预热中（剩余 {n} 秒）'],
+'m.tvoc':['TVOC','TVOC'],
+
 "fresh.independent":["Independent speed", "独立调速"],
 "auto.range_invalid":["Check speed limits and sensor thresholds.", "请检查风速范围和传感器阈值。"],
 "fresh.ppr":["Feedback pulses per revolution", "每转反馈脉冲数"],
@@ -101,7 +106,7 @@ const D={
 'average.co2':['Mean CO₂','平均 CO₂'],
 'auto.target_co2':['CO₂ target / idle at','CO₂ 目标值（待机）'],'auto.start_co2':['CO₂ start threshold','CO₂ 启动阈值'],
 'auto.low_co2':['CO₂ at minimum speed','最低风速对应 CO₂'],'auto.high_co2':['CO₂ at maximum speed','最高风速对应 CO₂'],
-'link.all':['All three','三者'],'link.co2_help':['CO₂ requires a linked M1 with a CO₂ sensor. Missing or expired readings use the offline fan speed.','CO₂ 需要绑定已安装 CO₂ 传感器的 M1；读数缺失或过期时使用离线风速。'],
+'link.all':['All three','三者'],'link.co2_help':["CO₂ requires a provider with a valid CO₂ reading. Missing or expired readings use the offline fan speed.", "CO₂ 需要数据源提供有效读数；读数缺失或过期时使用离线风速。"],
 'average.temperature':['Mean temperature','平均温度'],'average.humidity':['Mean humidity','平均湿度'],'average.pm25':['Mean PM2.5','平均 PM2.5'],'average.formaldehyde':['Mean formaldehyde','平均甲醛'],
 /* common */
 'btn.key_both':['Wi-Fi + power keys','Wi-Fi + 电源组合键'],
@@ -133,7 +138,7 @@ const D={
 'nav.home':['Home','首页'],'nav.settings':['Settings','设置'],
 'grp.network':['Network','网络'],'grp.device':['Device','设备'],'grp.auto':['Automation','自动化'],'grp.system':['System','系统'],
 'nav.wifi':['Wi-Fi','Wi-Fi'],'nav.mqtt':['MQTT / Home Assistant','MQTT / Home Assistant'],'nav.general':['General','通用'],'nav.light':['Light effects','灯效'],
-'nav.binding':['Linked M1','绑定 M1'],'nav.linkage':['Auto control','自动调速'],'auto.settings':['Automatic control settings','自动调速设置'],'nav.schedule':['Schedules','定时任务'],'nav.sleep':['Night mode','夜间模式'],
+'nav.binding':["Linked sensors", "绑定传感器"],'nav.linkage':['Auto control','自动调速'],'auto.settings':['Automatic control settings','自动调速设置'],'nav.schedule':['Schedules','定时任务'],'nav.sleep':['Night mode','夜间模式'],
 'nav.buttons':['Button events','按键事件'],'nav.permission':["A1 sessions", "A1 会话"],
 'nav.firmware':['Firmware','固件升级'],'nav.diagnostics':['Diagnostics','诊断'],'nav.logs':['Logs','日志'],'nav.maintenance':['Restart & reset','重启与恢复'],
 /* header */
@@ -211,7 +216,7 @@ const D={
 'air.humidity.dry':['Dry','偏干'],'air.humidity.comfort':['Comfortable','舒适'],'air.humidity.humid':['Humid','偏湿'],
 /* A1 home */
 'a1.fan':['Purifier','净化器'],'a1.power':['Power','电源'],'a1.running':['Running','运行中'],'a1.off':['Off','已关闭'],
-'a1.sub_manual':['{p}% · manual','{p}% · 手动'],'a1.sub_auto':['{p}% · following M1','{p}% · 跟随 M1 自动调节'],'a1.sub_off':['Starts at {p}% when turned on','开启后以 {p}% 运行'],
+'a1.sub_manual':['{p}% · manual','{p}% · 手动'],'a1.sub_auto':["{p}% · automatic", "{p}% · 自动调节"],'a1.sub_off':['Starts at {p}% when turned on','开启后以 {p}% 运行'],
 'a1.locked_ota':['Controls paused during update or restart','升级或重启期间暂停控制'],
 'a1.speed':['Fan speed','风速'],'a1.feedback_target':['Target speed','目标速度'],'a1.feedback_pwm':['Current output','当前输出'],'a1.resume':['{p}% when on','开启后 {p}%'],'a1.p_quiet':['Quiet','静音'],'a1.p_low':['Low','低'],'a1.p_mid':['Medium','中'],'a1.p_max':['Max','强'],
 'a1.out_stopped':['Fan stopped','风机已停止'],'a1.out_ramp':['Output {a}% → ramping to {p}%','实际输出 {a}%，正在调整到 {p}%'],'a1.out_steady':['Output {a}%','实际输出 {a}%'],
@@ -219,10 +224,10 @@ const D={
 'a1.panel':['Panel','面板'],'a1.panel_ok':['Panel connected','面板通信正常'],'a1.panel_bad':['Panel not responding','面板无响应'],
 'a1.child_lock':['Child lock','童锁'],'a1.child_lock_desc':['Locks power and speed keys on the device','锁定机身电源和调速按键'],'a1.lock_on':['Child lock on','童锁已开启'],'a1.lock_off':['Child lock off','童锁已关闭'],
 'a1.button_hint':['Hold the Wi-Fi key for 2.5 s to open the setup hotspot; this works with child lock on.','长按 Wi-Fi 键 2.5 秒可开启配网热点，童锁期间仍可使用。'],
-'a1.auto':['Auto control','自动调速'],'a1.auto_lead':['Adjusts the fan from linked M1 readings','根据绑定的 M1 读数调节风速'],
-'a1.auto_empty':['No M1 is linked yet. Link one to run the purifier automatically.','尚未绑定 M1，绑定后可按空气质量自动运行。'],'a1.auto_link':['Link an M1','绑定 M1'],
-'a1.auto_enable':['Turn on auto control','开启自动调速'],'a1.auto_peers':['{n} M1 · {f} reporting','{n} 台 M1 · {f} 台有数据'],
-'a1.auto_failed':['No fresh M1 data. The configured offline speed applies while powered on.','暂无有效的 M1 数据，开机时使用设定的离线风速。'],'a1.auto_speed':['Auto speed {p}%','自动风速 {p}%'],
+'a1.auto':['Auto control','自动调速'],'a1.auto_lead':["Adjusts the fan from linked sensor readings", "根据绑定传感器的读数调节风速"],
+'a1.auto_empty':["No sensor is linked yet. Link one to run the purifier automatically.", "尚未绑定传感器，绑定后可按空气质量自动运行。"],'a1.auto_link':["Link a sensor", "绑定传感器"],
+'a1.auto_enable':['Turn on auto control','开启自动调速'],'a1.auto_peers':["{n} sensors · {f} reporting", "{n} 台传感器 · {f} 台有数据"],
+'a1.auto_failed':["No fresh sensor data. The configured offline speed applies while powered on.", "暂无有效的传感器数据，开机时使用设定的离线风速。"],'a1.auto_speed':['Auto speed {p}%','自动风速 {p}%'],
 's.link_disabled':['Off','未开启'],'s.link_active':['Active','运行中'],'s.link_sensor_failed':['No data','无数据'],
 'a1.ring':['Light ring','灯环'],'a1.ring_on':['Light ring','启用灯环'],'a1.always_on':['Always on','常亮'],'a1.always_on_desc':['Otherwise it lights for 2 s after each change','否则仅在操作后亮 2 秒'],
 'a1.color':['Colour','颜色'],'a1.brightness':['Brightness','亮度'],'a1.effect_note':['Effect: {e}.','当前灯效：{e}。'],'a1.effect_change':['Change','更改'],
@@ -238,21 +243,21 @@ const D={
 'fx.disp.0':['Fixed colour, brightness by value','固定颜色 + 数值亮度'],'fx.disp.1':['Comfort colour, fixed brightness','适宜程度颜色 + 固定亮度'],'fx.disp.2':['Comfort colour, brightness by value','适宜程度颜色 + 数值亮度'],
 'fx.quality_hint':['Baselines used to compute "overall air quality".','用于计算“综合空气质量”的基准值。'],'fx.quality_pm':['PM2.5 baseline','PM2.5 基准'],'fx.quality_hcho':['Formaldehyde baseline','甲醛基准'],
 /* A1 binding */
-'bind.lead':['Link M1 monitors so the purifier can react to their readings.','绑定 M1 后，净化器可根据其读数自动运行。'],'bind.sensors':['Linked M1 monitors','已绑定的 M1'],
-'bind.empty':['No M1 linked','尚未绑定 M1'],'bind.add':['Add an M1','添加 M1'],'bind.mac':['M1 MAC address','M1 的 MAC 地址'],'bind.ip':['LAN IP (optional)','局域网 IP（可选）'],'bind.ip_ph':["Discover on the LAN if empty", "留空则在局域网内自动查找"],
-'bind.ip_auto':['IP found via MQTT','IP 通过 MQTT 获取'],'bind.add_btn':['Add M1','添加'],'bind.added':['Added','已添加'],'bind.bad_mac':['Enter a 12-digit MAC address','请输入 12 位 MAC 地址'],'bind.dup':['Already in the list','已在列表中'],
+'bind.lead':["Link sensor providers so the purifier can react to available readings.", "绑定数据提供设备后，净化器可根据有效读数自动运行。"],'bind.sensor':['Sensor','传感器'],'bind.sensors':["Linked sensors", "已绑定传感器"],
+'bind.empty':["No sensor linked", "尚未绑定传感器"],'bind.add':["Add a sensor", "添加传感器"],'bind.mac':["Device MAC address", "设备 MAC 地址"],'bind.ip':['LAN IP (optional)','局域网 IP（可选）'],'bind.ip_ph':["Discover on the LAN if empty", "留空则在局域网内自动查找"],
+'bind.ip_auto':['IP found via MQTT','IP 通过 MQTT 获取'],'bind.add_btn':["Add sensor", "添加传感器"],'bind.added':['Added','已添加'],'bind.bad_mac':['Enter a 12-digit MAC address','请输入 12 位 MAC 地址'],'bind.dup':['Already in the list','已在列表中'],
 'bind.pending':['Handshaking','握手中'],'bind.fresh':['Receiving data','数据正常'],'bind.stale':['No data','无数据'],'bind.probe':['Probe LAN','探测局域网'],'bind.probe_sent':['Probe sent','已发送探测'],
 'bind.remove_q':['Remove this device?','移除此设备？'],'bind.remove_body':['{m} will no longer be linked.','{m} 将解除关联。'],
 'bind.ids_title':['Next: allow this A1 on the M1','下一步：在 M1 上允许本机'],'bind.ids_body':['Copy the pairing ID to the M1 page → Settings → Linkage access.','复制以下配对 ID，粘贴到 M1 页面 → 设置 → 联动许可。'],
 'bind.force':['Always use MQTT','强制使用 MQTT'],'bind.force_desc':['Skip the LAN connection','不使用局域网直连'],'bind.recovery':['Retry LAN automatically','自动检查局域网恢复'],'bind.recovery_desc':['Switch back to LAN when it recovers','恢复后切回局域网'],
 'bind.timeout':['LAN timeout','局域网超时'],'bind.recovery_s':['Retry interval','恢复检查间隔'],
-'bind.hint':["Configure this M1 here; no setup is needed on the M1. MQTT authorizes the session, then readings use the LAN. A LAN failure pauses sensor-based control.", "只需在此添加 M1，无需在 M1 上配对。MQTT 用于建立会话，读数通过局域网获取；局域网失联后按数据失效规则处理。"],
+'bind.hint':["Add the device here. MQTT authorizes a LAN session; only fresh, available fields participate in automation.", "在此添加设备，MQTT 用于授权局域网会话；自动化仅使用有效且未过期的数据。"],
 'bind.group':['Purifier group','净化器组'],'bind.group_lead':['Run several A1 units as one. Enter the same name and member list on every A1.','多台 A1 作为一组运行；每台 A1 需填写相同的组名称和成员列表。'],
 'bind.group_name':['Group name','组名称'],'bind.group_ph':['Empty = standalone','留空为独立设备'],'bind.member_add':['Add member','添加成员'],
 /* A1 linkage */
-'link.lead':['Rules that turn the purifier on, off and set its speed from M1 readings.','根据 M1 读数开关净化器并调节风速的规则。'],
+'link.lead':["Adjusts the fan from available sensor readings.", "根据有效的传感器读数调节风速。"],
 'link.enable':['Automatic control','自动调速'],'link.enable_desc':['Manual control still works at any time','随时仍可手动控制'],
-'link.no_peer':['Link an M1 first.','请先绑定 M1。'],'link.speed':['Fan speed','风速调节'],'link.metric':['Based on','依据指标'],'link.both':['Both','两者'],
+'link.no_peer':["Link a sensor first.", "请先绑定传感器。"],'link.speed':['Fan speed','风速调节'],'link.metric':['Based on','依据指标'],'link.both':['Both','两者'],
 'link.mode.0':['Fixed','固定风速'],'link.mode.1':['Proportional','线性调节'],'link.mode.2':['Target (PID)','目标值（PID）'],
 'link.mode_desc.0':['Always the same speed','始终同一风速'],'link.mode_desc.1':['Faster as air gets worse','空气越差风速越高'],'link.mode_desc.2':['Hold a target level','维持在目标值'],
 'link.fixed':['Speed','风速'],'link.lin_pm_a':['PM2.5 at','PM2.5 为'],'link.lin_hcho_a':['Formaldehyde at','甲醛为'],'link.lin_b':['→','时风速'],'link.lin_c':[', at',' ；为'],
@@ -261,7 +266,7 @@ const D={
 'link.on_rule':['Start automatically','自动开启'],'link.on_desc':['Turn on when air gets worse','空气变差时开启'],'link.off_rule':['Stop automatically','自动关闭'],'link.off_desc':['Turn off when air is clean','空气变好时关闭'],
 'link.watch':['Watch','监测'],'link.any':['Any','任一满足'],'link.all':['All','全部满足'],'link.above':['above','高于'],'link.below':['below','低于'],
 'link.hyst_warn':['The stop level should be lower than the start level.','关闭阈值应低于启动阈值。'],
-'link.statistic':['With several M1','多台 M1 时取'],'link.debounce':['Condition must last','条件持续'],'link.min_switch':['Minimum run/idle time','最短运行／待机时间'],
+'link.statistic':["With several sensors", "多台传感器时取"],'link.debounce':['Condition must last','条件持续'],'link.min_switch':['Minimum run/idle time','最短运行／待机时间'],
 'link.stat.0':['Average','平均值'],'link.stat.1':['Highest','最高值'],'link.stat.2':['Lowest','最低值'],'link.stat.3':['Median (more than 3)','中位数（多于 3 台）'],'link.stat.4':['Average without extremes','去掉最高最低后平均'],'link.stat.5':['First available in list','按列表顺序故障切换'],
 /* Schedules / night */
 'fx.speed':['Animation speed','变化速度'],'fx.slow':['Slow','慢'],'fx.fast':['Fast','快'],
@@ -281,6 +286,7 @@ const D={
 'night.light':['Dim the light ring','调暗灯环'],'night.light_desc':['Cap brightness, 0 turns it off','限制亮度，0 为关闭'],'night.light_max':['Max brightness','亮度上限'],
 'night.block_t':['Don’t auto-start','禁止自动开启'],'night.block_desc':['Auto control cannot turn the purifier on','自动调速不会开启净化器'],
 'night.fan_cap':['Fan ≤ {p}%','风速 ≤ {p}%'],'night.light_cap':['Light ≤ {p}%','灯光 ≤ {p}%'],'night.light_off':['Light off','灯光关闭'],'night.block':['No auto-start','禁止自动开启'],'night.add_btn':['Add period','添加'],
+'daikin.ha':['Home Assistant discovers available sensors automatically.','Home Assistant 会自动发现可用传感器。'],'daikin.ota':['Choose this project’s signed DAIKIN OTA package.','请选择本项目的 DAIKIN 签名 OTA 包。'],'daikin.button':['Hold the rear button for five seconds to open the setup hotspot.','长按背面按钮五秒可开启配网热点。'],
 /* M1 */
 'm1.pressure':['Pressure','气压'],'m1.overall':['Air quality','空气质量'],'m1.v_excellent':['Excellent','优'],'m1.v_good':['Good','良好'],'m1.v_fair':['Fair','一般'],'m1.v_poor':['Poor','较差'],
 'm1.all_ok':['All readings are in range','各项读数均在适宜范围'],'m1.no_data':['No data','暂无数据'],'m1.stale':['Data is out of date','数据已过期'],
