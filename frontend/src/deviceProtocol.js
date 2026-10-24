@@ -1,7 +1,7 @@
 export const requestId = () => Array.from(crypto.getRandomValues(new Uint8Array(16)), b=>b.toString(16).padStart(2,"0")).join("");
 export const userKey = username => "u_" + [...new TextEncoder().encode(username)].map(b => b.toString(16).padStart(2,"0")).join("");
 export const deviceKey = d => d.namespace === "account" ? `account:${d.username}:${d.mqtt_username || d.username}:${d.mac}` : d.mac;
-export const modelName = (model) => String(model).toUpperCase();
+export const modelName = (model) => model==='daikin'?'DAIKIN BRY88AX151K':String(model).toUpperCase();
 export function normalizeMAC(value) {
   const s = String(value || "").trim();
   if (
@@ -18,7 +18,7 @@ export function deviceEntry(value) {
   const model = d.model || "tc1";
   const version = d.version || "v2";
   if (
-    !["tc1", "m1", "a1"].includes(model) ||
+    !["tc1", "m1", "a1", "daikin"].includes(model) ||
     !(model === "tc1"
       ? ["v1", "v2"].includes(version)
       : version === "v2")

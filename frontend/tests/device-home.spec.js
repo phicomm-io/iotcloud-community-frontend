@@ -1,9 +1,9 @@
 import {test,expect} from '@playwright/test';
 test('product home components share platform design and expose full settings',async({page})=>{
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
- await page.addInitScript(()=>localStorage.setItem('iotcloud.devices.'+encodeURIComponent(`${location.protocol==='https:'?'wss':'ws'}://${location.host}/mqtt`)+'/',JSON.stringify(['tc1','m1','a1'].map((model,i)=>({model,mac:'aabbccddee0'+i,version:'v2'})))));
+ await page.addInitScript(()=>localStorage.setItem('iotcloud.devices.'+encodeURIComponent(`${location.protocol==='https:'?'wss':'ws'}://${location.host}/mqtt`)+'/',JSON.stringify(['tc1','m1','a1','daikin'].map((model,i)=>({model,mac:'aabbccddee0'+i,version:'v2'})))));
  await page.goto('/#/guest');
- for(const model of ['TC1','M1','A1']){
+ for(const model of ['TC1','M1','A1','DAIKIN']){
   await page.locator('.device-select').filter({hasText:model}).click();
   const home=page.frameLocator('iframe');
   await expect(home.locator('#banners')).toContainText('连接已中断',{timeout:15000});

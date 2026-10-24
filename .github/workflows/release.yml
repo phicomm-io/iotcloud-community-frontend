@@ -33,6 +33,7 @@ jobs:
       - run: NODE_PATH=frontend/node_modules node tests/test_a1_countdown.cjs
       - run: NODE_PATH=frontend/node_modules node tests/test_a1_filter.cjs
       - run: NODE_PATH=frontend/node_modules node tests/test_a1_auto.cjs
+      - run: NODE_PATH=frontend/node_modules node tests/test_daikin.cjs
       - run: NODE_PATH=frontend/node_modules node tests/test_m1_pressure.cjs
       - run: python3 -m unittest discover -s tests -p 'test_*.py'
       - name: Test minified device pages
@@ -46,6 +47,7 @@ jobs:
           node tests/test_a1_filter.cjs
           node tests/test_a1_auto.cjs
           node tests/test_m1_co2.cjs
+          node tests/test_daikin.cjs
           node tests/test_m1_pressure.cjs
       - run: python3 tools/build_release.py
       - run: npx --prefix frontend playwright install --with-deps chromium webkit

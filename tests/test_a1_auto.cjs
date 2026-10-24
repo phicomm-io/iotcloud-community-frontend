@@ -38,7 +38,7 @@ test('A1 hysteresis settings validate and save through the shared local/platform
  try{
   w.TextEncoder=TextEncoder;w.scrollTo=()=>{};w.setTimeout=()=>0;
   const writes=[],config={revision:10,enabled:1,mode:2,metrics:3,hysteresis_enabled:0,target_pm:35,on_pm:50,target_hcho:.08,on_hcho:.1,min_speed:20,max_speed:80,fallback_speed:30,statistic:0,debounce_seconds:15,min_switch_seconds:60,kp:20,ki:.02,kd:0};
-  w.fetch=async(url,options)=>{const req=JSON.parse(options.body);writes.push(req);let data={};if(req.action==='linkage.get')data={...config};if(req.action==='linkage.set'){assert.equal(req.params.revision,config.revision,'save must use latest acknowledged revision');config.revision++;data={revision:config.revision};}return {ok:true,json:async()=>({code:'ok',data})};};
+  w.fetch=async(url,options)=>{const req=JSON.parse(options.body);writes.push(req);let data={};if(req.action==='binding.status.get')data={average:{valid:true,fields:{pm25:true,formaldehyde:true}}};if(req.action==='linkage.get')data={...config};if(req.action==='linkage.set'){assert.equal(req.params.revision,config.revision,'save must use latest acknowledged revision');config.revision++;data={revision:config.revision};}return {ok:true,json:async()=>({code:'ok',data})};};
   const scripts=[...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m=>m[1]);
   scripts.forEach((source,i)=>{if(i===scripts.length-1){w.UI.start=dev=>{w.UI.device=dev;w.UI.pages=dev.pages;};w.UI.reload=async()=>w.UI.state;}vm.runInContext(source,dom.getInternalVMContext());});
   w.I18N.set('en');w.UI.caps={actions:['fan.mode.set']};
@@ -71,7 +71,7 @@ test('A1 optional CO2 choices, thresholds and absent/stale capability',async()=>
   w.TextEncoder=TextEncoder;w.scrollTo=()=>{};w.setTimeout=()=>0;
   const writes=[],config={revision:1,enabled:1,mode:1,metrics:1,hysteresis_enabled:1,target_co2:1000,on_co2:1500,low_co2:800,high_co2:2000,min_speed:0,max_speed:80,fallback_speed:23};
   let supported=false;
-  w.fetch=async(url,options)=>{const req=JSON.parse(options.body);writes.push(req);let data={};if(req.action==='linkage.get')data={...config};if(req.action==='binding.status.get')data={average:{co2_supported:supported}};if(req.action==='linkage.set')data={revision:++config.revision};return {ok:true,json:async()=>({code:'ok',data})};};
+  w.fetch=async(url,options)=>{const req=JSON.parse(options.body);writes.push(req);let data={};if(req.action==='linkage.get')data={...config};if(req.action==='binding.status.get')data={average:{valid:true,co2_valid:supported,fields:{pm25:true,formaldehyde:false,co2:supported}}};if(req.action==='linkage.set')data={revision:++config.revision};return {ok:true,json:async()=>({code:'ok',data})};};
   const scripts=[...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m=>m[1]);
   scripts.forEach((source,i)=>{if(i===scripts.length-1){w.UI.start=dev=>{w.UI.device=dev;w.UI.pages=dev.pages;};w.UI.reload=async()=>w.UI.state;}vm.runInContext(source,dom.getInternalVMContext());});
   w.I18N.set('en');w.UI.caps={actions:['fan.mode.set']};
@@ -88,7 +88,7 @@ test('A1 optional CO2 choices, thresholds and absent/stale capability',async()=>
   const count=writes.filter(r=>r.action==='linkage.set').length;
   change('CO₂ start threshold',900);page.querySelector('.form-actions button').click();for(let i=0;i<3;i++)await flush();
   assert.equal(writes.filter(r=>r.action==='linkage.set').length,count);
-  supported=false;config.metrics=4;await w.UI.pages.linkage.show();assert.ok(co2Button(),'configured CO2 remains editable after sensor loss');
+  supported=false;config.metrics=4;await w.UI.pages.linkage.show();assert.equal(co2Button(),undefined,'missing measurement hides choices while retaining saved rules');assert.equal(config.metrics,4);
   delete config.target_co2;config.metrics=1;await w.UI.pages.linkage.show();assert.equal(co2Button(),undefined,'older A1 firmware hides CO2');
  }finally{dom.window.close();}
 });

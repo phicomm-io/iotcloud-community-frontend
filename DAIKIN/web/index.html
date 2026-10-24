@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta name="referrer" content="no-referrer"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DAIKIN BRY88AX151K</title>
+<style>/* @include style.css */</style>
+</head>
+<body>
+<main id="homePage" class="home">
+ <section class="card verdict" id="verdict">
+  <div class="grow"><div class="eyebrow" data-i18n="m1.overall"></div><div class="stat" id="overall">—</div><p class="help" id="overallWhy"></p></div>
+  <div class="fresh"><span class="dot live" id="freshDot"></span><span id="freshText" class="help"></span></div>
+ </section>
+ <div class="metrics sensor-metrics" id="metrics" tabindex="0" data-i18n-aria="daikin.measurements"></div>
+ <div class="grid">
+  <section class="card">
+   <label class="switch"><div class="text"><b data-i18n="daikin.indicator"></b><span data-i18n="daikin.indicator_hint"></span></div><input id="indicator" type="checkbox"></label>
+   <div class="indicator-lights" id="indicatorLights"></div>
+   <p class="help indicator-wifi" id="indicatorWifi"></p>
+  </section>
+  <section class="card" id="peerCard"></section>
+ </div>
+</main>
+
+<div id="settingsPage" class="settings" hidden>
+ <nav class="side" id="side" aria-label="Settings"></nav>
+ <div id="pages">
+  <div data-settings-page="device" class="stack">
+   <div><h2 class="page-title" data-i18n="nav.general"></h2><p class="page-lead" data-i18n="gen.lead"></p></div>
+   <div data-slot="name"></div>
+
+   <div data-slot="auth"></div>
+  </div>
+  <div data-settings-page="binding" class="stack"></div>
+ </div>
+</div>
+
+<footer class="copyright">Copyright &copy; Phicomm Community · <a href="https://github.com/phicomm-io/phicomm-community-firmware" target="_blank" rel="noopener noreferrer">固件仓库</a> · <a href="https://phicomm-io.github.io" target="_blank" rel="noopener noreferrer">项目网站</a></footer>
+<script>/* @include i18n.js */</script>
+<script>/* @include service.js */</script>
+<script>/* @include provision.js */</script>
+<script>/* @include ui.js */</script>
+<script>/* @include automation.js */</script>
+<script>/* @include sensor.js */</script>
+<script>/* @include page.js */</script>
+</body>
+</html>

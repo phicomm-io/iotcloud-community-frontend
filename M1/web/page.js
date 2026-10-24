@@ -30,12 +30,7 @@ window.addEventListener('pageshow',renderPressure);
 
 /* ---------- Home: readings ---------- */
 const tiles={};
-$('metrics').append(...METRICS.map(k=>{
- const value=h('span',{class:'num'}),badge=h('span',{class:'badge'}),scale=h('div');
- tiles[k]={value,badge,scale};
- return h('section',{class:'card metric'},h('div',{class:'metric-head'},h('span',{class:'label','data-i18n':'m.'+k},t('m.'+k)),badge),
-  h('div',{class:'stat'},value,h('small',{},UI.AIR[k].unit)),scale);
-}));
+$('metrics').append(...METRICS.map(k=>{const el=SensorUI.tile(k,UI.AIR[k].unit);tiles[k]=el;return el.card;}));
 // A serial number proves identification; bus initialization alone does not.
 let lastCo2=null,lastCo2Serial='';
 const co2Scale=h('div');
@@ -95,10 +90,7 @@ function renderHome(s){
  if(document.activeElement&&document.activeElement.parentNode!==screen)screen.set(s.brightness_requested);
 }
 function peerSessionRows(){
- const peers=bindingStatus.peers||[];
- return peers.map(p=>h('div',{class:'item binding-peer'},icon('fan'),
-  h('div',{class:'grow'},h('b',{class:'num'},'A1 · '+prettyMac(p.mac)),h('span',{},p.ip||'—')),
-  h('span',{class:'badge ok'},t('m1.session_ok'))));
+ return SensorUI.peers(bindingStatus);
 }
 function renderPeers(){
  const rows=peerSessionRows(),capacity=Number(bindingStatus.max_sessions)||4;

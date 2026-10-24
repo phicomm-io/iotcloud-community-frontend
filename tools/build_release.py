@@ -39,7 +39,7 @@ def main():
     env = dict(os.environ, VITE_DEMO='1')
     run('npm', '--prefix', 'frontend', 'run', 'build', env=env)
     shutil.copytree(ROOT / 'frontend/dist', out / 'demos/platform')
-    for model, source in [('tc1', 'TC1/http_server/web/index.html'), ('m1', 'M1/web/index.html'), ('a1', 'A1/web/index.html')]:
+    for model, source in [('tc1', 'TC1/http_server/web/index.html'), ('m1', 'M1/web/index.html'), ('a1', 'A1/web/index.html'), ('daikin', 'DAIKIN/web/index.html')]:
         data = render_page(ROOT / source, minify=True)
         device = out / 'devices' / model
         device.mkdir(parents=True)
@@ -68,7 +68,7 @@ def main():
         shutil.copyfile(ROOT / name, dest)
     hashes = {str(p.relative_to(out)): hashlib.sha256(p.read_bytes()).hexdigest()
               for p in sorted(out.rglob('*')) if p.is_file()}
-    manifest = dict(schema=1, repository='phicomm-io/phicomm-community-frontend', commit=commit, features=['bootstrap-ui', 'local-console'], files=hashes)
+    manifest = dict(schema=1, repository='phicomm-io/phicomm-community-frontend', commit=commit, features=['bootstrap-ui', 'local-console', 'sensor-providers', 'daikin'], files=hashes)
     (out / 'manifest.json').write_text(json.dumps(manifest, indent=2, sort_keys=True) + '\n')
     archive = ROOT / 'build/frontend.tar.gz'
     # No wall-clock timestamps or machine identities in the archive.

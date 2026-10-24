@@ -2,7 +2,7 @@ from pathlib import Path
 import subprocess, tempfile, sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "common/web"))
 from page import render_page
-for product in ('A1', 'M1', 'TC1'):
+for product in ('A1', 'M1', 'TC1', 'DAIKIN'):
     html = render_page(Path(product) / ('http_server/web/index.html' if product == 'TC1' else 'web/index.html')).decode()
     scripts = html.split('<script>')[1:]
     for source in scripts:
@@ -23,4 +23,4 @@ for product in ('A1', 'M1', 'TC1'):
         assert 'id="metrics"' in html and 'id="power"' not in html and 'id="tiles"' not in html
     if product == 'TC1':
         assert 'id="tiles"' in html and 'id="socketNamesForm"' in html and 'id="power"' not in html
-print('TC1, A1 and M1 embedded WebUI JavaScript syntax passed')
+print('TC1, A1, M1 and DAIKIN embedded WebUI JavaScript syntax passed')

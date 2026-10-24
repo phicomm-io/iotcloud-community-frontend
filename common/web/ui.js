@@ -124,12 +124,18 @@ function normalizeMac(v){const m=(v||'').replace(/[^0-9a-f]/gi,'').toLowerCase()
 function prettyMac(m){return (m||'').toUpperCase().replace(/(..)(?!$)/g,'$1:');}
 const clone=o=>JSON.parse(JSON.stringify(o));
 
-/* Air quality bands: PM2.5 per GB 3095, formaldehyde limit per GB/T 18883-2022,
+/* Particulate display bands follow HJ 633-2026 table 3 (not an AQI calculation):
+ * https://www.mee.gov.cn/ywgz/fgbz/bz/bzwb/jcffbz/202602/t20260225_1144441.shtml
+ * Formaldehyde limit per GB/T 18883-2022,
  * temperature and humidity comfort per the A1 light-segment defaults. */
 // CO2 ventilation reference: HSE using-co2-monitors (1000 / 1500 ppm).
 const AIR={
  co2:{unit:'ppm',max:2500,bands:[[1000,'comfort','ok'],[1500,'elevated','warn'],[Infinity,'ventilate','bad']]},
- pm25:{unit:'µg/m³',max:250,bands:[[35,'excellent','ok'],[75,'good','ok'],[115,'light','warn'],[150,'moderate','warn'],[250,'heavy','bad'],[Infinity,'severe','bad']]},
+ pm25:{unit:'µg/m³',max:250,bands:[[35,'excellent','ok'],[60,'good','ok'],[115,'light','warn'],[150,'moderate','warn'],[250,'heavy','bad'],[Infinity,'severe','bad']]},
+ pm10:{unit:'µg/m³',max:420,bands:[[50,'excellent','ok'],[120,'good','ok'],[250,'light','warn'],[350,'moderate','warn'],[420,'heavy','bad'],[Infinity,'severe','bad']]},
+ // Product ventilation reference, matching the DAIKIN indicator; not a health limit.
+ // MOX outputs are semiquantitative: https://sensirion.com/resource/application_note/output_mox_sensor
+ tvoc:{unit:'ppb',max:1000,bands:[[300,'reference','ok'],[Infinity,'ventilate','warn']]},
  formaldehyde:{unit:'mg/m³',max:0.2,bands:[[0.08,'pass','ok'],[0.1,'slight','warn'],[Infinity,'exceed','bad']]},
  temperature:{unit:'℃',min:0,max:40,bands:[[18,'cool','warn'],[26,'comfort','ok'],[Infinity,'warm','warn']]},
  humidity:{unit:'%',max:100,bands:[[40,'dry','warn'],[60,'comfort','ok'],[Infinity,'humid','warn']]}
@@ -402,7 +408,7 @@ function firmwarePage(dev){
   h('div',{class:'form-actions'},h('button',{class:'btn primary',type:'submit'},h('span',{i18n:'fw.upload'}))));
  const urlForm=h('form',{id:'urlForm',class:'stack',hidden:true},h('label',{class:'field'},h('span',{i18n:'fw.url'}),url),
   h('div',{class:'form-actions'},h('button',{class:'btn primary',type:'submit'},h('span',{i18n:'fw.download'}))));
- const picker=seg([['file','fw.tab_file'],['url','fw.tab_url']],v=>{fileForm.hidden=v!=='file';urlForm.hidden=v!=='url';});picker.set('file');
+ const picker=seg([['file','fw.tab_file'],['url','fw.tab_url']],v=>{fileForm.hidden=v!=='file';urlForm.hidden=v!=='url';});picker.set('file');picker.hidden=!UI.caps?.actions?.includes('ota.start');
  // Upload streams raw bytes; the request is synchronous up to send(), like the old page.
  let uploading=false;
  fileForm.addEventListener('submit',e=>{
