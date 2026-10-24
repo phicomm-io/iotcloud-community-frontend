@@ -1,6 +1,6 @@
 <script setup>
 import {computed, onBeforeUnmount, onMounted, ref} from 'vue';
-import {installation, requestInstallation} from '../installApp.js';
+import {installation, requestInstallation, confirmInstallation} from '../installApp.js';
 import {INSTALL_PREFERENCE_KEY, canOfferInstallation, readInstallPreference, saveInstallPreference} from '../installation.js';
 
 const props = defineProps({eligible: Boolean});
@@ -14,9 +14,11 @@ const showPromotion = computed(() => props.eligible && !handled.value
   && (nativeAvailable.value || installation.platform !== 'desktop')
   && canOfferInstallation(preference.value));
 const isIOS = computed(() => installation.platform === 'ios');
+const manualConfirmation = computed(() => !installation.standalone && !installation.installed
+  && !nativeAvailable.value && ['ios', 'android'].includes(installation.platform));
 
 function choose(choice) {
-  preference.value = saveInstallPreference(choice);
+  preference.value = choice === 'installed' ? confirmInstallation() : saveInstallPreference(choice);
   handled.value = true;
   close();
 }
@@ -77,13 +79,13 @@ defineExpose({open});
   <section v-if="showPromotion" class="install-promotion" aria-labelledby="install-promotion-title">
     <img :src="iconURL" alt="" width="40" height="40" />
     <div class="install-promotion-copy"><h2 id="install-promotion-title">把 IotCloud 添加到桌面</h2><p>下次点桌面图标，就能直接打开设备控制。</p></div>
-    <div class="install-promotion-actions"><button class="btn primary" type="button" @click="promote">添加到桌面</button><button class="btn ghost" type="button" @click="choose('later')">稍后提示</button><button class="btn ghost" type="button" @click="choose('never')">不再提示</button></div>
+    <div class="install-promotion-actions"><button class="btn primary" type="button" @click="promote">添加到桌面</button><button v-if="manualConfirmation" class="btn ghost" type="button" @click="choose('installed')">已经添加</button><button class="btn ghost" type="button" @click="choose('later')">稍后提示</button><button class="btn ghost" type="button" @click="choose('never')">不再提示</button></div>
   </section>
   <dialog ref="dialog" class="install-dialog" aria-labelledby="install-dialog-title" @close="closed" @click="backdrop">
     <header><img :src="iconURL" alt="" width="40" height="40" /><div><h2 id="install-dialog-title">添加到桌面</h2><p class="help">点桌面图标，快捷打开 IotCloud。</p></div><button class="btn ghost" type="button" aria-label="关闭安装说明" autofocus @click="close">关闭</button></header>
     <div class="install-guide">
       <p v-if="installation.standalone" role="status">当前已在独立窗口中打开，无需重复添加。</p>
-      <p v-else-if="installation.installed" role="status">已接受安装。图标就绪后，可从桌面或应用列表打开 IotCloud。</p>
+      <p v-else-if="installation.installed" role="status">已记录添加到桌面，可从桌面或应用列表打开 IotCloud。</p>
       <template v-else-if="installation.platform === 'in-app'">
         <h3>先在系统浏览器中打开</h3>
         <ol class="install-steps"><li><span class="install-step-icon" aria-hidden="true">···</span><div><b>打开右上角菜单</b><p>在微信等应用内，点击右上角的菜单按钮。</p></div></li><li><span class="install-step-icon" aria-hidden="true">↗</span><div><b>选择在浏览器中打开</b><p>iPhone 使用 Safari；Android 使用支持安装的浏览器。</p></div></li><li><span class="install-step-icon" aria-hidden="true">＋</span><div><b>再选择添加到桌面</b><p>打开 IotCloud 的设置，即可再次查看安装说明。</p></div></li></ol>
@@ -94,6 +96,7 @@ defineExpose({open});
           <h3>在 Safari 中添加</h3>
           <ol class="install-steps"><li><span class="install-step-icon" aria-hidden="true">1</span><div><b>用 Safari 打开当前页面</b><p>如果正在其他浏览器中，请先用 Safari 打开此地址。</p></div></li><li><span class="install-step-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" role="img" aria-label="分享图标"><path d="M12 15V3m-4 4 4-4 4 4M7 10H4v11h16V10h-3" /></svg></span><div><b>点击分享按钮</b><p>在浏览器工具栏或菜单中找到分享图标。</p></div></li><li><span class="install-step-icon" aria-hidden="true">＋</span><div><b>选择“添加到主屏幕”</b><p>如有“打开为网页 App”选项，请保持开启，再点“添加”。</p></div></li></ol>
           <p class="install-note">首次从桌面打开时，可能需要重新登录一次。</p>
+          <p class="install-note">添加后点击“已添加到桌面”，Safari 中将不再主动提示。</p>
         </template>
         <template v-else-if="installation.platform === 'android'">
           <h3>{{nativeAvailable ? '也可以使用浏览器菜单' : '通过浏览器菜单添加'}}</h3>
@@ -107,7 +110,7 @@ defineExpose({open});
       </template>
       <p v-if="message" class="install-note" role="status">{{message}}</p>
     </div>
-    <footer><p class="help">{{preference.never ? '已关闭主动提示，仍可随时从设置查看。' : '稍后提示将延后 7 天；设置中始终保留入口。'}}</p><div><button class="btn ghost" type="button" @click="choose('never')">不再提示</button><button class="btn" type="button" @click="choose('later')">稍后提示</button><button class="btn primary" type="button" @click="close">完成</button></div></footer>
+    <footer><p class="help">{{preference.never || preference.installed ? '已关闭主动提示，仍可随时从设置查看。' : '稍后提示将延后 7 天；设置中始终保留入口。'}}</p><div><button class="btn ghost" type="button" @click="choose('never')">不再提示</button><button class="btn" type="button" @click="choose('later')">稍后提示</button><button v-if="manualConfirmation" class="btn primary" type="button" @click="choose('installed')">已添加到桌面</button><button v-else class="btn primary" type="button" @click="close">完成</button></div></footer>
   </dialog>
 </template>
 

@@ -22,6 +22,14 @@ test('invalid or unavailable storage does not break the page or its current-visi
   const blocked = {getItem() { throw Error('blocked'); }, setItem() { throw Error('blocked'); }};
   assert.deepEqual(readInstallPreference(blocked), {});
   assert.equal(canOfferInstallation(saveInstallPreference('never', blocked)), false);
+  assert.equal(canOfferInstallation(saveInstallPreference('installed', blocked)), false);
+});
+
+test('confirmed installation suppresses reminders across future visits', () => {
+  const s = storage();
+  saveInstallPreference('installed', s);
+  assert.deepEqual(readInstallPreference(s), {installed: true});
+  assert.equal(canOfferInstallation(readInstallPreference(s), Date.now() + 365 * 86400000), false);
 });
 
 test('current standalone display and Apple standalone flag are independent of user agent', () => {

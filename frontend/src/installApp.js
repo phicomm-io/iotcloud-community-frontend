@@ -1,5 +1,5 @@
 import {shallowReactive} from 'vue';
-import {isStandalone, installationPlatform} from './installation.js';
+import {isStandalone, installationPlatform, readInstallPreference, saveInstallPreference} from './installation.js';
 
 export const installation = shallowReactive({standalone: false, installed: false, platform: 'desktop', prompt: null});
 let registered = false;
@@ -7,13 +7,18 @@ let registered = false;
 export function registerInstallPrompt() {
   if (registered || import.meta.env.VITE_DEMO === '1') return;
   registered = true;
+  installation.installed = readInstallPreference().installed === true;
   const update = () => {
     installation.standalone = isStandalone();
     installation.platform = installationPlatform();
+    if (installation.standalone && !installation.installed) confirmInstallation();
   };
   update();
-  window.matchMedia('(display-mode: standalone)').addEventListener('change', update);
+  const displayMode = window.matchMedia('(display-mode: standalone)');
+  if (displayMode.addEventListener) displayMode.addEventListener('change', update);
+  else displayMode.addListener(update);
   window.addEventListener('pageshow', update);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) update(); });
   window.addEventListener('beforeinstallprompt', event => {
     event.preventDefault();
     installation.prompt = event;
@@ -21,10 +26,15 @@ export function registerInstallPrompt() {
     update();
   });
   window.addEventListener('appinstalled', () => {
-    installation.prompt = null;
-    installation.installed = true;
+    confirmInstallation();
     update();
   });
+}
+
+export function confirmInstallation() {
+  installation.prompt = null;
+  installation.installed = true;
+  return saveInstallPreference('installed');
 }
 
 export async function requestInstallation() {
@@ -34,6 +44,6 @@ export async function requestInstallation() {
   installation.prompt = null;
   await prompt.prompt();
   const choice = await prompt.userChoice;
-  if (choice.outcome === 'accepted') installation.installed = true;
+  if (choice.outcome === 'accepted') confirmInstallation();
   return choice.outcome;
 }
