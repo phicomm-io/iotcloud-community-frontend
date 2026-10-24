@@ -8,16 +8,35 @@ const tvocHeading=h('div',{class:'label'});tiles.tvoc.label.before(tvocHeading);
 tvocHeading.append(tiles.tvoc.label,h('small',{class:'metric-reference',i18n:'m.tvoc_reference'}));
 let snapshot=null,receivedAt=0,status={peers:[]};
 function fresh(field,elapsed){return field?.valid===true&&typeof field.value==='number'&&Number.isFinite(field.value)&&typeof field.age_ms==='number'&&field.age_ms+elapsed<20000;}
+const lightMetrics=[['co2','ppm',10000],['tvoc','ppb',65535],['pm','µg/m³',10000],['formaldehyde','mg/m³',5]];
+const defaultRules=()=>({pm_source:'pm25',...Object.fromEntries([['co2',1000],['tvoc',300],['pm',50],['formaldehyde',.1]].map(([key,threshold])=>[key,[{threshold,op:'gt',mode:'on'}]]))});
+function measurementMode(s,key,elapsed){
+ const field=s.sensors?.[key];if(!s.indicator_enabled||!fresh(field,elapsed))return 'off';
+ const rules=(s.indicator_rules||defaultRules())[['pm25','pm10'].includes(key)?'pm':key]||[];
+ const match=rules.filter(r=>({gt:field.value>r.threshold,gte:field.value>=r.threshold,lt:field.value<r.threshold,lte:field.value<=r.threshold})[r.op]).sort((a,b)=>b.threshold-a.threshold)[0];
+ return match?.mode||'off';
+}
+const indicatorViews=[];
 function renderIndicators(s,elapsed){
  const voc=s.sensors?.formaldehyde?'formaldehyde':'tvoc';
- $('indicatorLights').replaceChildren(...[['pm25',50,'µg/m³'],['co2',1000,'ppm'],[voc,voc==='tvoc'?300:.1,voc==='tvoc'?'ppb':'mg/m³']].map(([key,threshold,unit])=>{
-  const field=s.sensors?.[key],valid=fresh(field,elapsed),active=!!s.indicator_enabled&&valid&&field.value>threshold;
-  return h('div',{class:'indicator-light','data-indicator':key,'data-active':String(active)},
-   h('div',{class:'row'},h('span',{class:'dot '+(active?'warn':'')}),h('b',{},key==='co2'?'CO₂':t('m.'+key))),
-   h('span',{class:'indicator-state'},t(!s.indicator_enabled?'daikin.light_disabled':!valid?'m1.no_data':active?'daikin.light_on':'daikin.light_idle')),
-   h('small',{},'> '+threshold+' '+unit));
- }));
- $('indicatorWifi').textContent=t(s.wifi_connected?'daikin.wifi_ok':'daikin.wifi_lost');
+ const pm=s.indicator_rules?.pm_source||'pm25';
+ const rank={off:0,on:1,slow:2,fast:3};
+ [['pm',[pm],t('m.'+pm)],['co2',['co2'],'CO₂'],[voc,s.indicator_rules_custom?['tvoc','formaldehyde']:[voc],s.sensors?.formaldehyde?'TVOC / '+t('m.formaldehyde'):'TVOC']].forEach(([key,sources,label],index)=>{
+  const valid=sources.some(k=>fresh(s.sensors?.[k],elapsed));
+  const mode=sources.map(k=>measurementMode(s,k,elapsed)).reduce((a,b)=>rank[b]>rank[a]?b:a,'off'),active=mode!=='off';
+  let view=indicatorViews[index];
+  if(!view){
+   const dot=h('span',{class:'dot'}),title=h('b'),state=h('span',{class:'indicator-state'}),hint=h('small');
+   const root=h('div',{class:'indicator-light'},h('div',{class:'row'},dot,title),state,hint);
+   $('indicatorLights').append(root);view=indicatorViews[index]={root,dot,title,state,hint};
+  }
+  // Retain the dot across polling so slow blinks can complete their cycle.
+  view.root.dataset.indicator=key;view.root.dataset.mode=mode;view.root.dataset.active=String(active);
+  view.dot.className='dot '+(active?'warn':'');view.title.textContent=label;
+  view.state.textContent=t(!s.indicator_enabled?'daikin.light_disabled':!valid?'m1.no_data':'daikin.mode.'+mode);
+  view.hint.textContent=sources.map(k=>t('m.'+k)).join(' / ');
+ });
+ $('indicatorWifi').textContent=s.system_indicator?t('daikin.system.'+s.system_indicator):t(s.wifi_connected?'daikin.wifi_ok':'daikin.wifi_lost');
 }
 function render(s){
  if(snapshot!==s){snapshot=s;receivedAt=performance.now();}
@@ -36,6 +55,7 @@ function render(s){
  $('overallWhy').textContent=t(!count?'m1.stale_hint':'m1.all_ok');if(why.length)$('overallWhy').textContent=why.join(' · ');
  $('freshDot').className='dot '+(count?'ok live':'bad');$('freshText').textContent=t(count?'m1.updated':'m1.stale',{n:Math.floor(elapsed/1000)});
  $('indicator').checked=!!s.indicator_enabled;
+ ruleEditor.status(s);
  renderIndicators(s,elapsed);
 }
 function renderPeers(){
@@ -43,9 +63,71 @@ function renderPeers(){
  $('peerCard').replaceChildren(h('div',{class:'card-head'},h('div',{},h('h2',{i18n:'m1.linked'}),h('p',{class:'help',i18n:'m1.linked_desc'})),h('span',{class:'badge'},count+' / '+(status.max_sessions||4))),rows.length?h('div',{class:'list'},rows):h('div',{class:'empty'},t('m1.linked_empty')));
  const page=document.querySelector('[data-settings-page="binding"]');page.replaceChildren(UI.pageHead('nav.permission','m1.perm_lead'),h('section',{class:'card'},...SensorUI.peers(status)),UI.info('m1.perm_hint'));
 }
+function indicatorSettings(){
+ let dirty=false,lastRules='',saving=false,supported=false;
+ const groups=new Map(),box=$('indicatorSettings');
+ const pmSource=h('select',{id:'indicatorPmSource'},['pm25','pm10'].map(value=>h('option',{value,i18n:'m.'+value})));
+ pmSource.onchange=()=>{dirty=true;const title=groups.get('pm').group.querySelector('h3 span');title.dataset.i18n='m.'+pmSource.value;title.textContent=t(title.dataset.i18n);};
+ const enabled=UI.switchRow('indicatorSettingsEnabled','daikin.indicator','daikin.indicator_hint');
+ enabled.querySelector('input').onchange=e=>run(e.target,()=>UI.control('indicator.set',{enabled:e.target.checked},{indicator_enabled:e.target.checked}));
+ const form=h('form',{id:'indicatorRulesForm',class:'stack'}),notice=h('p',{class:'help',i18n:'daikin.rules_upgrade'});
+ box.append(h('h2',{i18n:'daikin.rules'}),enabled,h('p',{class:'help',i18n:'daikin.rules_hint'}),h('p',{class:'help',i18n:'daikin.shared_hint'}),notice,form,
+  h('div',{},h('h3',{i18n:'daikin.system_light'}),h('p',{class:'help',i18n:'daikin.system_hint'})));
+ for(const [key,unit,max] of lightMetrics){
+  const list=h('div',{class:'indicator-rule-list'}),empty=h('p',{class:'help',i18n:'daikin.no_rules'});
+  const add=h('button',{type:'button',class:'btn',i18n:'daikin.add_rule',onclick:()=>{append({threshold:0,op:'gte',mode:'on'});dirty=true;}});
+  const group=h('section',{class:'indicator-rule-group','data-rule-metric':key},h('h3',{},h('span',{i18n:'m.'+(key==='pm'?pmSource.value:key)}),' · '+unit),
+   key==='pm'?h('label',{class:'field'},h('span',{i18n:'daikin.pm_source'}),pmSource):null,list,empty,add);
+  function update(){add.disabled=!supported||saving||list.children.length>=2;empty.hidden=list.children.length>0;}
+  function append(rule){
+   if(list.children.length>=2)return;
+   const label=(text,input)=>h('label',{class:'field'},h('span',{i18n:text}),input);
+   const op=h('select',{'data-rule-op':true},[['gt','>'],['gte','≥'],['lt','<'],['lte','≤']].map(([value,text])=>h('option',{value},text)));op.value=rule.op;
+   const threshold=h('input',{type:'number',required:true,min:0,max,step:'any',value:rule.threshold,'data-rule-threshold':true});
+   const mode=h('select',{'data-rule-mode':true},['on','off','fast','slow'].map(value=>h('option',{value,i18n:'daikin.mode.'+value})));mode.value=rule.mode;
+   const row=h('div',{class:'indicator-rule'},label('daikin.compare',op),label('daikin.threshold',threshold),label('daikin.pattern',mode),
+    h('button',{type:'button',class:'btn ghost',i18n:'daikin.remove_rule',onclick:()=>{row.remove();dirty=true;update();}}));
+   row.addEventListener('input',()=>{dirty=true;});row.addEventListener('change',()=>{dirty=true;});list.append(row);update();
+  }
+  groups.set(key,{group,list,append,update});form.append(group);
+ }
+ const save=h('button',{type:'submit',class:'btn primary',i18n:'common.save',disabled:true});form.append(h('div',{class:'form-actions'},save));
+ const comparable=rules=>JSON.stringify([rules.pm_source,...lightMetrics.map(([key])=>(rules[key]||[]).map(({threshold,op,mode})=>({threshold,op,mode})))]);
+ UI.onSubmit(form,async()=>{
+  if(!supported||saving)return;
+  const values={pm_source:pmSource.value};
+  for(const [key,,max] of lightMetrics){
+   values[key]=[...groups.get(key).list.children].map(row=>({threshold:Number(row.querySelector('[data-rule-threshold]').value),op:row.querySelector('[data-rule-op]').value,mode:row.querySelector('[data-rule-mode]').value}));
+   if(values[key].some(r=>!Number.isFinite(r.threshold)||r.threshold<0||r.threshold>max)||values[key].length===2&&values[key][0].threshold===values[key][1].threshold)throw Error(t('daikin.rules_invalid'));
+  }
+  saving=true;sync(snapshot||{});
+  let confirmed;
+  try{
+   await command('config.set',{section:'indicator_rules',values});
+   confirmed=await UI.reload({full:true});
+   if(!confirmed?.indicator_rules||comparable(confirmed.indicator_rules)!==comparable(values))throw Error(t('daikin.rules_unconfirmed'));
+   dirty=false;lastRules='';
+  }finally{saving=false;sync(confirmed||snapshot||{});}
+ },'common.saved');
+ function sync(s){
+  enabled.querySelector('input').checked=!!s.indicator_enabled;
+  supported=s.indicator_rules_supported===true&&!!s.indicator_rules;notice.hidden=supported;save.disabled=!supported||saving;
+  pmSource.disabled=!supported||saving;
+  const rules=s.indicator_rules||{},fingerprint=JSON.stringify(rules);
+  if(supported&&!dirty&&fingerprint!==lastRules){
+   pmSource.value=rules.pm_source||'pm25';
+   const title=groups.get('pm').group.querySelector('h3 span');title.dataset.i18n='m.'+pmSource.value;title.textContent=t(title.dataset.i18n);
+   for(const [key] of lightMetrics){const group=groups.get(key);group.list.replaceChildren();for(const rule of rules[key]||[])group.append(rule);group.update();}
+   lastRules=fingerprint;
+  }
+  for(const [key,group] of groups){group.group.hidden=key==='formaldehyde'&&!s.sensors?.formaldehyde;for(const input of group.list.querySelectorAll('input,select,button'))input.disabled=!supported||saving;group.update();}
+ }
+ return {status:sync};
+}
+const ruleEditor=indicatorSettings();
 $('indicator').onchange=()=>run($('indicator'),()=>UI.control('indicator.set',{enabled:$('indicator').checked},{indicator_enabled:$('indicator').checked}));
 UI.start({model:'DAIKIN BRY88AX151K',kindKey:'daikin.kind',icon:'air',factoryReset:true,mqttHostMax:127,interval:2000,
- otaName:'phicomm_daikin.ota.bin.signed',haHintKey:'daikin.ha',otaHintKey:'daikin.ota',buttonHintKey:'daikin.button',
+ otaName:'daikin_BRY88AX151K.ota.bin.signed',haHintKey:'daikin.ha',otaHintKey:'daikin.ota',buttonHintKey:'daikin.button',
  groups:[['grp.network',['network','mqtt']],['grp.device',['device','binding']],['grp.system',['firmware','diagnostics','maintenance']]],
  nav:{network:'nav.wifi',mqtt:'nav.mqtt',device:'nav.general',binding:'nav.permission',firmware:'nav.firmware',diagnostics:'nav.diagnostics',maintenance:'nav.maintenance'},
  pages:{device:{},binding:{show:async()=>{status=await api('/binding/status');renderPeers();}}},

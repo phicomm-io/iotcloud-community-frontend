@@ -17,6 +17,7 @@ export function installationPlatform(navigatorObject = navigator) {
 export function readInstallPreference(storage) {
   try {
     const value = JSON.parse((storage || globalThis.localStorage).getItem(INSTALL_PREFERENCE_KEY) || 'null');
+    if (value?.installed === true) return {installed: true};
     if (value?.never === true) return {never: true};
     if (Number.isFinite(value?.remindAt) && value.remindAt > 0) return {remindAt: value.remindAt};
   } catch { /* A disabled or invalid store must not break device controls. */ }
@@ -24,11 +25,12 @@ export function readInstallPreference(storage) {
 }
 
 export function canOfferInstallation(preference, now = Date.now()) {
-  return preference.never !== true && !(preference.remindAt > now);
+  return preference.installed !== true && preference.never !== true && !(preference.remindAt > now);
 }
 
 export function saveInstallPreference(choice, storage, now = Date.now()) {
-  const value = choice === 'never' ? {never: true} : {remindAt: now + INSTALL_REMINDER_DELAY};
+  const value = choice === 'installed' ? {installed: true}
+    : choice === 'never' ? {never: true} : {remindAt: now + INSTALL_REMINDER_DELAY};
   try { (storage || globalThis.localStorage).setItem(INSTALL_PREFERENCE_KEY, JSON.stringify(value)); } catch { /* Still apply for this visit. */ }
   return value;
 }
