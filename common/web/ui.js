@@ -133,7 +133,7 @@ const AIR={
  co2:{unit:'ppm',max:2500,bands:[[1000,'comfort','ok'],[1500,'elevated','warn'],[Infinity,'ventilate','bad']]},
  pm25:{unit:'µg/m³',max:250,bands:[[35,'excellent','ok'],[60,'good','ok'],[115,'light','warn'],[150,'moderate','warn'],[250,'heavy','bad'],[Infinity,'severe','bad']]},
  pm10:{unit:'µg/m³',max:420,bands:[[50,'excellent','ok'],[120,'good','ok'],[250,'light','warn'],[350,'moderate','warn'],[420,'heavy','bad'],[Infinity,'severe','bad']]},
- // Product ventilation reference, matching the DAIKIN indicator; not a health limit.
+ // Product ventilation reference, independent of custom indicator rules; not a health limit.
  // MOX outputs are semiquantitative: https://sensirion.com/resource/application_note/output_mox_sensor
  tvoc:{unit:'ppb',max:1000,bands:[[300,'reference','ok'],[Infinity,'ventilate','warn']]},
  formaldehyde:{unit:'mg/m³',max:0.2,bands:[[0.08,'pass','ok'],[0.1,'slight','warn'],[Infinity,'exceed','bad']]},

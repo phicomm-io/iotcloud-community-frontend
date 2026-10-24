@@ -301,6 +301,17 @@ pre{overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;bac
 .indicator-state{font-size:12px}
 .indicator-light small{margin-top:auto;color:var(--muted);font-size:11px}
 .indicator-wifi{margin:14px 0 0;font-size:12px}
+.indicator-rule-group{padding:16px 0;border-top:1px solid var(--border)}
+.indicator-rule-group h3{margin:0 0 12px;font-size:15px}
+.indicator-rule-list{display:grid;gap:12px;margin-bottom:12px}
+.indicator-rule{display:grid;grid-template-columns:minmax(80px,.65fr) minmax(100px,1fr) minmax(110px,1fr) auto;gap:12px;align-items:end}
+.indicator-rule .field{min-width:0}
+.indicator-rule .input-unit{min-width:0}
+.indicator-rule input,.indicator-rule select{width:100%;min-width:0}
+.indicator-light[data-mode="fast"] .dot{animation:indicator-blink .3s step-end infinite}
+.indicator-light[data-mode="slow"] .dot{animation:indicator-blink 2s step-end infinite}
+@keyframes indicator-blink{50%{opacity:.2}}
+@media(max-width:600px){.indicator-rule{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.indicator-rule .btn{justify-self:start}}
 
 /* Schedule rows keep the duration, action and controls readable on phones. */
 .schedule-task{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto}
