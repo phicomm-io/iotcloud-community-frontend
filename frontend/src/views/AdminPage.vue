@@ -139,7 +139,7 @@ function bind() {
             >型号<select v-model="model" aria-label="型号">
               <option value="tc1">TC1</option>
               <option value="m1">M1</option>
-              <option value="a1">A1</option>
+              <option value="a1">A1</option><option value="daikin">DAIKIN BRY88AX151K</option>
             </select></label
           ><label v-if="model === 'tc1'">协议<select v-model="version">
             <option value="v1">Legacy</option>

@@ -8,7 +8,7 @@ import {resolve, dirname} from 'node:path';
 // Render the same source fragments as common/web/page.py; never fork device UI.
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, '..');
-const products = {tc1:'TC1/http_server/web/index.html',a1:'A1/web/index.html',m1:'M1/web/index.html'};
+const products = {tc1:'TC1/http_server/web/index.html',a1:'A1/web/index.html',m1:'M1/web/index.html',daikin:'DAIKIN/web/index.html'};
 function devicePages() {
  return {name:'device-pages', resolveId(id){if(id==='virtual:device-pages')return '\0device-pages';},
  load(id){if(id!=='\0device-pages')return;

@@ -6,7 +6,7 @@ export function socketStates(s={}){
   return v===true||v===1||v==='1'?true:v===false||v===0||v==='0'?false:undefined;
  });
 }
-export const deviceType=d=>({tc1:'TC1 智能插排',m1:'M1 空气质量检测器',a1:'A1 空气净化器'})[d.model]||'设备';
+export const deviceType=d=>({tc1:'TC1 智能插排',m1:'M1 空气质量检测器',a1:'A1 空气净化器',daikin:'DAIKIN BRY88AX151K'})[d.model]||'设备';
 export function pressureReading(s={},now=Date.now()){
  const b=s.barometer,elapsed=now-s.sensorAt;
  return b?.ready===true&&b.valid===true&&['BMP388','BMP390'].includes(b.model)&&
@@ -24,6 +24,9 @@ export function deviceSummary(d,s={},connected=false,now=Date.now()){
   const power=s.power_watts??s.power;
   if(!known&&power===undefined)return '等待设备数据';
   return [power!==undefined?number(power,1)+' W':null,known?`${sockets.filter(Boolean).length} 开 · ${sockets.filter(x=>!x).length} 关`:null].filter(Boolean).join(' · ');
+ }
+ if(d.model==='daikin'){
+  const p=s.sensors?.pm25;return p?.valid&&typeof p.value==='number'&&now-s.sensorAt+(p.age_ms||0)<20000?'PM2.5 '+number(p.value)+' µg/m³':'等待有效空气数据';
  }
  if(d.model==='m1'){
   if(!s.sensor_valid||!s.sensorAt||now-s.sensorAt>60000)return '等待有效空气数据';
