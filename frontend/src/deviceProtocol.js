@@ -27,7 +27,7 @@ export function deviceEntry(value) {
   )
     throw new Error(t('p.4baaf7d5f598'));
   if (d.namespace && (d.namespace !== "account" || !d.username)) throw new Error(t('p.c384a9d1db4f'));
-  return { mac, model, version, ...(d.username ? {username:d.username} : {}), ...(d.namespace ? { namespace: d.namespace, username: d.username, ...(d.mqtt_username ? { mqtt_username: d.mqtt_username } : {}) } : {}), ...(d.status ? { status: d.status } : {}) };
+  return { mac, model, version, ...(['full','lite','hub'].includes(d.firmware_variant)?{firmware_variant:d.firmware_variant}:{}), ...(d.username ? {username:d.username} : {}), ...(d.namespace ? { namespace: d.namespace, username: d.username, ...(d.mqtt_username ? { mqtt_username: d.mqtt_username } : {}) } : {}), ...(d.status ? { status: d.status } : {}) };
 }
 export function localDevices(storage = localStorage) {
   const list = JSON.parse(

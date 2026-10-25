@@ -17,7 +17,8 @@ const demoMode=import.meta.env.VITE_DEMO==='1';
 const props=defineProps({localMode:Boolean,devicePreferences:Object,lanConnections:Object,initialSection:{type:String,default:'connection'},connection:Object,deviceBroker:Object,connected:Boolean,busy:Boolean,thirdParty:Boolean,devices:Array,states:Object,addForm:Object,deviceName:Function,now:Number});
 const emit=defineEmits(['device-connection','mode-change','connect','disconnect','add','remove','password','mqtt-password','install','home','refresh','rename']);
 const section=ref(props.localMode?'devices':props.initialSection),showPassword=ref(false),adding=ref(false),currentPassword=ref(''),newPassword=ref(''),mqttCurrent=ref(''),mqttNew=ref('');
-const sections=computed(()=>[...(hubMode?[{id:'hub',title:t('hub.services'),description:t('hub.servicesHelp'),icon:'cloud'}]:[]),...(!props.localMode?[{id:'connection',title:t('p.b3ffbff70344'),description:t('p.a32fe8826341'),icon:'cloud'}]:[]),{id:'devices',title:t('p.7e708dd49f0a'),description:t('p.e9f1eed63fe4'),icon:'plug'},...(!props.localMode&&!props.thirdParty&&!demoMode&&account.username?[{id:'bemfa',title:t('p.1565532c2b7e'),description:t('p.88d6cf2dba7f'),icon:'cloud'}]:[]),...(!props.localMode&&account.username?[{id:'account',title:t('p.2079bd640fc8'),description:t('p.0796282491b5'),icon:'shield'}]:[])]);
+const ownerHub=computed(()=>hubMode&&!props.localMode&&!props.thirdParty&&!!account.username);
+const sections=computed(()=>[...(ownerHub.value?[{id:'hub',title:t('hub.services'),description:t('hub.servicesHelp'),icon:'cloud'}]:[]),...(!props.localMode?[{id:'connection',title:t('p.b3ffbff70344'),description:t('p.a32fe8826341'),icon:'cloud'}]:[]),{id:'devices',title:t('p.7e708dd49f0a'),description:t('p.e9f1eed63fe4'),icon:'plug'},...(!props.localMode&&!props.thirdParty&&!demoMode&&account.username?[{id:'bemfa',title:t('p.1565532c2b7e'),description:t('p.88d6cf2dba7f'),icon:'cloud'}]:[]),...(!props.localMode&&account.username?[{id:'account',title:t('p.2079bd640fc8'),description:t('p.0796282491b5'),icon:'shield'}]:[])]);
 const online=computed(()=>props.devices.filter(d=>(props.connected||props.states[deviceKey(d)]?.lan_connected)&&props.states[deviceKey(d)]?.available===true).length);
 function status(d){return props.states[deviceKey(d)]?.lan_connected?t('p.a2d6d3fd2463'):!props.connected?t('p.3d52574ce150'):props.states[deviceKey(d)]?.available===true?t('p.b9086662b1df'):props.states[deviceKey(d)]?.available===false?t('p.be1b4f3c6c1c'):t('p.93e474c68ed5');}
 </script>
@@ -55,7 +56,7 @@ function status(d){return props.states[deviceKey(d)]?.lan_connected?t('p.a2d6d3f
 <footer class="settings-footnote"><AppIcon name="signal" :size="17"/><span>{{localMode?t('p.be4817445188'):t('p.7393ba889e8f')}}{{t('p.61777b0a6264')}}</span></footer>
 </section>
 </template>
-<HubSettings v-else-if="section==='hub'&&hubMode"/>
+<HubSettings v-else-if="section==='hub'&&ownerHub"/>
 <BemfaIntegration v-else-if="section==='bemfa'&&!localMode&&!thirdParty&&!demoMode&&account.username" :devices="devices" :device-name="deviceName"/>
 <template v-else>
 <GitHubAccount v-if="!demoMode&&!hubMode"/>

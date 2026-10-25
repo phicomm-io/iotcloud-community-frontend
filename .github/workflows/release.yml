@@ -110,6 +110,12 @@ jobs:
           node tests/hub-home.mjs
           node --test tests/hub-device-assets.mjs
         working-directory: frontend
+      - name: Test standalone and local hub management entry points
+        env:
+          HUB_TEST_DIST: ../build/ci-hub
+          CLOUD_TEST_DIST: dist
+        run: node tests/hub-webui-entry.mjs
+        working-directory: frontend
       - uses: actions/upload-artifact@v4
         with:
           name: frontend-release

@@ -16,7 +16,7 @@ export async function connectLocal(raw,password='',fetcher=fetch){
   if(!response.ok)throw Error(t('p.23a84a23f636')+response.status);
   const info=await response.json(),data=info.data;
   if(info.code!=='ok'||data?.api_version!==1)throw Error(t('p.937d246a8029'));
-  const device=deviceEntry({mac:normalizeMAC(data.device_id),model:data.model,version:'v2'});
+  const device=deviceEntry({mac:normalizeMAC(data.device_id),model:data.model,version:'v2',firmware_variant:data.firmware_variant});
   const devices=savedLocalDevices().filter(d=>d.mac!==device.mac);devices.push(device);
   savePreference(localScope(),device.mac,{mode:'auto',address});
   localStorage.setItem(localListKey,JSON.stringify(devices));localPasswords.set(device.mac,password);
