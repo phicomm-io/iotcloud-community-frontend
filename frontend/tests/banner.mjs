@@ -15,7 +15,7 @@ async function open(p,url){const ready=p.waitForResponse(r=>new URL(r.url()).pat
 await mkdir(evidence,{recursive:true});
 const engines=process.env.BROWSER?[[process.env.BROWSER,{chromium,webkit}[process.env.BROWSER]]]:[['chromium',chromium],['webkit',webkit]];
 try{for(const [engine,type] of engines){const browser=await type.launch();try{for(const width of [375,1280]){
- const context=await browser.newContext({viewport:{width,height:900},serviceWorkers:'block'}),page=await context.newPage(),errors=[];
+ const context=await browser.newContext({locale:'zh-CN',viewport:{width,height:900},serviceWorkers:'block'}),page=await context.newPage(),errors=[];
  let saved={enabled:false,audience:'before_login',text:'',url:'',label:''},fail=false,failLoad=true,adminName='banner-admin';page.on('pageerror',e=>errors.push(e.message));
  await context.route('**/*',async route=>{
   const req=route.request(),u=new URL(req.url()),p=u.pathname;
@@ -62,7 +62,7 @@ try{for(const [engine,type] of engines){const browser=await type.launch();try{fo
  const otherTab=await context.newPage();await open(otherTab,base+'#/login');await expect(otherTab.locator('#app > .platform-banner')).toBeVisible();await otherTab.close();
  // A permanent dismissal survives a fresh browser context. Updated content remains eligible.
  await page.evaluate(()=>sessionStorage.clear());await reload(page);await expect(banner).toBeVisible();await banner.getByRole('button',{name:'不再显示',exact:true}).click();await reload(page);await expect(banner).toHaveCount(0);
- const state=await context.storageState();const restarted=await browser.newContext({storageState:state,viewport:{width,height:900},serviceWorkers:'block'});await restarted.route('**/*',async route=>{const p=new URL(route.request().url()).pathname;if(p==='/iotcloud/config.json')return route.fulfill({json:{apiOrigin:api}});if(p==='/api/banner')return route.fulfill({json:saved});if(p.startsWith('/api/'))return route.fulfill({json:{}});return route.continue();});const fresh=await restarted.newPage();await open(fresh,base+'#/login');await expect(fresh.locator('#app > .platform-banner')).toHaveCount(0);
+ const state=await context.storageState();const restarted=await browser.newContext({locale:'zh-CN',storageState:state,viewport:{width,height:900},serviceWorkers:'block'});await restarted.route('**/*',async route=>{const p=new URL(route.request().url()).pathname;if(p==='/iotcloud/config.json')return route.fulfill({json:{apiOrigin:api}});if(p==='/api/banner')return route.fulfill({json:saved});if(p.startsWith('/api/'))return route.fulfill({json:{}});return route.continue();});const fresh=await restarted.newPage();await open(fresh,base+'#/login');await expect(fresh.locator('#app > .platform-banner')).toHaveCount(0);
  saved.text+='（公告已更新）';await reload(fresh);await expect(fresh.locator('#app > .platform-banner')).toBeVisible();await restarted.close();
  saved.text=saved.text.replace('（公告已更新）','');await reload(page);await expect(banner).toHaveCount(0);
  await page.evaluate(()=>{const x=JSON.parse(localStorage.getItem('iotcloud.server')||'{}');x.apiOrigin='https://second.banner.example';localStorage.setItem('iotcloud.server',JSON.stringify(x));});await reload(page);await expect(banner).toBeVisible();

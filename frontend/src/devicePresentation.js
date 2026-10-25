@@ -1,3 +1,5 @@
+
+import {t} from './i18n.js';
 // Both Legacy and TMCP devices may report relay states as booleans or 0/1.
 export function socketStates(s={}){
  const source=Array.isArray(s.socket_states)?s.socket_states:Array.from({length:6},(_,i)=>s[`plug_${i}`]?.on);
@@ -6,7 +8,7 @@ export function socketStates(s={}){
   return v===true||v===1||v==='1'?true:v===false||v===0||v==='0'?false:undefined;
  });
 }
-export const deviceType=d=>({tc1:'TC1 智能插排',m1:'M1 空气质量检测器',a1:'A1 空气净化器',daikin:'DAIKIN BRY88AX151K'})[d.model]||'设备';
+export const deviceType=d=>({tc1:t('p.1d002acab84e'),m1:t('p.5f519f80aa2f'),a1:t('p.d1d553a7ed95'),daikin:'DAIKIN BRY88AX151K'})[d.model]||t('p.e1506406a5bd');
 export function pressureReading(s={},now=Date.now()){
  const b=s.barometer,elapsed=now-s.sensorAt;
  return b?.ready===true&&b.valid===true&&['BMP388','BMP390'].includes(b.model)&&
@@ -16,25 +18,25 @@ export function pressureReading(s={},now=Date.now()){
 }
 const number=(v,digits=0)=>v!==null&&v!==undefined&&v!==''&&Number.isFinite(Number(v))?Number(v).toFixed(digits):'—';
 export function deviceSummary(d,s={},connected=false,now=Date.now()){
- if(!connected)return '尚未连接';
- if(s.available===false)return '设备离线';
+ if(!connected)return t('p.93ae902da0d3');
+ if(s.available===false)return t('p.6e1e714df035');
  if(d.model==='tc1'){
   const sockets=socketStates(s);
   const known=sockets.length===6&&sockets.every(x=>x!==undefined&&x!==null);
   const power=s.power_watts??s.power;
-  if(!known&&power===undefined)return '等待设备数据';
-  return [power!==undefined?number(power,1)+' W':null,known?`${sockets.filter(Boolean).length} 开 · ${sockets.filter(x=>!x).length} 关`:null].filter(Boolean).join(' · ');
+  if(!known&&power===undefined)return t('p.59b4aa3bd881');
+  return [power!==undefined?number(power,1)+' W':null,known?t('p.0f583152f409',{v0:(sockets.filter(Boolean).length),v1:(sockets.filter(x=>!x).length)}):null].filter(Boolean).join(' · ');
  }
  if(d.model==='daikin'){
-  const p=s.sensors?.pm25;return p?.valid&&typeof p.value==='number'&&now-s.sensorAt+(p.age_ms||0)<20000?'PM2.5 '+number(p.value)+' µg/m³':'等待有效空气数据';
+  const p=s.sensors?.pm25;return p?.valid&&typeof p.value==='number'&&now-s.sensorAt+(p.age_ms||0)<20000?'PM2.5 '+number(p.value)+' µg/m³':t('p.47b36dd03059');
  }
  if(d.model==='m1'){
-  if(!s.sensor_valid||!s.sensorAt||now-s.sensorAt>60000)return '等待有效空气数据';
-  if(!Number.isFinite(Number(s.pm25)))return '等待有效空气数据';
-  const quality=Number(s.pm25)>75||Number(s.formaldehyde)>0.1?'空气较差':Number(s.pm25)>35||Number(s.formaldehyde)>0.08?'空气一般':'空气良好';
+  if(!s.sensor_valid||!s.sensorAt||now-s.sensorAt>60000)return t('p.47b36dd03059');
+  if(!Number.isFinite(Number(s.pm25)))return t('p.47b36dd03059');
+  const quality=Number(s.pm25)>75||Number(s.formaldehyde)>0.1?t('p.16cedc124c56'):Number(s.pm25)>35||Number(s.formaldehyde)>0.08?t('p.e268425690f3'):t('p.4e519d625485');
   return `${quality} · PM2.5 ${number(s.pm25)}`;
  }
- if(s.fan_on===undefined)return '等待设备数据';
+ if(s.fan_on===undefined)return t('p.59b4aa3bd881');
  const speed=s.applied_speed??s.percentage??s.speed;
- return `${s.fan_mode==='auto'?'自动 ':s.fan_mode==='manual'?'手动 ':''}${s.fan_on?(s.fan_state==='idle'?'待机':(s.fan_mode?'':'运行 ')+number(speed)+'%'):'已停止'} · ${s.led_enabled===undefined?'灯光未知':s.led_enabled?'灯光开启':'灯光关闭'}`;
+ return `${s.fan_mode==='auto'?t('p.4bf67adc8978'):s.fan_mode==='manual'?t('p.160f0db1672a'):''}${s.fan_on?(s.fan_state==='idle'?t('p.bed4c87f1838'):(s.fan_mode?'':t('p.a29348be5310'))+number(speed)+'%'):t('p.f006455e3baf')} · ${s.led_enabled===undefined?t('p.2af8e1320bfc'):s.led_enabled?t('p.659da33989d5'):t('p.bbb57d0f248f')}`;
 }

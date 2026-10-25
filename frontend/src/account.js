@@ -1,3 +1,5 @@
+
+import {language,errorMessage} from './i18n.js';
 import {apiURL, sessionToken} from './serverConfig';
 import { reactive } from "vue";
 import {forgetLogin} from "./connectionPreferences";
@@ -14,7 +16,7 @@ export async function api(path, options = {}) {
   const response = await fetch(apiURL(path), {
     credentials: "include",
     ...options,
-    headers: { "Content-Type": "application/json", ...(sessionToken()?{Authorization: `Bearer ${sessionToken()}`} : {}), ...options.headers },
+    headers: { "Content-Type": "application/json", "Accept-Language":language.value, ...(sessionToken()?{Authorization: `Bearer ${sessionToken()}`} : {}), ...options.headers },
   });
   const token=response.headers.get('X-IotCloud-Session');
   if(token)sessionToken(token);
@@ -31,11 +33,10 @@ export async function api(path, options = {}) {
       forgetLogin();
       window.dispatchEvent(new Event("phicomm-session-expired"));
     }
-    if (response.status === 403 && path.startsWith("/admin") && data.error === "没有管理权限") account.isAdmin = false;
-    throw new Error(
-      data.error || data.message || `请求失败 (${response.status})`,
-    );
+    if (response.status === 403 && path.startsWith("/admin") && (data.code === 'admin_forbidden' || (!data.code && data.error === '\u6ca1\u6709\u7ba1\u7406\u6743\u9650'))) account.isAdmin = false;
+    const error=new Error(errorMessage(data,response.status));error.code=data.code||'request_failed';throw error;
   }
+  if(data.message)data.message=errorMessage({message:data.message,message_key:data.message_key},response.status);
   return data;
 }
 export async function restoreAccount() {

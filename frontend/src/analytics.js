@@ -1,3 +1,4 @@
+import {hubMode} from './deployment.js';
 import {apiURL,scopeKey} from './serverConfig.js';
 const pages=new Set(['/','/login','/register','/guest','/admin','/settings','/guest/settings']);
 const random=()=>Array.from(crypto.getRandomValues(new Uint8Array(16)),b=>b.toString(16).padStart(2,'0')).join('');
@@ -12,7 +13,7 @@ function identity(now){
  }catch{return {visitor:fallbackVisitor||=(random()),session:fallbackSession||=(random())};}
 }
 export function track(event,page=location.pathname,model=''){
- if(import.meta.env?.VITE_LOCAL_ONLY==='1'||location.hash?.startsWith('#/local')||!pages.has(page))return;
+ if(hubMode||import.meta.env?.VITE_LOCAL_ONLY==='1'||location.hash?.startsWith('#/local')||!pages.has(page))return;
  try{
   let referrer='';try{referrer=document.referrer?new URL(document.referrer).origin:'';}catch{}
   const data={...identity(Date.now()),event,page,model,referrer,screen:innerWidth<768?'mobile':innerWidth<1200?'tablet':'desktop'};

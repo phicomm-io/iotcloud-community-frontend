@@ -4,6 +4,36 @@
 (()=>{
 'use strict';
 const D={
+"a1.ring_aria":["A1 ring preview: 31 evenly spaced lights; light 10 at 6 o’clock, lights 25 and 26 either side of 12 o’clock","A1 圆环导光预览：31 颗光源均匀分布，10 号在 6 点，25 和 26 号分列 12 点两侧"],
+"backup.title":["Configuration backup", "配置备份"],
+"backup.hint":["Full backups contain Wi-Fi, MQTT and web passwords. Keep the file private. M1 MCU music is stored separately. A web password and direct LAN connection are required.", "完整备份包含 Wi-Fi、MQTT 和网页密码，请妥善保管文件。M1 MCU 音乐需单独保存。完整备份需要网页密码和内网直连。"],
+"backup.download":["Download full backup", "下载完整备份"],
+"backup.public":["Download public settings", "下载公开配置"],
+"backup.partial":["This device supports a partial backup only. Passwords are omitted; save them separately before upgrading.", "此设备仅支持部分备份，不包含密码；升级前请另行保存密码。"],
+"backup.restore":["Restore backup", "恢复备份"],
+"backup.confirm":["Restore this device’s configuration, including passwords, then reboot?", "恢复此设备的配置（含密码）并重启？"],
+"backup.failed":["Backup transfer failed. Check the LAN connection and web password.", "备份传输失败，请检查内网连接和网页密码。"],
+"backup.restoring":["Configuration saved. Reconnect after reboot using the restored address and password.", "配置已保存，重启后请使用恢复的地址和密码重新连接。"],
+"recovery.hint":["The saved configuration cannot be migrated. Original data is retained. Confirm clearing it to configure the device again.", "原配置无法迁移，原始数据已保留。请明确确认清空后重新配网。"],
+"recovery.clear":["Clear configuration and set up again", "清空配置并重新设置"],
+"recovery.confirm":["Clear all saved settings, including Wi-Fi and MQTT credentials? This cannot be undone.", "清空包括 Wi-Fi、MQTT 密码在内的所有配置？此操作无法撤销。"],
+"fw.notes_unavailable":["The browser could not load a verified upgrade comparison. Open the comparison page or retry.", "浏览器暂时无法加载已校验的升级差异，请打开对比页面或重试。"],
+"fw.notes_confirm":["Upgrade differences are unavailable. Continue with the upgrade anyway?", "暂时无法查看升级差异，仍确认继续升级？"],
+"fw.convert_hub":["Switch to hub firmware", "切换为中枢版本"],
+"fw.convert_hub_help":["Install signed hub firmware over the device’s local HTTP connection to enable hub features.", "通过设备的本地 HTTP 连接上传中枢签名固件，启用中枢功能。"],
+"fw.convert_hub_confirm":["Switch to hub firmware and restart? Wi-Fi, MQTT and the web password will be kept. Hub features will be enabled. Use a signed hub OTA file and a local HTTP connection.", "确认切换为中枢版本并重启？将保留 Wi-Fi、MQTT 和网页管理密码，并启用中枢功能。请通过本地 HTTP 连接上传中枢版本的签名 OTA 文件。"],
+"fw.convert_hub_signed":["Choose a signed hub OTA file (.signed). Unsigned rescue cannot be combined with this switch.", "请选择中枢版本的签名 OTA 文件（.signed），切换版本不能使用未签名救援。"],
+"fw.convert_hub_password":["Set a web password in Device settings before switching to hub firmware.", "切换为中枢版本前，请先在设备设置中设置网页管理密码。"],
+"fw.set_web_password":["Set web password", "设置网页管理密码"],
+"error.invalid_params":["Invalid settings", "配置参数无效"],
+"error.busy":["Device busy; retry later", "设备忙，请稍后重试"],
+"error.storage_error":["Could not save settings", "配置保存失败"],
+"error.invalid_backup":["Backup does not match this model or configuration version", "备份与当前机型或配置版本不匹配"],
+"error.set_web_password_first":["Set a web password first", "请先设置网页管理密码"],
+"error.migration_required":["Clear the incompatible configuration before setting up again", "请先确认清空不兼容配置，再重新设置"],
+"error.unauthorized":["Incorrect web password", "网页管理密码错误"],
+"common.unsupported":["Unsupported operation", "不支持的操作"],
+
 "daikin.climate_title":["Temperature and humidity compensation", "温湿度补偿与校准"],
 "daikin.climate_temperature":["Temperature subtraction (°C, −20 to 20)", "温度减去值（°C，−20～20）"],
 "daikin.climate_humidity":["Humidity adjustment (%RH, −30 to 30)", "湿度微调（%RH，−30～30）"],
@@ -165,7 +195,7 @@ const D={
 "wake.try_tone":["Preview sound", "试音"],
 "wake.tone_unavailable":["This sound requires MCU 0.9.3 or later with built-in tone support.", "该提示音需要 0.9.3 及以上且支持内置提示音的主控。"],
 "wake.hint":["One beep every 2 seconds; default 60 seconds, maximum 180. A screen on/off event or Stop silences the alarm. Missed alarms are not replayed after a restart.", "每 2 秒提示一次，默认 60 秒，最长 180 秒；屏幕点亮、熄灭事件或停止按钮可关闭。重启后不补响错过的闹钟。"],
-"wake.home_hint":["Add an Alarm clock action in Settings → Schedules & alarms. Screen on/off events stop ringing; the default duration is 1 minute.", "在设置 → 定时与闹钟中添加“闹钟”动作。屏幕点亮或熄灭事件可停止响铃，默认响 1 分钟。"],
+"wake.home_hint":["Add an Alarm clock action in Settings → Schedules & alarms. Double-press the button to stop ringing (requires MCU v1); the default duration is 1 minute.", "在设置 → 定时与闹钟中添加“闹钟”动作。双击按钮停止响铃（需 MCU v1），默认响 1 分钟。"],
 "wake.invalid":["Use a whole number from 1 to 180 seconds.", "请输入 1–180 秒的整数。"],
 "wake.stop":["Stop ringing", "停止响铃"],
 "wake.preview":["Preview sound", "试听提示音"],
@@ -329,6 +359,14 @@ const D={
 'sys.hint_m1':['On the device: a long press of the panel key clears Wi-Fi and the web password.','设备上：长按面板按键可清除 Wi-Fi 和网页密码。'],
 'sys.hint_tc1':['On the device: hold the key 5–10 s to clear Wi-Fi and the web password, over 10 s to clear everything (all sockets default to on).','设备上：按键按住 5–10 秒清除 Wi-Fi 和网页密码，超过 10 秒清除全部配置（六路默认开启）。'],
 /* Air quality */
+'co2source.title':['Wi-Fi display source','Wi-Fi 显示数据源'],
+'co2source.source':['CO₂ source','CO₂ 来源'],'co2source.local':['Local SCD40 module','本机 SCD40 模块'],'co2source.mqtt':['Another online sensor via MQTT','通过 MQTT 获取其他在线传感器'],
+'co2source.id':['Sensor MAC (12 hexadecimal characters)','传感器 MAC（12 位十六进制）'],'co2source.double_click':['Double-press action','双击按钮动作'],
+'co2source.no_action':['None','无'],'co2source.switch':['Switch original / Wi-Fi display','切换原始 / Wi-Fi 显示'],
+'co2source.help':['Use a sensor connected to the same MQTT account. Online sources appear in the list in IoTCloud; you may also enter its MAC. Expired data restores the original reading.','选择接入同一 MQTT 账户的传感器。在 IoTCloud 中可从列表选择在线来源，也可填写 MAC。数据过期后恢复原始读数。'],
+'co2source.button_hint':['Double-press switches between original and Wi-Fi values. When an alarm is ringing, it stops the alarm first.','双击仅在原始读数与 Wi-Fi 数据间切换。闹钟响铃时优先停止闹钟。'],
+'co2source.button_upgrade':['Upgrade the sensor MCU to v1 to enable double-press actions.','传感器 MCU 升级至 v1 后可设置双击动作。'],
+'co2source.unavailable':['Source settings are unavailable','数据源设置暂不可用'],'co2source.invalid':['Enter a 12-character sensor MAC','请填写 12 位传感器 MAC'],
 'air.co2.comfort':['Comfortable','舒适'],'air.co2.elevated':['Elevated','偏高'],'air.co2.ventilate':['Ventilate','建议通风'], 'co2screen.title':['CO₂ on the device screen','设备屏幕显示 CO₂'],
 'co2screen.mode':['Display mode','显示模式'],'co2screen.none':['Keep original readings','不替换'],
 'co2screen.replace':['Always show CO₂','完全替换'],'co2screen.alternate':['Alternate with original','交替显示'],
@@ -415,7 +453,16 @@ const D={
 'daikin.ha':['Home Assistant discovers available sensors automatically.','Home Assistant 会自动发现可用传感器。'],'daikin.ota':['Choose this project’s signed DAIKIN OTA package.','请选择本项目的 DAIKIN 签名 OTA 包。'],'daikin.button':['Hold the rear button for five seconds to open the setup hotspot.','长按背面按钮五秒可开启配网热点。'],
 /* M1 */
 'm1.thresholds':['Controller alarm thresholds','主控告警阈值'],
-'m1.threshold_help':['Values are in µg/m³ (100 µg/m³ = 0.100 mg/m³ formaldehyde). The open-source MCU uses these limits for green/yellow/red lamps and red-band alarms. Stock MCU behavior may differ. Saving confirms the Wi-Fi configuration, not the physical lamp state.','单位为 µg/m³（甲醛 100 µg/m³ = 0.100 mg/m³）。开源主控将阈值用于绿/黄/红灯色及红档告警；原厂主控行为可能不同。保存确认的是联网模块配置，灯色以设备为准。'],
+'m1.threshold_help':['Values are in µg/m³ (100 µg/m³ = 0.100 mg/m³ formaldehyde). The open-source MCU uses these limits for green/yellow/red lamps. Stock MCU behavior may differ. Saving confirms the Wi-Fi configuration; check lamp behavior on the device.','单位为 µg/m³（甲醛 100 µg/m³ = 0.100 mg/m³）。开源主控按阈值显示绿/黄/红灯色，原厂主控行为可能不同。保存确认联网模块配置，灯色以设备为准。'],
+'m1.alarm_help':['Buzzer alarms default to off. Enable each pollutant as needed to beep above its yellow upper limit. Lamp colors, wake alarms and manual beeps work independently.','蜂鸣报警默认关闭，可按需分别开启，超过黄档上限时鸣叫。灯色、闹钟和手动鸣叫独立工作。'],
+'m1.alarm_enabled':['Buzzer alarm above limit','超阈值蜂鸣报警'],
+'m1.alarm_loading':['Reading alarm settings…','正在读取报警设置…'],
+'m1.alarm_upgrade':['Upgrade the sensor/display MCU to configure buzzer alarms. Its current alarm settings are unknown.','需升级传感器/屏幕主控后配置蜂鸣报警；当前主控报警设置未知。'],
+'m1.alarm_pending':['Settings saved on Wi-Fi module; waiting for MCU readback.','配置已保存在联网模块，等待主控读回确认。'],
+'m1.alarm_confirmed':['MCU buzzer settings read back and confirmed.','主控蜂鸣开关已读回确认。'],
+'m1.alarm_actual_on':['MCU readback: enabled','主控读回：已开启'],
+'m1.alarm_actual_off':['MCU readback: disabled','主控读回：已关闭'],
+'m1.alarm_actual_unknown':['MCU readback: unknown','主控读回：未知'],
 'm1.threshold_low':['Green upper limit (µg/m³)','绿档上限（µg/m³）'],
 'm1.threshold_high':['Yellow upper limit (µg/m³)','黄档上限（µg/m³）'],
 'm1.threshold_restore':['Restore stock thresholds','恢复原厂阈值'],
@@ -479,6 +526,18 @@ const D={
 'd.config_dirty':['Saving settings','设置保存中'],'d.save_error':['Save error','保存错误'],'d.reboot_pending':['Restart pending','等待重启'],
 'd.report_seconds':['Report interval (s)','上报间隔（秒）'],'d.powerCoefficientX100':['Power coefficient (×100)','功率系数（×100）'],'d.mask':['Subnet mask','子网掩码'],'d.gateway':['Gateway','网关']
 };
+Object.assign(D,{
+ 'gen.language':['Device language','设备语言'],
+ 'gen.language_help':['Controls MQTT entity names. Your browser language is set separately.','控制 MQTT 通告的实体名称，浏览器显示语言单独设置。'],
+ 'mcu.version':['Sensor MCU firmware','传感器 MCU 固件'],
+ 'mcu.query':['Read MCU version','读取 MCU 版本'],
+ 'mcu.unknown':['Not read yet','尚未读到版本'],
+ 'mcu.open':['Open firmware','开源固件'],
+ 'mcu.stock11':['Factory 11.x: recommended for the first open firmware release. Back up the factory MCU before flashing.','原厂 11.x：建议优先使用开源固件，刷入前请备份原厂 MCU。'],
+ 'mcu.stock17':['Factory 17.x (including 17.1.2.3) differs substantially. Keep the factory MCU until a 17.x image has been obtained and analyzed.','原厂 17.x（包括 17.1.2.3）差异较大，请先保留原厂 MCU，等取得 17.x 固件并完成分析后再考虑刷入。'],
+ 'mcu.unverified':['This MCU version has not been verified. Keep its original version text when reporting an issue.','此 MCU 版本尚未验证，反馈问题时请保留完整的原始版本号。'],
+ 'common.retry':['Retry','重试']
+});
 const KEY='phicomm.language';
 let preference='auto';try{preference=localStorage.getItem(KEY)||'auto';}catch{}
 const detect=()=>{for(const l of navigator.languages||[navigator.language||'en']){const s=l.toLowerCase();if(s.startsWith('zh'))return 'zh-CN';if(s.startsWith('en'))return 'en';}return 'en';};

@@ -1,4 +1,6 @@
 <script setup>
+import {t} from '../i18n.js';
+
 import {computed, onBeforeUnmount, onMounted, ref} from 'vue';
 import {installation, requestInstallation, confirmInstallation} from '../installApp.js';
 import {INSTALL_PREFERENCE_KEY, canOfferInstallation, readInstallPreference, saveInstallPreference} from '../installation.js';
@@ -56,10 +58,10 @@ async function install() {
     if (result === 'accepted') close();
     else if (result === 'dismissed') {
       preference.value = saveInstallPreference('later');
-      message.value = '已取消安装，7 天内不再主动提示。也可以随时从设置打开。';
-    } else message.value = '请按下方说明，通过浏览器菜单添加到桌面。';
+      message.value = t('p.d31bf8d2a5fa');
+    } else message.value = t('p.b540b819b3b4');
   } catch {
-    message.value = '未能打开安装窗口，请按下方说明操作，或稍后重试。';
+    message.value = t('p.d7b5e9596c72');
   } finally { pending.value = false; }
 }
 function backdrop(event) {
@@ -78,39 +80,39 @@ defineExpose({open});
 <template>
   <section v-if="showPromotion" class="install-promotion" aria-labelledby="install-promotion-title">
     <img :src="iconURL" alt="" width="40" height="40" />
-    <div class="install-promotion-copy"><h2 id="install-promotion-title">把 IotCloud 添加到桌面</h2><p>下次点桌面图标，就能直接打开设备控制。</p></div>
-    <div class="install-promotion-actions"><button class="btn primary" type="button" @click="promote">添加到桌面</button><button v-if="manualConfirmation" class="btn ghost" type="button" @click="choose('installed')">已经添加</button><button class="btn ghost" type="button" @click="choose('later')">稍后提示</button><button class="btn ghost" type="button" @click="choose('never')">不再提示</button></div>
+    <div class="install-promotion-copy"><h2 id="install-promotion-title">{{t('p.528ad8cd9201')}}</h2><p>{{t('p.28b01aa990d1')}}</p></div>
+    <div class="install-promotion-actions"><button class="btn primary" type="button" @click="promote">{{t('p.47ee0a9bee5b')}}</button><button v-if="manualConfirmation" class="btn ghost" type="button" @click="choose('installed')">{{t('p.3476d3a8f328')}}</button><button class="btn ghost" type="button" @click="choose('later')">{{t('p.8a3fd4b5a7be')}}</button><button class="btn ghost" type="button" @click="choose('never')">{{t('p.a54a0add5447')}}</button></div>
   </section>
   <dialog ref="dialog" class="install-dialog" aria-labelledby="install-dialog-title" @close="closed" @click="backdrop">
-    <header><img :src="iconURL" alt="" width="40" height="40" /><div><h2 id="install-dialog-title">添加到桌面</h2><p class="help">点桌面图标，快捷打开 IotCloud。</p></div><button class="btn ghost" type="button" aria-label="关闭安装说明" autofocus @click="close">关闭</button></header>
+    <header><img :src="iconURL" alt="" width="40" height="40" /><div><h2 id="install-dialog-title">{{t('p.47ee0a9bee5b')}}</h2><p class="help">{{t('p.c3b52c46c884')}}</p></div><button class="btn ghost" type="button" :aria-label="t('p.8d08fdf5a7ad')" autofocus @click="close">{{t('p.3fd47edce45b')}}</button></header>
     <div class="install-guide">
-      <p v-if="installation.standalone" role="status">当前已在独立窗口中打开，无需重复添加。</p>
-      <p v-else-if="installation.installed" role="status">已记录添加到桌面，可从桌面或应用列表打开 IotCloud。</p>
+      <p v-if="installation.standalone" role="status">{{t('p.425f1c11150a')}}</p>
+      <p v-else-if="installation.installed" role="status">{{t('p.96316f46fa02')}}</p>
       <template v-else-if="installation.platform === 'in-app'">
-        <h3>先在系统浏览器中打开</h3>
-        <ol class="install-steps"><li><span class="install-step-icon" aria-hidden="true">···</span><div><b>打开右上角菜单</b><p>在微信等应用内，点击右上角的菜单按钮。</p></div></li><li><span class="install-step-icon" aria-hidden="true">↗</span><div><b>选择在浏览器中打开</b><p>iPhone 使用 Safari；Android 使用支持安装的浏览器。</p></div></li><li><span class="install-step-icon" aria-hidden="true">＋</span><div><b>再选择添加到桌面</b><p>打开 IotCloud 的设置，即可再次查看安装说明。</p></div></li></ol>
+        <h3>{{t('p.63de39f03604')}}</h3>
+        <ol class="install-steps"><li><span class="install-step-icon" aria-hidden="true">···</span><div><b>{{t('p.176ad515f48c')}}</b><p>{{t('p.afed60ccb624')}}</p></div></li><li><span class="install-step-icon" aria-hidden="true">↗</span><div><b>{{t('p.129c8d5b408c')}}</b><p>{{t('p.4c93bc98285e')}}</p></div></li><li><span class="install-step-icon" aria-hidden="true">＋</span><div><b>{{t('p.041d37877b6f')}}</b><p>{{t('p.88b721414d14')}}</p></div></li></ol>
       </template>
       <template v-else>
-        <button v-if="nativeAvailable" class="btn primary install-native" type="button" :disabled="pending" @click="install">{{pending ? '正在打开安装窗口…' : '安装应用'}}</button>
+        <button v-if="nativeAvailable" class="btn primary install-native" type="button" :disabled="pending" @click="install">{{pending ? t('p.8f327633b6a7') : t('p.a298ba1f627c')}}</button>
         <template v-if="isIOS">
-          <h3>在 Safari 中添加</h3>
-          <ol class="install-steps"><li><span class="install-step-icon" aria-hidden="true">1</span><div><b>用 Safari 打开当前页面</b><p>如果正在其他浏览器中，请先用 Safari 打开此地址。</p></div></li><li><span class="install-step-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" role="img" aria-label="分享图标"><path d="M12 15V3m-4 4 4-4 4 4M7 10H4v11h16V10h-3" /></svg></span><div><b>点击分享按钮</b><p>在浏览器工具栏或菜单中找到分享图标。</p></div></li><li><span class="install-step-icon" aria-hidden="true">＋</span><div><b>选择“添加到主屏幕”</b><p>如有“打开为网页 App”选项，请保持开启，再点“添加”。</p></div></li></ol>
-          <p class="install-note">首次从桌面打开时，可能需要重新登录一次。</p>
-          <p class="install-note">添加后点击“已添加到桌面”，Safari 中将不再主动提示。</p>
+          <h3>{{t('p.485a25ee2735')}}</h3>
+          <ol class="install-steps"><li><span class="install-step-icon" aria-hidden="true">1</span><div><b>{{t('p.16c1930ff7ee')}}</b><p>{{t('p.ff7563aab76f')}}</p></div></li><li><span class="install-step-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" role="img" :aria-label="t('p.4138e74e8fb6')"><path d="M12 15V3m-4 4 4-4 4 4M7 10H4v11h16V10h-3" /></svg></span><div><b>{{t('p.b13c93dcab20')}}</b><p>{{t('p.35d133764fee')}}</p></div></li><li><span class="install-step-icon" aria-hidden="true">＋</span><div><b>{{t('p.be48b8dab8d1')}}</b><p>{{t('p.44b2ededb94c')}}</p></div></li></ol>
+          <p class="install-note">{{t('p.7cf0936559b8')}}</p>
+          <p class="install-note">{{t('p.250d25095692')}}</p>
         </template>
         <template v-else-if="installation.platform === 'android'">
-          <h3>{{nativeAvailable ? '也可以使用浏览器菜单' : '通过浏览器菜单添加'}}</h3>
-          <ol class="install-steps"><li><span class="install-step-icon" aria-hidden="true">⋮</span><div><b>打开浏览器菜单</b><p>点击地址栏旁的菜单按钮。</p></div></li><li><span class="install-step-icon" aria-hidden="true">＋</span><div><b>选择安装应用或添加到主屏幕</b><p>按浏览器提示确认。不同浏览器的名称可能不同。</p></div></li></ol>
-          <p v-if="!nativeAvailable" class="install-note">如果没有该选项，可用 Chrome 或 Edge 打开当前地址后重试。</p>
+          <h3>{{nativeAvailable ? t('p.cfeafa1a4316') : t('p.e2e677b6e57c')}}</h3>
+          <ol class="install-steps"><li><span class="install-step-icon" aria-hidden="true">⋮</span><div><b>{{t('p.26463eda207c')}}</b><p>{{t('p.62b1811c177e')}}</p></div></li><li><span class="install-step-icon" aria-hidden="true">＋</span><div><b>{{t('p.83f475a6ac89')}}</b><p>{{t('p.e6360ce18b06')}}</p></div></li></ol>
+          <p v-if="!nativeAvailable" class="install-note">{{t('p.d4fb6e342282')}}</p>
         </template>
         <template v-else>
-          <h3>{{nativeAvailable ? '也可以使用浏览器菜单' : '通过浏览器菜单添加'}}</h3>
-          <p>在浏览器地址栏或菜单中查找“安装应用”。如果没有该选项，可用支持安装的 Chrome 或 Edge 打开当前地址。</p>
+          <h3>{{nativeAvailable ? t('p.cfeafa1a4316') : t('p.e2e677b6e57c')}}</h3>
+          <p>{{t('p.a0e407fb7820')}}</p>
         </template>
       </template>
       <p v-if="message" class="install-note" role="status">{{message}}</p>
     </div>
-    <footer><p class="help">{{preference.never || preference.installed ? '已关闭主动提示，仍可随时从设置查看。' : '稍后提示将延后 7 天；设置中始终保留入口。'}}</p><div><button class="btn ghost" type="button" @click="choose('never')">不再提示</button><button class="btn" type="button" @click="choose('later')">稍后提示</button><button v-if="manualConfirmation" class="btn primary" type="button" @click="choose('installed')">已添加到桌面</button><button v-else class="btn primary" type="button" @click="close">完成</button></div></footer>
+    <footer><p class="help">{{preference.never || preference.installed ? t('p.1e787cef6d43') : t('p.9076f53bbc08')}}</p><div><button class="btn ghost" type="button" @click="choose('never')">{{t('p.a54a0add5447')}}</button><button class="btn" type="button" @click="choose('later')">{{t('p.8a3fd4b5a7be')}}</button><button v-if="manualConfirmation" class="btn primary" type="button" @click="choose('installed')">{{t('p.c327bf46a222')}}</button><button v-else class="btn primary" type="button" @click="close">{{t('p.c0b3fbff51cc')}}</button></div></footer>
   </dialog>
 </template>
 

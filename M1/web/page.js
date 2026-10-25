@@ -108,21 +108,73 @@ UI.onSubmit(screenForm,async()=>{
 },'toast.accepted');
 co2Display.append(h('h2',{i18n:'co2screen.title'}),h('p',{class:'help',i18n:'co2screen.help'}),screenForm);
 document.querySelector('[data-settings-page="device"]').append(co2Display);
+let sourceConfig=null,sourcePending=false,sourceEditing=false,sourceRead=0;
+const sourceMode=h('select',{id:'co2SourceMode'},h('option',{value:'local',i18n:'co2source.local'}),h('option',{value:'mqtt',i18n:'co2source.mqtt'}));
+const sourceID=h('input',{id:'co2SourceID',maxlength:12,pattern:'[0-9a-fA-F]{12}',autocomplete:'off'});
+sourceID.setAttribute('list','co2SourceCandidates');
+const sourceCandidates=h('datalist',{id:'co2SourceCandidates'});
+const doubleClick=h('select',{id:'co2DoubleClick'},h('option',{value:'none',i18n:'co2source.no_action'}),h('option',{value:'switch_display',i18n:'co2source.switch'}));
+const sourceHint=h('p',{class:'help'});
+const sourceForm=h('form',{class:'stack'},
+ h('label',{class:'field'},h('span',{i18n:'co2source.source'}),sourceMode),
+ h('label',{class:'field'},h('span',{i18n:'co2source.id'}),sourceID,sourceCandidates),
+ h('label',{class:'field'},h('span',{i18n:'co2source.double_click'}),doubleClick),sourceHint,
+ h('button',{class:'btn primary',type:'submit',i18n:'common.save'}));
+const sourceCard=h('section',{class:'card stack',id:'co2SourceConfig',hidden:true},h('h2',{i18n:'co2source.title'}),info('co2source.help'),sourceForm);
+document.querySelector('[data-settings-page="device"]').append(sourceCard);
+function renderSource(){
+ sourceMode.disabled=sourcePending;
+ sourceID.disabled=sourceMode.value!=='mqtt'||sourcePending;
+ sourceID.required=sourceMode.value==='mqtt';
+ doubleClick.disabled=sourcePending||sourceConfig?.button_events_supported!==true;
+ sourceHint.textContent=t(sourceConfig?.button_events_supported?'co2source.button_hint':'co2source.button_upgrade');
+}
+sourceMode.addEventListener('change',renderSource);
+sourceForm.addEventListener('input',()=>{sourceEditing=true;});
+async function loadCo2Source(){
+ if(sourceCard.hidden||sourcePending)return;
+ const generation=++sourceRead,config=await command('co2_source.get');
+ if(sourcePending||generation!==sourceRead)return;
+ if(!sourceEditing){sourceConfig=config;sourceMode.value=config.source;sourceID.value=config.device_id;doubleClick.value=config.double_click;}
+ else if(sourceConfig)sourceConfig.button_events_supported=config.button_events_supported;
+ renderSource();
+ if(window.getDeviceSensorSources){
+  const candidates=await window.getDeviceSensorSources();
+  sourceCandidates.replaceChildren(...candidates.map(c=>h('option',{value:c.device_id},c.name+' · '+c.ppm+' ppm')));
+ }
+}
+UI.onSubmit(sourceForm,async()=>{
+ if(!sourceConfig||sourcePending)throw Error(t('co2source.unavailable'));
+ const id=sourceMode.value==='mqtt'?sourceID.value.trim().toLowerCase():'';
+ if(sourceMode.value==='mqtt'&&!/^[0-9a-f]{12}$/.test(id))throw Error(t('co2source.invalid'));
+ sourcePending=true;sourceRead++;renderSource();
+ try{sourceConfig=await command('co2_source.set',{source:sourceMode.value,device_id:id,double_click:doubleClick.value,revision:sourceConfig.revision});sourceEditing=false;}
+ catch(error){try{sourceConfig=await command('co2_source.get');}catch{}throw error;}
+ finally{sourcePending=false;renderSource();}
+},'toast.accepted');
 /* Persisted controller thresholds share one revision across both pollutants. */
-let thresholdConfig=null,thresholdPending=false,thresholdRead=0;
+let thresholdConfig=null,thresholdPending=false,thresholdRead=0,thresholdReadAt=0,thresholdLoading=false;
 const thresholdRows={};
+const thresholdAlarmStatus=h('p',{class:'help',id:'m1AlarmStatus',role:'status'});
 const thresholdCard=h('section',{class:'card stack',id:'m1Thresholds',hidden:true},
- h('h2',{i18n:'m1.thresholds'}),info('m1.threshold_help'));
+ h('h2',{i18n:'m1.thresholds'}),info('m1.threshold_help'),info('m1.alarm_help'),thresholdAlarmStatus);
 async function loadThresholds(){
- if(thresholdCard.hidden||thresholdPending)return;
- const generation=++thresholdRead,config=await command('alarm.get');
- if(generation===thresholdRead&&!thresholdPending){thresholdConfig=config;renderThresholds();}
+ if(thresholdCard.hidden||thresholdPending||thresholdLoading)return;
+ thresholdLoading=true;thresholdReadAt=Date.now();
+ const generation=++thresholdRead;
+ try{const config=await command('alarm.get');if(generation===thresholdRead&&!thresholdPending){thresholdConfig=config;renderThresholds();}}
+ finally{thresholdLoading=false;}
 }
 function renderThresholds(){
+ const supported=thresholdConfig?.buzzer_supported===true;
+ thresholdAlarmStatus.textContent=t(!thresholdConfig?'m1.alarm_loading':!supported?'m1.alarm_upgrade':thresholdConfig.buzzer_confirmed===true?'m1.alarm_confirmed':'m1.alarm_pending');
  for(const [sensor,row] of Object.entries(thresholdRows)){
   const configured=thresholdConfig?.[sensor+'_configured'];
-  if(thresholdConfig&&!row.editing){row.low.value=configured?thresholdConfig[sensor+'_yellow']:row.defaults[0];row.high.value=configured?thresholdConfig[sensor+'_red']:row.defaults[1];}
+  if(thresholdConfig&&!row.editing){row.low.value=configured?thresholdConfig[sensor+'_yellow']:row.defaults[0];row.high.value=configured?thresholdConfig[sensor+'_red']:row.defaults[1];row.buzzer.checked=thresholdConfig[sensor+'_buzzer_enabled']===true;}
   for(const el of [row.low,row.high,row.save,row.reset])el.disabled=thresholdPending||!thresholdConfig;
+  row.buzzer.disabled=thresholdPending||!supported;
+  const actual=supported?thresholdConfig?.['mcu_'+sensor+'_buzzer_enabled']:null;
+  row.actual.textContent=t(actual===true?'m1.alarm_actual_on':actual===false?'m1.alarm_actual_off':'m1.alarm_actual_unknown');
  }
 }
 async function saveThresholds(sensor,restore){
@@ -132,7 +184,9 @@ async function saveThresholds(sensor,restore){
  if(!values.every(Number.isInteger)||values[0]<0||values[1]<1||values[1]>65535||values[0]>values[1])throw Error(t('m1.threshold_invalid'));
  thresholdPending=true;thresholdRead++;renderThresholds();
  try{
-  thresholdConfig=await command('alarm.set',{sensor,yellow:values[0],red:values[1],revision:thresholdConfig.revision});
+  const params={sensor,yellow:values[0],red:values[1],revision:thresholdConfig.revision};
+  if(!restore&&thresholdConfig.buzzer_supported===true)params.buzzer_enabled=row.buzzer.checked;
+  thresholdConfig=await command('alarm.set',params);
   row.editing=false;
  }catch(error){
   // Refresh the shared revision after conflicts, retaining the user's inputs.
@@ -143,12 +197,15 @@ async function saveThresholds(sensor,restore){
 for(const [sensor,key,defaults] of [['hcho','m.formaldehyde',[100,300]],['pm25','m.pm25',[75,150]]]){
  const low=h('input',{id:'m1Threshold_'+sensor+'_low',type:'number',min:0,max:65535,step:1,required:true});
  const high=h('input',{id:'m1Threshold_'+sensor+'_high',type:'number',min:1,max:65535,step:1,required:true});
+ const buzzer=h('input',{id:'m1Alarm_'+sensor,type:'checkbox',role:'switch'});
+ const actual=h('p',{class:'help',id:'m1AlarmActual_'+sensor});
  const save=h('button',{type:'submit',class:'btn primary',i18n:'common.save'});
  const reset=h('button',{type:'button',class:'btn ghost',i18n:'m1.threshold_restore',onclick:()=>run(null,()=>saveThresholds(sensor,true),'toast.accepted')});
  const form=h('form',{class:'stack','data-threshold-sensor':sensor},h('h3',{i18n:key}),
   ...[[low,'m1.threshold_low'],[high,'m1.threshold_high']].map(([input,label])=>h('label',{class:'field'},h('span',{i18n:label}),input)),
+  h('label',{class:'switch'},h('span',{class:'text'},h('b',{i18n:'m1.alarm_enabled'})),buzzer),actual,
   h('div',{class:'form-actions'},save,reset));
- thresholdRows[sensor]={low,high,save,reset,defaults,editing:false};
+ thresholdRows[sensor]={low,high,buzzer,actual,save,reset,defaults,editing:false};
  form.addEventListener('input',()=>{thresholdRows[sensor].editing=true;});
  UI.onSubmit(form,()=>saveThresholds(sensor,false),'toast.accepted');thresholdCard.append(form);
 }
@@ -214,7 +271,7 @@ function renderHome(s){
  }
  renderPressure();
  const config=s.co2_display;
- co2Display.hidden=!(config?.available===true&&config.mcu_supported===true&&config.module_present===true&&s.scd40?.serial);
+ co2Display.hidden=!(config?.available===true&&config.mcu_supported===true&&config.module_present===true);
  if(!co2Display.hidden){
   screenConfig=config;
   if(!screenEditing){displayMode.value=String(config.mode);displaySlot.value=String(config.slot);displayInterval.value=config.interval_seconds;displayLow.value=config.low;displayHigh.value=config.high;}
@@ -334,6 +391,7 @@ UI.start({
  capabilities(caps){
   particleEnabled=caps.actions?.includes("sensor_details.get")===true;renderParticles();pollParticles();
   if(caps.actions?.includes('alarm.get')&&caps.actions.includes('alarm.set')){thresholdCard.hidden=false;renderThresholds();run(null,loadThresholds,null);}
+  if(caps.actions?.includes('co2_source.get')&&caps.actions.includes('co2_source.set')){sourceCard.hidden=false;run(null,loadCo2Source,null);}
   if(caps.actions?.includes("wake_alarm.start")&&caps.actions.includes("wake_alarm.get")&&caps.actions.includes("wake_alarm.stop")){this.nav.schedule="wake.schedules";this.scheduleLead="wake.lead";installWakeAlarm();}
  },
  model:'M1',kindKey:'kind.m1',icon:'air',mqttHostMax:127,factoryReset:true,
@@ -341,16 +399,16 @@ UI.start({
  scheduleLead:'sch.lead_a1',interval:1000,
  groups:[['grp.network',['network','mqtt']],['grp.device',['device']],['grp.auto',['binding','schedule','night']],['grp.system',['firmware','diagnostics','logs','maintenance']]],
  nav:{network:'nav.wifi',mqtt:'nav.mqtt',device:'nav.general',binding:'nav.permission',schedule:'nav.schedule',night:'nav.sleep',firmware:'nav.firmware',diagnostics:'nav.diagnostics',logs:'nav.logs',maintenance:'nav.maintenance'},
- pages:{device:{show:async()=>{await Promise.all([clock.show(),loadThresholds(),loadMusic()]);},status:clock.status},binding:{show:showBinding}},
+ pages:{device:{show:async()=>{await Promise.all([clock.show(),loadThresholds(),loadMusic(),loadCo2Source()]);},status:clock.status},binding:{show:showBinding}},
  diagGroups:[['diag.g_sensor',['uart_ready','sensor_valid','sensor_received','age_ms','temperature','humidity','formaldehyde','pm25','rx_frames','unknown_frames','uart_errors','discarded_bytes','last_frame']],
   ['diag.g_clock',['timezone_minutes','ntp_host','ntp_status','ntp_server','ntp_synced','ntp_screen_queued','ntp_last_success','ntp_next_seconds']],
   ['diag.g_screen',['brightness_requested']],
   ['diag.g_ota_img',['ota_signature_verified','ota_image_verified','ota_key_id','ota_image_length','ota_release_counter','ota_version']]],
  healthChecks:s=>[['diag.c_sensor',s.uart_ready&&s.sensor_valid?'ok':'bad',s.uart_errors?t('diag.errors',{n:s.uart_errors}):t(s.sensor_valid?'state.ok':'m1.no_data')],
   ['diag.c_clock',s.ntp_synced?'ok':'warn',t('s.'+(s.ntp_status||'syncing'))]],
- onStatus:s=>{renderHome(s);renderWakeAlarm();pollWakeAlarm();}
+ onStatus:s=>{renderHome(s);renderWakeAlarm();pollWakeAlarm();if(UI.activePage()==='device'&&Date.now()-thresholdReadAt>=2000)loadThresholds().catch(()=>{});}
 });
-I18N.onChange(()=>{renderPeers();const p=document.querySelector('[data-settings-page="binding"]');if(p&&!p.hidden)showBinding();});
+I18N.onChange(()=>{renderPeers();renderThresholds();const p=document.querySelector('[data-settings-page="binding"]');if(p&&!p.hidden)showBinding();});
 // The linked list is small and changes rarely; refresh it with the status.
 (async function poll(){try{if(document.hidden||($('homePage').hidden&&UI.activePage()!=='binding'&&UI.activePage()!=='linkage'))return;bindingStatus=await api('/binding/status');renderPeers();}catch{}finally{setTimeout(poll,4000);}})();
 renderPeers();

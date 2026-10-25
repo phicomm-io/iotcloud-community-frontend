@@ -1,4 +1,6 @@
 <script setup>
+import {t} from '../i18n.js';
+
 import {ref} from 'vue';
 import {useRouter} from 'vue-router';
 import {connectLocal} from '../localConnection';
@@ -8,15 +10,15 @@ const router=useRouter(),address=ref(''),password=ref(''),busy=ref(false),error=
 async function connect(){busy.value=true;error.value='';try{const device=await connectLocal(address.value,password.value);password.value='';emit('connected',device);if(props.navigate)await router.push('/local');}catch(e){error.value=e.message;}finally{busy.value=false;}}
 </script>
 <template>
-<section class="local-connect card" aria-label="本地直连">
-<div><span class="eyebrow">无需账号 · 无需后端</span><h2>本地直连</h2><p class="help">填写设备内网 IP，即可控制设备、配置 Wi-Fi 和 MQTT。请允许浏览器访问本地网络。</p></div>
+<section class="local-connect card" :aria-label="t('p.3d3b06d22814')">
+<div><span class="eyebrow">{{t('p.17821a5cda93')}}</span><h2>{{t('p.3d3b06d22814')}}</h2><p class="help">{{t('p.8cb925b229b0')}}</p></div>
 <form @submit.prevent="connect">
-<label>设备 IP<input v-model="address" required placeholder="192.168.1.100 或 192.168.1.100:80" inputmode="url" autocomplete="off" :disabled="busy"/></label>
-<label>设备网页管理密码<input v-model="password" type="password" autocomplete="off" placeholder="未设置则留空" :disabled="busy"/></label>
-<button class="btn primary" :disabled="busy">{{busy?'正在探测…':'连接本地设备'}}</button>
+<label>{{t('p.3fd1c5c06889')}}<input v-model="address" required :placeholder="t('p.42b008274992')" inputmode="url" autocomplete="off" :disabled="busy"/></label>
+<label>{{t('p.f07ec443fcb9')}}<input v-model="password" type="password" autocomplete="off" :placeholder="t('p.44bb498d31cb')" :disabled="busy"/></label>
+<button class="btn primary" :disabled="busy">{{busy?t('p.f26c1e607006'):t('p.8be0e6fe5dcd')}}</button>
 <p v-if="error" class="form-message error" role="alert">{{error}}</p>
 </form>
-<RouterLink v-if="navigate" class="help" to="/local">打开本地设备管理，无需登录 →</RouterLink>
+<RouterLink v-if="navigate" class="help" to="/local">{{t('p.66556ccc5e16')}}</RouterLink>
 </section>
 </template>
 <style scoped>

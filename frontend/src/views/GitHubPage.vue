@@ -1,10 +1,12 @@
 <script setup>
+import {t} from '../i18n.js';
+
 import {onMounted, ref} from 'vue';
 import {useRoute, useRouter} from 'vue-router';
 import AuthShell from '../components/AuthShell.vue';
 import {completeGitHub} from '../githubAuth';
 const route=useRoute(),router=useRouter(),ticket=String(route.query.ticket||'');
-const busy=ref(true),message=ref('正在完成 GitHub 登录…'),registration=ref(false),username=ref(''),password=ref('');
+const busy=ref(true),message=ref(t('p.4a8dc8bf79fc')),registration=ref(false),username=ref(''),password=ref('');
 async function finish(){
  busy.value=true;
  try{
@@ -22,18 +24,18 @@ onMounted(finish);
 </script>
 <template>
  <AuthShell>
-  <span class="eyebrow">GitHub 登录</span>
-  <h1>{{registration?'完成账号创建':'连接你的账号'}}</h1>
+  <span class="eyebrow">{{t('p.5b1886225bb0')}}</span>
+  <h1>{{registration?t('p.5d805e2679d3'):t('p.5a73caed627a')}}</h1>
   <template v-if="registration">
-   <p>选择平台用户名和初始密码。此密码也用于设备连接 MQTT，之后可在设置中独立修改；下次可直接用 GitHub 登录。</p>
+   <p>{{t('p.d7872ca58142')}}</p>
    <form class="auth-form" @submit.prevent="finish">
-    <label>平台用户名<input v-model="username" required minlength="3" maxlength="32" pattern="[A-Za-z0-9_.\-]{3,32}" autocomplete="username" /></label>
-    <label>初始密码<input v-model="password" required type="password" minlength="6" maxlength="256" autocomplete="new-password" /></label>
-    <button class="primary-button auth-submit" :disabled="busy">{{busy?'正在创建…':'创建账号并登录'}}</button>
+    <label>{{t('p.b421c0b078ca')}}<input v-model="username" required minlength="3" maxlength="32" pattern="[A-Za-z0-9_.\-]{3,32}" :placeholder="t('p.c8ea90209208')" autocomplete="username" /></label>
+    <label>{{t('p.df387080f986')}}<input v-model="password" required type="password" minlength="6" maxlength="256" autocomplete="new-password" /></label>
+    <button class="primary-button auth-submit" :disabled="busy">{{busy?t('p.7c0305bc0ce6'):t('p.f6ebe2b96b3c')}}</button>
    </form>
-   <p class="auth-footnote">已有平台账号？请使用密码登录，在设置的账号安全中绑定 GitHub，保留原有设备。</p>
+   <p class="auth-footnote">{{t('p.68303c415b24')}}</p>
   </template>
   <p v-if="message" :role="busy?'status':'alert'" class="form-message">{{message}}</p>
-  <RouterLink v-if="!busy" to="/login">返回登录</RouterLink>
+  <RouterLink v-if="!busy" to="/login">{{t('p.747b0f9082e6')}}</RouterLink>
  </AuthShell>
 </template>

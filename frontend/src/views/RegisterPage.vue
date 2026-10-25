@@ -1,4 +1,6 @@
 <script setup>
+import {t} from '../i18n.js';
+
 import { ref, onMounted } from "vue";
 import AuthShell from "../components/AuthShell.vue";
 import { api } from "../account";
@@ -25,7 +27,7 @@ async function verify() {
       method: "POST",
       body: JSON.stringify({ email: email.value }),
     });
-    message.value = "验证码已发送";
+    message.value = t('p.2c1288e1d9f3');
   } catch (e) {
     message.value = e.message;
   }
@@ -42,7 +44,7 @@ async function register() {
         code: code.value,
       }),
     });
-    message.value = "注册成功，请登录后添加设备";
+    message.value = t('p.0bf253bee02b');
     password.value = "";
   } catch (e) {
     message.value = e.message;
@@ -53,22 +55,22 @@ async function register() {
 </script>
 <template>
   <AuthShell>
-    <span class="eyebrow">开始连接</span>
-    <h1>注册账号</h1>
-    <p>创建账号，自动同步设备列表。</p>
+    <span class="eyebrow">{{t('p.66af5915cc75')}}</span>
+    <h1>{{t('p.679e917b16ef')}}</h1>
+    <p>{{t('p.06bdce5081f8')}}</p>
     <form class="auth-form" v-if="level" @submit.prevent="register">
       <label
-        >用户名<input
+        >{{t('p.1a3f0617d6de')}}<input
           v-model="username"
           type="text"
           minlength="3"
           maxlength="32"
           pattern="[A-Za-z0-9_.\-]{3,32}"
-          placeholder="3–32 个字母、数字、下划线、点或连字符"
+          :placeholder="t('p.c8ea90209208')"
           autocomplete="username"
           required /></label
       ><label
-        >密码<input
+        >{{t('p.a621ab606db2')}}<input
           v-model="password"
           type="password"
           minlength="6"
@@ -76,13 +78,13 @@ async function register() {
           autocomplete="new-password"
           required /></label
       ><template v-if="level === 2"
-        ><label>验证邮箱<input v-model="email" type="email" maxlength="254" autocomplete="email" required /></label><button type="button" @click="verify">发送验证码</button
-        ><label>验证码<input v-model="code" required /></label></template
-      ><button class="primary-button auth-submit" :disabled="busy">注册</button>
+        ><label>{{t('p.7f98620a54e6')}}<input v-model="email" type="email" maxlength="254" autocomplete="email" required /></label><button type="button" @click="verify">{{t('p.4656fed515ae')}}</button
+        ><label>{{t('p.bb015c60bafc')}}<input v-model="code" required /></label></template
+      ><button class="primary-button auth-submit" :disabled="busy">{{t('p.c4fb62202bad')}}</button>
     </form>
-    <p v-else>注册已关闭 {{ contact }}</p>
+    <p v-else>{{t('p.3885d9589040')}} {{ contact }}</p>
     <p role="alert" class="form-message">{{ message }}</p>
-    <RouterLink to="/login">登录</RouterLink> ·
-    <RouterLink to="/guest">进入访客模式</RouterLink>
+    <RouterLink to="/login">{{t('p.1e2df9c3075a')}}</RouterLink> ·
+    <RouterLink to="/guest">{{t('p.b1c58c605cc1')}}</RouterLink>
   </AuthShell>
 </template>

@@ -86,7 +86,7 @@ input[type=text],input[type=password],input[type=number],input[type=url],input[t
 textarea{min-height:120px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px}
 input[type=range]{width:100%;min-height:28px;accent-color:var(--accent);margin:0;padding:0;border:0;background:transparent}
 input[type=color]{width:40px;height:40px;min-height:40px;padding:2px;border:1px solid var(--border);border-radius:var(--radius-s);background:var(--surface);cursor:pointer}
-input[type=file]{padding:8px}
+input[type=file]{width:100%;max-width:100%;min-width:0;padding:8px}
 .fields{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
 .form-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:20px}
 .input-unit{display:flex;align-items:center;gap:8px}.input-unit input{flex:1}.input-unit em{font-style:normal;color:var(--muted);font-size:13px;white-space:nowrap}
@@ -341,3 +341,4 @@ pre{overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;bac
 
 .m1-metrics .stat{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px}
 .m1-metrics .stat small{margin-left:0}
+@media(max-width:760px){.m1-metrics .metric .stat{padding-top:8px}}

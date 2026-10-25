@@ -15,7 +15,10 @@ const ACTIONS={M1:['schedules.get','schedules.put','schedules.delete','schedules
  const html=require('./render_page.cjs')(path);
  const dom=new JSDOM(html,{pretendToBeVisual:true,runScripts:'outside-only',url:'http://device.local'}),w=dom.window,d=w.document,calls=[];
  const missing=[];w.console.warn=(...args)=>{if(args[0]==='i18n missing')missing.push(args[1]);};
- const pollTimers=[];w.TextEncoder=require('node:util').TextEncoder;w.setTimeout=(fn)=>{if(fn.name==='refresh')pollTimers.push(fn);return 0;};w.confirm=()=>true;w.scrollTo=()=>{};
+ const pollTimers=[];w.TextEncoder=require('node:util').TextEncoder;
+ // Minification renames callbacks. Identify the status poll by its configured
+ // interval rather than relying on a source-only function name.
+ w.setTimeout=(fn,delay)=>{const page=w.UI?.activePage?.(),interval=page?(page==='diagnostics'?5000:10000):(w.UI?.device?.interval||2000);if(delay===interval)pollTimers.push(fn);return 0;};w.confirm=()=>true;w.scrollTo=()=>{};
  const state={mqtt_topic_mode:model==='TC1'?'legacy':'tmcp',name:'test <img>',device_id:'aabbccddeeff',version:'test',ip:'1.2.3.4',ssid:'home',wifi_connected:true,mqtt_status:'ready',mqtt_host:'broker',mqtt_user:'user',mqtt_port:1883,
   brightness_requested:4,brightness:255,led_enabled:true,led_always_on:true,red:1,green:2,blue:3,speed:60,percentage:60,applied_speed:60,requested_speed:60,fan_on:true,fan_ready:true,panel_ready:true,
   sensor_received:true,sensor_valid:true,age_ms:1000,temperature:25,humidity:50,formaldehyde:0.02,pm25:20,time_synced:true,timezone_minutes:480,ntp_host:'pool.ntp.org',ntp_status:'synced',ntp_synced:true,
@@ -79,7 +82,7 @@ const ACTIONS={M1:['schedules.get','schedules.put','schedules.delete','schedules
  if(model==='A1')assert(d.querySelector('#autoCard').textContent.includes('25.0 °C'),'homepage displays the live M1 mean even when linkage is disabled');
  if(model==='A1'){
   const ring=d.querySelector('#ring'),label=ring.getAttribute('aria-label');
-  assert.match(label,/31.*10.*6 点.*25.*26/,'A1 preview documents the real 31-source ring orientation');
+  assert.match(label,/31.*10.*6.*25.*26/,'A1 preview documents the real 31-source ring orientation');
   assert.equal(ring.querySelectorAll('.ring-guide').length,1,'A1 preview renders a continuous light guide');
   assert(ring.querySelectorAll('.ring-light-segment').length>31,'A1 preview samples continuous guide illumination');
   assert.equal(ring.querySelectorAll('circle:not(.ring-guide):not(.ring-edge)').length,0,'A1 preview does not render LED particles');

@@ -1,4 +1,6 @@
 <script setup>
+import {t} from '../i18n.js';
+
 import { ref, watch, computed } from "vue";
 import AppIcon from "./AppIcon.vue";
 const props = defineProps({
@@ -42,6 +44,7 @@ watch(
 );
 const send = (leaf, value) =>
   emit("send-cmd", { mac: props.device.mac, leaf, value });
+const stateLabel = value => t(value === 'ON' ? 'state.on' : value === 'OFF' ? 'state.off' : 'state.unknown');
 function light(state) {
   const c = rgb.value;
   send("light/set", {
@@ -57,19 +60,19 @@ function light(state) {
 </script>
 <template>
  <section class="card community-control">
-  <div class="community-heading"><span class="model-icon" :class="`model-${device.model}`"><AppIcon :name="device.model === 'm1' ? 'air' : 'fan'" :size="25" /></span><div><h2>{{ device.deviceName || device.model }}</h2><p>{{ device.model === 'm1' ? '空气质量检测' : '空气净化与灯光' }}</p></div><span class="status-pill" :class="{ online: device.available && connected }"><span class="status-dot" :class="{ online: device.available && connected }"></span>{{ !connected || device.available === undefined ? '状态未知' : device.available ? '在线' : '离线' }}</span></div>
+  <div class="community-heading"><span class="model-icon" :class="`model-${device.model}`"><AppIcon :name="device.model === 'm1' ? 'air' : 'fan'" :size="25" /></span><div><h2>{{ device.deviceName || device.model }}</h2><p>{{ device.model === 'm1' ? t('p.396014745419') : t('p.4ccda3dd41d9') }}</p></div><span class="status-pill" :class="{ online: device.available && connected }"><span class="status-dot" :class="{ online: device.available && connected }"></span>{{ !connected || device.available === undefined ? t('p.93e474c68ed5') : device.available ? t('p.b9086662b1df') : t('p.be1b4f3c6c1c') }}</span></div>
   <template v-if="device.model === 'm1'">
-   <div v-if="!sensorValid" class="sensor-warning"><AppIcon name="air" :size="21" /><p>传感器数据无效或已过期</p></div>
-   <dl v-else class="sensor-grid"><div v-for="[key,title,unit] in [['temperature','温度','°C'],['humidity','湿度','%'],['formaldehyde','甲醛','mg/m³'],['pm25','PM2.5','µg/m³']]" :key="key" class="sensor-metric"><dt>{{ title }}</dt><dd>{{ device[key] ?? '—' }} <span>{{ unit }}</span></dd></div></dl>
+   <div v-if="!sensorValid" class="sensor-warning"><AppIcon name="air" :size="21" /><p>{{t('p.55ff1e6806c1')}}</p></div>
+   <dl v-else class="sensor-grid"><div v-for="[key,title,unit] in [['temperature',t('p.3732e264dfa9'),'°C'],['humidity',t('p.82213712d6ae'),'%'],['formaldehyde',t('p.e3094ccafe04'),'mg/m³'],['pm25','PM2.5','µg/m³']]" :key="key" class="sensor-metric"><dt>{{ title }}</dt><dd>{{ device[key] ?? '—' }} <span>{{ unit }}</span></dd></div></dl>
    <div class="control-divider"></div>
-   <form class="brightness-control" @submit.prevent="send('brightness/set',Number(brightness))"><span class="control-section-icon"><AppIcon name="monitor" :size="23" /></span><label>屏幕亮度（设备请求值）<select v-model="brightness" aria-label="屏幕亮度（设备请求值）"><option v-for="n in 5" :value="n-1" :key="n">{{ n-1 }}</option></select></label><button class="secondary-button" :disabled="!connected">设置亮度</button></form>
+   <form class="brightness-control" @submit.prevent="send('brightness/set',Number(brightness))"><span class="control-section-icon"><AppIcon name="monitor" :size="23" /></span><label>{{t('p.c810bdb7595a')}}<select v-model="brightness" :aria-label="t('p.c810bdb7595a')"><option v-for="n in 5" :value="n-1" :key="n">{{ n-1 }}</option></select></label><button class="secondary-button" :disabled="!connected">{{t('p.a8616178eeee')}}</button></form>
   </template>
   <template v-else>
-   <div class="a1-module"><div class="a1-module-heading"><span class="control-section-icon"><AppIcon name="fan" :size="23" /></span><div><h3>风扇</h3><p>风扇：{{ device.fan ?? '未知' }} · 转速：{{ device.fan_percentage ?? '—' }}%</p></div><button class="secondary-button" :disabled="!connected" @click="send('fan/set',device.fan === 'ON' ? 'OFF' : 'ON')">切换风扇</button></div><form class="fan-speed-control" @submit.prevent="send('fan/percentage/set',Number(percentage))"><label>风扇转速<span class="percentage-field"><input v-model="percentage" aria-label="风扇转速" type="number" min="0" max="100" required /><span>%</span></span></label><button class="secondary-button" :disabled="!connected">设置转速</button></form></div>
+   <div class="a1-module"><div class="a1-module-heading"><span class="control-section-icon"><AppIcon name="fan" :size="23" /></span><div><h3>{{t('p.3e41bc3fa911')}}</h3><p>{{t('p.d46048d26dfc')}}{{ stateLabel(device.fan) }} {{t('p.065fabb46741')}}{{ device.fan_percentage ?? '—' }}%</p></div><button class="secondary-button" :disabled="!connected" @click="send('fan/set',device.fan === 'ON' ? 'OFF' : 'ON')">{{t('p.5fde98750404')}}</button></div><form class="fan-speed-control" @submit.prevent="send('fan/percentage/set',Number(percentage))"><label>{{t('p.81a4001eda3b')}}<span class="percentage-field"><input v-model="percentage" :aria-label="t('p.81a4001eda3b')" type="number" min="0" max="100" required /><span>%</span></span></label><button class="secondary-button" :disabled="!connected">{{t('p.4e7710cf0e43')}}</button></form></div>
    <div class="control-divider"></div>
-   <div class="a1-module"><div class="a1-module-heading"><span class="control-section-icon"><AppIcon name="sun" :size="23" /></span><div><h3>RGB 灯光</h3><p>灯光：{{ device.light?.state ?? '未知' }}</p></div></div><div class="light-inputs"><label>颜色<input v-model="rgb" type="color" /></label><label class="light-range">亮度 <span class="range-value">{{ lightBrightness }} / 255</span><input v-model="lightBrightness" type="range" min="0" max="255" /></label></div><div class="light-actions"><button class="secondary-button" :disabled="!connected" @click="light('ON')">开启灯光</button><button class="quiet-button" :disabled="!connected" @click="light('OFF')">关闭灯光</button></div></div>
+   <div class="a1-module"><div class="a1-module-heading"><span class="control-section-icon"><AppIcon name="sun" :size="23" /></span><div><h3>{{t('p.72f339c4de35')}}</h3><p>{{t('p.e49a3d49cbab')}}{{ stateLabel(device.light?.state) }}</p></div></div><div class="light-inputs"><label>{{t('p.070a8016fcc3')}}<input v-model="rgb" type="color" /></label><label class="light-range">{{t('p.8e2f643ad160')}} <span class="range-value">{{ lightBrightness }} / 255</span><input v-model="lightBrightness" type="range" min="0" max="255" /></label></div><div class="light-actions"><button class="secondary-button" :disabled="!connected" @click="light('ON')">{{t('p.3cd9f8a67fcb')}}</button><button class="quiet-button" :disabled="!connected" @click="light('OFF')">{{t('p.02054ba5e3f9')}}</button></div></div>
    <div class="control-divider"></div>
-   <div class="extra-controls"><div v-for="[key,title] in [['child_lock','童锁'],['led_always_on','指示灯常亮']]" :key="key" class="extra-control"><span><AppIcon :name="key === 'child_lock' ? 'shield' : 'sun'" :size="18" />{{ title }}<small>{{ device[key] ?? '未知' }}</small></span><button class="toggle-control" :class="{ on: device[key] === 'ON' }" :disabled="!connected" :aria-label="`切换${title}`" :aria-pressed="device[key] === 'ON'" @click="send(key+'/set',device[key] === 'ON' ? 'OFF' : 'ON')"><span></span></button></div></div>
+   <div class="extra-controls"><div v-for="[key,title] in [['child_lock',t('p.0f68010bc429')],['led_always_on',t('p.bbddcc027e0c')]]" :key="key" class="extra-control"><span><AppIcon :name="key === 'child_lock' ? 'shield' : 'sun'" :size="18" />{{ title }}<small>{{ stateLabel(device[key]) }}</small></span><button class="toggle-control" :class="{ on: device[key] === 'ON' }" :disabled="!connected" :aria-label="t('p.ca1ed60f09c5',{v0:(title)})" :aria-pressed="device[key] === 'ON'" @click="send(key+'/set',device[key] === 'ON' ? 'OFF' : 'ON')"><span></span></button></div></div>
   </template>
  </section>
 </template>
