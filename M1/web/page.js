@@ -25,8 +25,50 @@ function renderPressure(){
 // Expire this optional reading even if status polling stops succeeding.
 // Browsers pause timers in the back/forward cache and resume them on restore.
 // Keep this timer, and expire immediately on pageshow even if polling fails.
-setInterval(()=>{renderPressure();renderWakeAlarm();pollWakeAlarm();},1000);
+setInterval(()=>{renderPressure();renderWakeAlarm();pollWakeAlarm();renderParticles();pollParticles();},1000);
 window.addEventListener('pageshow',renderPressure);
+
+/* Independent particle snapshot: keep PM2.5 in the primary readings. */
+let particleData=null,particleAt=0,particlePollAt=-Infinity,particlePending=false,particleEnabled=false;
+const particleRows=[];
+function particleGroup(parent,group,keys,unit){
+ const list=h('dl',{class:'particle-grid'});
+ for(const [key,label] of keys){const value=h('span',{},'—');
+  list.append(h('div',{},h('dt',{},label),h('dd',{},value,...(group==='particles_per_0_1_l'?[]:[h('small',{},unit)]))));
+  particleRows.push({group,key,value});}
+ parent.append(list);
+}
+const particleCard=h('section',{class:'card stack',id:'particleCard'},
+ h('div',{class:'card-head'},h('h2',{i18n:'particles.title'}),h('span',{class:'badge',id:'particleState',role:'status'})));
+particleCard.hidden=true;
+particleGroup(particleCard,'atmospheric_ug_m3',[['pm1','PM1.0'],['pm10','PM10']],'µg/m³');
+particleCard.append(h('p',{class:'help',i18n:'particles.counts'}));
+particleGroup(particleCard,'particles_per_0_1_l',['0_3','0_5','1_0','2_5','5_0','10_0'].map(k=>['gt_'+k,'> '+k.replace('_','.')+' µm']),'');
+const cf=h('details',{},h('summary',{i18n:'particles.cf1'}));
+particleGroup(cf,'cf1_ug_m3',[['pm1','PM1.0'],['pm10','PM10']],'µg/m³');particleCard.append(cf);
+const raw=h('pre',{class:'particle-raw',id:'particleRaw'});
+particleCard.append(h('details',{},h('summary',{i18n:'particles.diagnostics'}),raw));
+$('metrics').after(particleCard);
+function renderParticles(){
+ const d=particleData;
+ particleCard.hidden=!particleEnabled||d?.supported===false;
+ const valid=d?.supported!==false&&d?.available===true&&d.fresh===true&&d.healthy===true&&
+  Number.isFinite(d.age_ms)&&d.age_ms>=0&&d.age_ms+Math.max(0,performance.now()-particleAt)<6000;
+ $('particleState').textContent=t(valid?'state.ok':'particles.unavailable');
+ for(const row of particleRows){const n=d?.pm?.[row.group]?.[row.key];
+  row.value.textContent=valid&&Number.isInteger(n)&&n>=0&&n<=65535?String(n):'—';}
+ raw.textContent=d?.diagnostics?JSON.stringify(d.diagnostics,null,2):'—';
+}
+async function pollParticles(){
+ if(!particleEnabled||particlePending||document.hidden||$('homePage').hidden||performance.now()-particlePollAt<2000)return;
+ particlePending=true;particlePollAt=performance.now();
+ try{particleData=await command('sensor_details.get');particleAt=performance.now();}
+ catch{particleData=null;}
+ finally{particlePending=false;renderParticles();}
+}
+
+window.addEventListener('pageshow',()=>{renderParticles();pollParticles();});
+I18N.onChange(renderParticles);
 
 /* ---------- Home: readings ---------- */
 const tiles={};
@@ -290,6 +332,7 @@ $('clockCard').replaceWith(clock.el);
 
 UI.start({
  capabilities(caps){
+  particleEnabled=caps.actions?.includes("sensor_details.get")===true;renderParticles();pollParticles();
   if(caps.actions?.includes('alarm.get')&&caps.actions.includes('alarm.set')){thresholdCard.hidden=false;renderThresholds();run(null,loadThresholds,null);}
   if(caps.actions?.includes("wake_alarm.start")&&caps.actions.includes("wake_alarm.get")&&caps.actions.includes("wake_alarm.stop")){this.nav.schedule="wake.schedules";this.scheduleLead="wake.lead";installWakeAlarm();}
  },

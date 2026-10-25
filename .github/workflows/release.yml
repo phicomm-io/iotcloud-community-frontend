@@ -32,7 +32,7 @@ jobs:
       - run: NODE_PATH=frontend/node_modules node tests/test_a1_light_save.cjs
       - run: NODE_PATH=frontend/node_modules node tests/test_a1_countdown.cjs
       - run: NODE_PATH=frontend/node_modules node tests/test_a1_filter.cjs
-      - run: NODE_PATH=frontend/node_modules node --test tests/test_a1_filter_stock.cjs tests/test_a1_sensor_capabilities.cjs tests/test_a1_fresh_air.cjs tests/test_m1_co2_display.cjs tests/test_m1_wake_alarm.cjs tests/test_m1_thresholds.cjs tests/test_m1_music.cjs
+      - run: NODE_PATH=frontend/node_modules node --test tests/test_a1_filter_stock.cjs tests/test_a1_sensor_capabilities.cjs tests/test_a1_fresh_air.cjs tests/test_m1_co2_display.cjs tests/test_m1_wake_alarm.cjs tests/test_m1_thresholds.cjs tests/test_m1_music.cjs tests/test_m1_particles.cjs
       - run: TZ=Asia/Shanghai NODE_PATH=frontend/node_modules node --test tests/test_m1_wake_alarm.cjs
       - run: NODE_PATH=frontend/node_modules node tests/test_a1_auto.cjs
       - run: NODE_PATH=frontend/node_modules node tests/test_daikin.cjs
@@ -47,7 +47,7 @@ jobs:
           node tests/test_a1_light_save.cjs
           node tests/test_a1_countdown.cjs
           node tests/test_a1_filter.cjs
-          node --test tests/test_a1_filter_stock.cjs tests/test_a1_sensor_capabilities.cjs tests/test_m1_co2_display.cjs tests/test_m1_wake_alarm.cjs tests/test_m1_thresholds.cjs tests/test_m1_music.cjs
+          node --test tests/test_a1_filter_stock.cjs tests/test_a1_sensor_capabilities.cjs tests/test_m1_co2_display.cjs tests/test_m1_wake_alarm.cjs tests/test_m1_thresholds.cjs tests/test_m1_music.cjs tests/test_m1_particles.cjs
           node tests/test_a1_auto.cjs
           node tests/test_m1_co2.cjs
           node tests/test_daikin.cjs
@@ -63,6 +63,8 @@ jobs:
       - run: NODE_PATH=frontend/node_modules node tests/test_interaction_layout.cjs
       - run: NODE_PATH=frontend/node_modules node tests/test_m1_pressure_browser.cjs
       - run: BROWSER=webkit NODE_PATH=frontend/node_modules node tests/test_m1_pressure_browser.cjs
+      - run: NODE_PATH=frontend/node_modules node tests/test_m1_particles_browser.cjs
+      - run: BROWSER=webkit NODE_PATH=frontend/node_modules node tests/test_m1_particles_browser.cjs
       - run: BROWSER=webkit NODE_PATH=frontend/node_modules node tests/test_interaction_layout.cjs
       - run: npm run build --prefix frontend
       - run: node tests/bemfa-cloud.mjs

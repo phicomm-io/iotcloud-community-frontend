@@ -329,3 +329,15 @@ pre{overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;bac
  .binding-peer{flex-wrap:wrap}
  .binding-peer>.grow{flex-basis:calc(100% - 52px)}
 }
+
+.particle-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,130px),1fr));gap:16px;margin:0}
+.particle-grid dt{color:var(--muted);font-size:13px}
+.particle-grid dd{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px;margin:4px 0 0;font-size:24px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.particle-grid small{font-size:12px;color:var(--muted)}
+.particle-raw{white-space:pre-wrap;overflow-wrap:anywhere;max-height:280px;overflow:auto;font-size:12px}
+
+#particleCard .card-head{flex-wrap:wrap}
+#particleCard{min-width:0}
+
+.m1-metrics .stat{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px}
+.m1-metrics .stat small{margin-left:0}

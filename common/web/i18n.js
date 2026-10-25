@@ -4,6 +4,11 @@
 (()=>{
 'use strict';
 const D={
+'particles.title':['Particle details','颗粒物详情'],
+'particles.counts':['Cumulative particle counts by diameter, per 0.1 L','按粒径统计的累计颗粒数，每 0.1 L'],
+'particles.cf1':['CF=1 mass concentration','CF=1 质量浓度'],
+'particles.diagnostics':['Sensor diagnostics and raw frames','传感器诊断与原始帧'],
+'particles.unavailable':['Waiting for valid readings','等待有效读数'],
 'daikin.kind':['Air quality monitor','空气质量检测仪'],
 'daikin.indicator':['Air quality indicators','空气质量指示灯'],
 'daikin.indicator_hint':['Configure thresholds and light patterns in Device settings.','在设备设置中配置阈值和亮灯方式。'],
