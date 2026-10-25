@@ -127,6 +127,7 @@ for(const engine of [chromium,webkit]){
   await passwordBounds(cloudPage,language,false,cloudOwner.requests);assert.deepEqual(cloudOwner.errors,[]);await cloudOwner.context.close();
   for(const variant of ['hub','full']){
    const {context,requests,errors,setIdentityUnavailable}=await fixtureContext(browser,language,{variant}),page=await context.newPage();await page.goto(platform+'/#/local');
+   await page.getByRole('button',{name:zh?'本地连接':'Local connection',exact:true}).click();
    await page.getByLabel(zh?'设备 IP':'Device IP',{exact:true}).fill('192.168.1.18');await page.getByRole('button',{name:zh?'连接本地设备':'Connect local device',exact:true}).click();
    await expect(page.locator('.device-heading')).toContainText(zh?'内网已连接':'LAN connected');
    const entry=page.locator('.local-hub-entry a');
