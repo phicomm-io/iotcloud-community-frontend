@@ -27,6 +27,7 @@ function actionEditor(host,{keys=false}={}){
  box.append(fields);
  let read=()=>({}),current=keys?'none':(available[0]||'none');
  function draw(a,params={}){
+  fields.querySelector('[data-wake-tone-field]')?.dispatchEvent(new Event('m1-tone-dispose'));
   current=a;fields.replaceChildren();read=()=>({});
   if(a==='none'||!a)return;
   const parts=[];
@@ -53,6 +54,24 @@ function actionEditor(host,{keys=false}={}){
    const duration=h('input',{type:'number',min:1,max:180,step:1,value:params.duration_seconds??60,required:true,'data-wake-duration':''});
    fields.append(h('label',{class:'field'},h('span',{i18n:'wake.duration'}),duration),info('wake.hint'));
    parts.push(()=>{const n=Number(duration.value);if(!Number.isInteger(n)||n<1||n>180)throw Error(t('wake.invalid'));return {duration_seconds:n};});
+   const tone=h('select',{'data-wake-tone':''},...[0,1,2,3,4,5].map(id=>h('option',{value:id,i18n:'wake.tone.'+id})));
+   tone.value=String(params.tone??0);
+   const preview=h('button',{type:'button',class:'btn ghost',i18n:'wake.try_tone',onclick:()=>run(preview,()=>{
+    if(!UI.m1ToneSupported)throw Error(t('wake.tone_unavailable'));
+    const id=Number(tone.value);if(id===5){if(!UI.m1MusicPresent)throw Error(t('wake.tone_unavailable'));return command('music.play');}return command('wake_alarm.start',id?{duration_seconds:1,tone:id}:{duration_seconds:3});
+   },null)});
+   const toneField=h('div',{class:'stack','data-wake-tone-field':''},h('label',{class:'field'},h('span',{i18n:'wake.tone'}),tone),preview);
+   function updateTones(){toneField.hidden=UI.m1ToneSupported!==true;tone.querySelector('[value="5"]').hidden=UI.m1MusicPresent!==true;}
+   updateTones();window.addEventListener('m1-tone-capability',updateTones);
+   // Remove the listener when a different action replaces these fields.
+   toneField.addEventListener('m1-tone-dispose',()=>window.removeEventListener('m1-tone-capability',updateTones),{once:true});
+   fields.append(toneField);
+   parts.push(()=>{
+    const id=Number(tone.value);
+    if(!Number.isInteger(id)||id<0||id>5)throw Error(t('wake.tone_unavailable'));
+    if((id&&!UI.m1ToneSupported)||(id===5&&!UI.m1MusicPresent))throw Error(t('wake.tone_unavailable'));
+    return id?{tone:id}:{};
+   });
   }
   if(a==='fan.set'){
    const m={speed:params.speed||60},[out,range]=slider(m,'speed',{min:1});

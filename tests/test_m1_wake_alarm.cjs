@@ -1,7 +1,7 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm');
 const {JSDOM}=require('jsdom');const flush=()=>new Promise(r=>setImmediate(r));
 async function settle(){for(let i=0;i<8;i++)await flush();}
-async function setup(supported=true,{timezone=0,now}={}){
+async function setup(supported=true,{timezone=0,now,toneSupport=false}={}){
  const html=require('./render_page.cjs')('M1/web/index.html');
  const dom=new JSDOM(html,{runScripts:'outside-only',url:'http://device.local'}),w=dom.window;
  if(now!==undefined){const NativeDate=w.Date;w.Date=class extends NativeDate{constructor(...args){super(...(args.length?args:[now]));}static now(){return now;}};}
@@ -11,7 +11,7 @@ async function setup(supported=true,{timezone=0,now}={}){
  w.fetch=async(url,opt)=>{const req=JSON.parse(opt.body);calls.push(req);let data={};
   if(req.action==='wake_alarm.start'){active=true;seconds=req.params.duration_seconds;}
   if(req.action==='wake_alarm.stop')active=false;
-  if(req.action.startsWith('wake_alarm.'))data={active,remaining_seconds:active?seconds:0};
+  if(req.action.startsWith('wake_alarm.'))data={active,remaining_seconds:active?seconds:0,tone_supported:toneSupport,tone_count:toneSupport?4:0};
   if(req.action==='schedules.put'&&!fail)tasks=[{at:0,days:0,minute:0,...req.params,id:req.params.id||1,state:'waiting'}];
   if(req.action==='schedules.get')data={items:tasks,next:8,capacity:8,count:tasks.length};
   return {ok:true,json:async()=>({code:fail?'storage_error':'ok',data})};};
@@ -19,7 +19,7 @@ async function setup(supported=true,{timezone=0,now}={}){
  scripts.forEach((s,i)=>{if(i===scripts.length-1){w.UI.start=dev=>{w.UI.device=dev;w.UI.caps=caps;dev.capabilities(caps);};w.UI.reload=async()=>w.UI.state;}vm.runInContext(s,dom.getInternalVMContext());});
  w.I18N.set('en');w.UI.state={time_synced:true,timezone_minutes:timezone};
  const page=w.automationPages(w.UI.device).schedule;w.document.body.append(page.el);await page.show();await settle();
- return {dom,w,calls,page,setFail:v=>{fail=v;}};
+ return {dom,w,calls,page,setFail:v=>{fail=v;},setToneSupport:v=>{toneSupport=v;}};
 }
 test('M1 alarm schedule defaults to 60 seconds, supports repeat/once/edit, and rejects invalid duration',async()=>{
  const x=await setup(),{w,page,calls}=x;try{
@@ -70,4 +70,32 @@ test('M1 alarm preview is bounded, stop remains reachable, older firmware hides 
   w.UI.state={ota_active:true,pm25:5,formaldehyde:.01,temperature:20,humidity:50};w.UI.device.onStatus({...w.UI.state,sensor_fields:{},barometer:null});assert.equal(get('wakeAlarmPreview').disabled,true);assert.equal(get('wakeAlarmStop').disabled,false);
  }finally{x.dom.window.close();}
  const old=await setup(false);try{assert.equal(old.w.document.getElementById('wakeAlarmCard'),null);assert.equal(old.page.el.querySelector('[data-value="wake_alarm.start"]'),null);}finally{old.dom.window.close();}
+});
+test('MCU-gated tones support single preview, schedule persistence and capability loss',async()=>{
+ const x=await setup(true,{toneSupport:true}),{w,page,calls}=x;
+ try{
+  const get=id=>w.document.getElementById(id);
+  assert.equal(get('wakeAlarmToneField').hidden,false);
+  get('wakeAlarmTone').value='3';get('wakeAlarmPreview').click();await settle();
+  assert.deepEqual(calls.findLast(x=>x.action==='wake_alarm.start').params,{duration_seconds:1,tone:3});
+  get('wakeAlarmStop').click();await settle();
+  const root=page.el,form=root.querySelector('form');
+  root.querySelector('[data-value="wake_alarm.start"]').click();
+  root.querySelector('[data-wake-tone]').value='2';
+  root.querySelector('input[type="time"]').value='07:30';
+  root.querySelector('[data-wake-tone-field] button').click();await settle();
+  assert.deepEqual(calls.findLast(x=>x.action==='wake_alarm.start').params,{duration_seconds:1,tone:2});
+  get('wakeAlarmStop').click();await settle();
+  form.dispatchEvent(new w.Event('submit',{cancelable:true}));await settle();
+  assert.deepEqual(calls.findLast(x=>x.action==='schedules.put').params.params,{duration_seconds:60,tone:2});
+  [...root.querySelectorAll('button')].find(b=>b.textContent==='Edit').click();
+  assert.equal(root.querySelector('[data-wake-tone]').value,'2');
+  x.setToneSupport(false);get('wakeAlarmStop').click();await settle();
+  assert.equal(get('wakeAlarmToneField').hidden,true);
+  assert.equal(root.querySelector('[data-wake-tone-field]').hidden,true);
+  const before=calls.filter(x=>x.action==='schedules.put').length;
+  form.dispatchEvent(new w.Event('submit',{cancelable:true}));await settle();
+  assert.equal(calls.filter(x=>x.action==='schedules.put').length,before,'retain unsupported saved tone rather than silently rewriting');
+ }finally{x.dom.window.close();}
+ const old=await setup();try{assert.equal(old.w.document.getElementById('wakeAlarmToneField').hidden,true);}finally{old.dom.window.close();}
 });

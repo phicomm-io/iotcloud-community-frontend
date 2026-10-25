@@ -66,6 +66,102 @@ UI.onSubmit(screenForm,async()=>{
 },'toast.accepted');
 co2Display.append(h('h2',{i18n:'co2screen.title'}),h('p',{class:'help',i18n:'co2screen.help'}),screenForm);
 document.querySelector('[data-settings-page="device"]').append(co2Display);
+/* Persisted controller thresholds share one revision across both pollutants. */
+let thresholdConfig=null,thresholdPending=false,thresholdRead=0;
+const thresholdRows={};
+const thresholdCard=h('section',{class:'card stack',id:'m1Thresholds',hidden:true},
+ h('h2',{i18n:'m1.thresholds'}),info('m1.threshold_help'));
+async function loadThresholds(){
+ if(thresholdCard.hidden||thresholdPending)return;
+ const generation=++thresholdRead,config=await command('alarm.get');
+ if(generation===thresholdRead&&!thresholdPending){thresholdConfig=config;renderThresholds();}
+}
+function renderThresholds(){
+ for(const [sensor,row] of Object.entries(thresholdRows)){
+  const configured=thresholdConfig?.[sensor+'_configured'];
+  if(thresholdConfig&&!row.editing){row.low.value=configured?thresholdConfig[sensor+'_yellow']:row.defaults[0];row.high.value=configured?thresholdConfig[sensor+'_red']:row.defaults[1];}
+  for(const el of [row.low,row.high,row.save,row.reset])el.disabled=thresholdPending||!thresholdConfig;
+ }
+}
+async function saveThresholds(sensor,restore){
+ if(thresholdPending)return;
+ if(!thresholdConfig)throw Error(t('m1.threshold_unavailable'));
+ const row=thresholdRows[sensor],values=restore?row.defaults:[row.low,row.high].map(el=>el.value.trim()===''?NaN:Number(el.value));
+ if(!values.every(Number.isInteger)||values[0]<0||values[1]<1||values[1]>65535||values[0]>values[1])throw Error(t('m1.threshold_invalid'));
+ thresholdPending=true;thresholdRead++;renderThresholds();
+ try{
+  thresholdConfig=await command('alarm.set',{sensor,yellow:values[0],red:values[1],revision:thresholdConfig.revision});
+  row.editing=false;
+ }catch(error){
+  // Refresh the shared revision after conflicts, retaining the user's inputs.
+  try{thresholdConfig=await command('alarm.get');}catch{}
+  throw error;
+ }finally{thresholdPending=false;renderThresholds();}
+}
+for(const [sensor,key,defaults] of [['hcho','m.formaldehyde',[100,300]],['pm25','m.pm25',[75,150]]]){
+ const low=h('input',{id:'m1Threshold_'+sensor+'_low',type:'number',min:0,max:65535,step:1,required:true});
+ const high=h('input',{id:'m1Threshold_'+sensor+'_high',type:'number',min:1,max:65535,step:1,required:true});
+ const save=h('button',{type:'submit',class:'btn primary',i18n:'common.save'});
+ const reset=h('button',{type:'button',class:'btn ghost',i18n:'m1.threshold_restore',onclick:()=>run(null,()=>saveThresholds(sensor,true),'toast.accepted')});
+ const form=h('form',{class:'stack','data-threshold-sensor':sensor},h('h3',{i18n:key}),
+  ...[[low,'m1.threshold_low'],[high,'m1.threshold_high']].map(([input,label])=>h('label',{class:'field'},h('span',{i18n:label}),input)),
+  h('div',{class:'form-actions'},save,reset));
+ thresholdRows[sensor]={low,high,save,reset,defaults,editing:false};
+ form.addEventListener('input',()=>{thresholdRows[sensor].editing=true;});
+ UI.onSubmit(form,()=>saveThresholds(sensor,false),'toast.accepted');thresholdCard.append(form);
+}
+thresholdCard.append(h('button',{type:'button',class:'btn ghost',i18n:'diag.log_refresh',onclick:()=>run(null,loadThresholds,null)}));
+document.querySelector('[data-settings-page="device"]').append(thresholdCard);
+/* One persisted RTTTL song resides on the sensor/display MCU, not in Wi-Fi config. */
+let musicStatus=null,musicBusy=false,musicEnabled=false;
+const musicText=h('textarea',{id:'m1MusicText',rows:5,maxlength:1024,spellcheck:false,placeholder:'Chime:d=8,o=5,b=120:c,e,g,4c6'});
+const musicProgress=h('p',{id:'m1MusicStatus',role:'status',class:'help'});
+const musicCard=h('section',{class:'card stack',id:'m1Music',hidden:true},h('h2',{i18n:'music.title'}),info('music.help'));
+function musicCrc(text){let crc=0xffffffff;for(let i=0;i<text.length;i++){crc^=text.charCodeAt(i);for(let j=0;j<8;j++)crc=(crc>>>1)^((crc&1)?0xedb88320:0);}return ((crc^0xffffffff)>>>0).toString(16).padStart(8,'0');}
+function renderMusic(){
+ musicCard.hidden=!UI.m1MusicSupported;
+ for(const el of musicCard.querySelectorAll('button,input,textarea'))el.disabled=musicBusy||!UI.m1MusicSupported;
+ musicPlay.disabled=musicBusy||!musicStatus?.present;
+ UI.m1MusicPresent=musicStatus?.present===true&&UI.m1MusicSupported===true;
+ window.dispatchEvent(new Event('m1-tone-capability'));
+ if(!musicBusy)musicProgress.textContent=musicStatus?.present?t('music.saved',{n:musicStatus.length,s:(musicStatus.duration_ms/1000).toFixed(1)}):t('music.empty');
+}
+async function loadMusic(){if(!UI.m1MusicSupported||musicBusy)return;musicStatus=await command('music.get');renderMusic();}
+async function saveMusic(){
+ if(musicBusy)return;
+ const text=musicText.value.trim();
+ if(!text||text.length>1024||/[^\x09\x0a\x0d\x20-\x7e]/.test(text))throw Error(t('music.invalid'));
+ musicBusy=true;renderMusic();let begun=false;
+ try{
+  await command('music.begin',{length:text.length,crc32:musicCrc(text)});begun=true;
+  for(let offset=0;offset<text.length;offset+=4){
+   let error;
+   for(let attempt=0;attempt<3;attempt++)try{await command('music.chunk',{offset,data:text.slice(offset,offset+4)});error=null;break;}catch(e){error=e;}
+   if(error)throw error;
+   musicProgress.textContent=t('music.uploading',{n:Math.min(offset+4,text.length),total:text.length});
+  }
+  await command('music.commit');begun=false;
+  musicStatus=await command('music.get');
+  if(!musicStatus.present||musicStatus.crc32!==musicCrc(text)||musicStatus.length!==text.length)throw Error(t('music.verify_failed'));
+ }finally{if(begun)try{await command('music.cancel');}catch{}musicBusy=false;renderMusic();}
+}
+async function readMusic(){
+ if(musicBusy)return;musicBusy=true;renderMusic();
+ try{
+  musicStatus=await command('music.get');if(!musicStatus.present)return;
+  let text='';for(let offset=0;offset<musicStatus.length;offset+=10){const data=await command('music.read',{offset,length:Math.min(10,musicStatus.length-offset)});text+=data.data;}
+  if(text.length!==musicStatus.length||musicCrc(text)!==musicStatus.crc32)throw Error(t('music.verify_failed'));
+  musicText.value=text;
+ }finally{musicBusy=false;renderMusic();}
+}
+const musicSave=h('button',{type:'button',class:'btn primary',id:'m1MusicSave',i18n:'music.save',onclick:()=>run(null,saveMusic,'toast.accepted')});
+const musicPlay=h('button',{type:'button',class:'btn',id:'m1MusicPlay',i18n:'music.play',onclick:()=>run(null,()=>command('music.play'),null)});
+const musicStop=h('button',{type:'button',class:'btn',id:'m1MusicStop',i18n:'wake.stop',onclick:()=>run(null,async()=>{await command('wake_alarm.stop');await command('music.stop');},null)});
+const musicFile=h('input',{type:'file',accept:'.rtttl,.txt,text/plain',id:'m1MusicFile'});
+musicFile.addEventListener('change',()=>run(null,async()=>{const file=musicFile.files?.[0];if(file){if(file.size>1024)throw Error(t('music.invalid'));musicText.value=await file.text();}},null));
+musicCard.append(h('label',{class:'field'},h('span',{i18n:'music.file'}),musicFile),h('label',{class:'field'},h('span',{i18n:'music.text'}),musicText),musicProgress,
+ h('div',{class:'form-actions'},musicSave,h('button',{type:'button',class:'btn ghost',id:'m1MusicRead',i18n:'music.read',onclick:()=>run(null,readMusic,null)}),musicPlay,musicStop));
+document.querySelector('[data-settings-page="device"]').append(musicCard);
 const RANK={ok:0,warn:1,bad:2};
 function renderHome(s){
  // Optimistic controls and their final render reuse the same measurement.
@@ -139,10 +235,17 @@ async function showBinding(){
 let wakeStatus=null,wakeReadAt=0,wakePending=false,wakeReadPending=false,wakeLastPoll=0,wakeGeneration=0;
 function renderWakeAlarm(){
  const box=$('wakeAlarmCard');if(!box)return;
+ const tones=wakeStatus?.tone_supported===true&&wakeStatus.tone_count===4;
+ UI.m1MusicSupported=tones&&wakeStatus?.music_supported===true;
+ if(musicEnabled!==UI.m1MusicSupported){musicEnabled=UI.m1MusicSupported;renderMusic();if(musicEnabled)run(null,loadMusic,null);}
+ const custom=$('wakeAlarmTone').querySelector('[value="5"]');if(custom)custom.hidden=!UI.m1MusicPresent;
+ if(UI.m1ToneSupported!==tones){UI.m1ToneSupported=tones;window.dispatchEvent(new Event('m1-tone-capability'));}
+ $('wakeAlarmToneField').hidden=!tones;
  const remaining=wakeStatus?.active?Math.max(0,Math.ceil(wakeStatus.remaining_seconds-(Date.now()-wakeReadAt)/1000)):0;
  $('wakeAlarmState').textContent=wakeStatus===null?t('wake.unknown'):remaining?t('wake.ringing',{n:remaining}):t('wake.idle');
  box.classList.toggle('warn',remaining>0);
  $('wakeAlarmStop').disabled=wakePending;
+ $('wakeAlarmTone').disabled=wakePending||remaining>0;
  const s=UI.state||{};$('wakeAlarmPreview').disabled=wakePending||remaining>0||!!(s.ota_active||s.reboot_pending||s.wifi_trial_active);
 }
 async function pollWakeAlarm(force=false){
@@ -159,10 +262,16 @@ function installWakeAlarm(){
   try{wakeStatus=await command(action,params);wakeReadAt=Date.now();}
   finally{wakePending=false;renderWakeAlarm();}
  }
+ const tone=h('select',{id:'wakeAlarmTone'},...[0,1,2,3,4,5].map(id=>h('option',{value:id,i18n:'wake.tone.'+id})));
  const box=h('section',{class:'card stack',id:'wakeAlarmCard'},h('h2',{i18n:'wake.title'}),
   h('p',{id:'wakeAlarmState',role:'status'}),info('wake.home_hint'),
-  h('div',{class:'form-actions'},h('button',{id:'wakeAlarmStop',type:'button',class:'btn',i18n:'wake.stop',onclick:()=>run(null,()=>control('wake_alarm.stop'),null)}),
-   h('button',{id:'wakeAlarmPreview',type:'button',class:'btn ghost',i18n:'wake.preview',onclick:()=>run(null,()=>control('wake_alarm.start',{duration_seconds:3}),null)})));
+  h('label',{class:'field',id:'wakeAlarmToneField',hidden:true},h('span',{i18n:'wake.tone'}),tone),
+  h('div',{class:'form-actions'},h('button',{id:'wakeAlarmStop',type:'button',class:'btn',i18n:'wake.stop',onclick:()=>run(null,async()=>{await control('wake_alarm.stop');if(UI.m1MusicSupported)await command('music.stop');},null)}),
+   h('button',{id:'wakeAlarmPreview',type:'button',class:'btn ghost',i18n:'wake.preview',onclick:()=>run(null,()=>{
+    const selected=UI.m1ToneSupported?Number(tone.value):0;
+    if(selected===5){if(!UI.m1MusicPresent)throw Error(t('wake.tone_unavailable'));return command('music.play');}
+    return control('wake_alarm.start',selected?{duration_seconds:1,tone:selected}:{duration_seconds:3});
+   },null)})));
  $('metrics').after(box);renderWakeAlarm();pollWakeAlarm(true);
 }
 
@@ -180,13 +289,16 @@ const clock=UI.clockCard({
 $('clockCard').replaceWith(clock.el);
 
 UI.start({
- capabilities(caps){if(caps.actions?.includes("wake_alarm.start")&&caps.actions.includes("wake_alarm.get")&&caps.actions.includes("wake_alarm.stop")){this.nav.schedule="wake.schedules";this.scheduleLead="wake.lead";installWakeAlarm();}},
+ capabilities(caps){
+  if(caps.actions?.includes('alarm.get')&&caps.actions.includes('alarm.set')){thresholdCard.hidden=false;renderThresholds();run(null,loadThresholds,null);}
+  if(caps.actions?.includes("wake_alarm.start")&&caps.actions.includes("wake_alarm.get")&&caps.actions.includes("wake_alarm.stop")){this.nav.schedule="wake.schedules";this.scheduleLead="wake.lead";installWakeAlarm();}
+ },
  model:'M1',kindKey:'kind.m1',icon:'air',mqttHostMax:127,factoryReset:true,
  otaName:'phicomm_m1.ota.bin.signed',haHintKey:'mqtt.ha_m1',otaHintKey:'fw.hint_m1',buttonHintKey:'sys.hint_m1',
  scheduleLead:'sch.lead_a1',interval:1000,
  groups:[['grp.network',['network','mqtt']],['grp.device',['device']],['grp.auto',['binding','schedule','night']],['grp.system',['firmware','diagnostics','logs','maintenance']]],
  nav:{network:'nav.wifi',mqtt:'nav.mqtt',device:'nav.general',binding:'nav.permission',schedule:'nav.schedule',night:'nav.sleep',firmware:'nav.firmware',diagnostics:'nav.diagnostics',logs:'nav.logs',maintenance:'nav.maintenance'},
- pages:{device:{show:clock.show,status:clock.status},binding:{show:showBinding}},
+ pages:{device:{show:async()=>{await Promise.all([clock.show(),loadThresholds(),loadMusic()]);},status:clock.status},binding:{show:showBinding}},
  diagGroups:[['diag.g_sensor',['uart_ready','sensor_valid','sensor_received','age_ms','temperature','humidity','formaldehyde','pm25','rx_frames','unknown_frames','uart_errors','discarded_bytes','last_frame']],
   ['diag.g_clock',['timezone_minutes','ntp_host','ntp_status','ntp_server','ntp_synced','ntp_screen_queued','ntp_last_success','ntp_next_seconds']],
   ['diag.g_screen',['brightness_requested']],
