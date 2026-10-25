@@ -69,3 +69,15 @@ test('root integer tokens ignore additive nested metadata and strings while reje
  const escaped=JSON.stringify(data).replace('"boot":7','"\\u0062oot":7'),decoded={};
  applyTypedSensorFeed(decoded,topic(tc1.mac),escaped,{username:'alice',deviceIds:[tc1.mac]});assert.equal(decoded[tc1.mac].sensors.power.value,42);
 });
+test('sample ages use integer tokens including zero, without inspecting additive nested metadata',()=>{
+ const data=sample('power',42,'W',{diagnostics:{age_ms:0.5}});data.sensors.power.diagnostics={age_ms:0.5};
+ for(const token of ['0','100','0.0','0e0','1.0','1e2']){
+  const feeds={},text=JSON.stringify(data).replace('"age_ms":100','"age_ms":'+token);
+  applyTypedSensorFeed(feeds,topic(tc1.mac),text,{username:'alice',deviceIds:[tc1.mac],now:1000});
+  const candidates=displaySourceCandidates([self,tc1],{},feeds,self,'alice',1000);
+  assert.equal(candidates.length,/^[0-9]+$/.test(token)?1:0,token);
+ }
+ const duplicate={},text=JSON.stringify(data).replace('"age_ms":100','"age_ms":100,"age_ms":100');
+ applyTypedSensorFeed(duplicate,topic(tc1.mac),text,{username:'alice',deviceIds:[tc1.mac],now:1000});assert.deepEqual(duplicate[tc1.mac].sensors,{});
+ assert.doesNotThrow(()=>applyTypedSensorFeed({},topic(tc1.mac),JSON.stringify(data).replace('"sensors":{','"sensors":{"power":null,'),{username:'alice',deviceIds:[tc1.mac]}));
+});

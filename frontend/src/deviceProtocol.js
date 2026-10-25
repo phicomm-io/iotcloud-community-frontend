@@ -65,6 +65,8 @@ const merge = (state, data) => {
         "mqtt_username",
         "sensorAt",
         "sensorFresh",
+        "co2SensorAt",
+        "co2Scd40At",
       ].includes(key)
     )
       if (/^plug_[0-5]$/.test(key) && value && typeof value === "object") {
@@ -89,7 +91,12 @@ const json = (value) => {
   }
 };
 function mergeStatus(state,data,now){
+ // Partial status updates must not renew an older CO2 representation.
+ if(state.co2SensorAt===undefined&&state.sensors?.co2)state.co2SensorAt=state.sensorAt??null;
+ if(state.co2Scd40At===undefined&&state.scd40)state.co2Scd40At=state.sensorAt??null;
  merge(state,data);
+ if(data.sensors?.co2&&typeof data.sensors.co2==='object'&&Object.hasOwn(data.sensors.co2,'value'))state.co2SensorAt=now;
+ if(data.scd40&&typeof data.scd40==='object'&&Object.hasOwn(data.scd40,'co2_ppm'))state.co2Scd40At=now;
  const measurements=['temperature','humidity','pm25','formaldehyde','co2','pm10','tvoc','pressure','power_watts','energy_kwh'].some(key=>Number.isFinite(data[key]))||
   ['sensors','scd40','barometer'].some(key=>data[key]&&typeof data[key]==='object'&&!Array.isArray(data[key])&&Object.keys(data[key]).length>0);
  // A successful empty/metadata response is not a new physical sample.

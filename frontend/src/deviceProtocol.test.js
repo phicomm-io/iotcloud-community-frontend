@@ -40,6 +40,20 @@ test('empty and metadata-only state receipts cannot revive an expired physical C
   assert.equal(co2SourceCandidates([source,target],{[source.mac]:state},target,'alice',22000)[0].ppm,900);
  }
 });
+test('partial readings keep independent CO2 receipt times and new complete CO2 samples remain usable',()=>{
+ const target=deviceEntry({mac:'123456abcdef',model:'m1',username:'alice'}),source=deviceEntry({mac:'aabbccddeeff',model:'daikin',username:'alice'});
+ for(const leaf of ['state','result'])for(const initial of [{sensors:{co2:{value:800,unit:'ppm',valid:true,age_ms:0}}},{scd40:{ready:true,valid:true,co2_ppm:800,age_ms:0}}]){
+  for(const payload of [{temperature:22},{barometer:{ready:true}},{scd40:{ready:true}},{sensors:{humidity:{value:50,unit:'%',valid:true,age_ms:0}}}]){
+   const state={pending:{q:'status.get'},sensorAt:1000,...structuredClone(initial)};
+   const send=(data,now)=>applyMessage(source,state,baseTopic(source)+'/'+leaf,JSON.stringify(leaf==='result'?{request_id:'q',code:'ok',data}:data),now);
+   send(payload,21000);assert.deepEqual(co2SourceCandidates([source,target],{[source.mac]:state},target,'alice',21000),[],JSON.stringify([leaf,initial,payload]));
+   send({sensors:{co2:{value:900,unit:'ppm',valid:true,age_ms:0}}},22000);
+   assert.equal(co2SourceCandidates([source,target],{[source.mac]:state},target,'alice',22000)[0].ppm,900);
+   send({scd40:{ready:true,valid:true,co2_ppm:1000,age_ms:0}},23000);
+   assert.equal(co2SourceCandidates([source,target],{[source.mac]:state},target,'alice',23000)[0].ppm,1000,'the newest complete representation wins');
+  }
+ }
+});
 test('Legacy HA text mode keeps original uppercase topics and controls',()=>{const d=deviceEntry({mac:'aabbccddeeff',version:'v1'}),state={};assert(applyMessage(d,state,'homeassistant/switch/AABBCCDDEEFF/socket_2/state','set socket AABBCCDDEEFF 2 1'));assert.equal(state.plug_2.on,1);assert.deepEqual(command({...d,...state},{plug_2:{on:0}}),{topic:'device/ztc1/AABBCCDDEEFF/set',payload:'set socket AABBCCDDEEFF 2 0'});assert(!applyMessage(d,state,'homeassistant/switch/001122334455/socket_2/state','set socket AABBCCDDEEFF 2 0'));});
 test('migrated HA outlet names survive retained state replay and later status updates',()=>{
  const d=deviceEntry({mac:'d0bae4632b42',version:'v1'}),state={};
