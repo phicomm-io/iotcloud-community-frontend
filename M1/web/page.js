@@ -25,7 +25,7 @@ function renderPressure(){
 // Expire this optional reading even if status polling stops succeeding.
 // Browsers pause timers in the back/forward cache and resume them on restore.
 // Keep this timer, and expire immediately on pageshow even if polling fails.
-setInterval(renderPressure,1000);
+setInterval(()=>{renderPressure();renderWakeAlarm();pollWakeAlarm();},1000);
 window.addEventListener('pageshow',renderPressure);
 
 /* ---------- Home: readings ---------- */
@@ -165,7 +165,6 @@ function installWakeAlarm(){
    h('button',{id:'wakeAlarmPreview',type:'button',class:'btn ghost',i18n:'wake.preview',onclick:()=>run(null,()=>control('wake_alarm.start',{duration_seconds:3}),null)})));
  $('metrics').after(box);renderWakeAlarm();pollWakeAlarm(true);
 }
-setInterval(()=>{renderWakeAlarm();pollWakeAlarm();},1000);
 
 /* ---------- Boot ---------- */
 const clock=UI.clockCard({
