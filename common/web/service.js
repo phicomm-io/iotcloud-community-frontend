@@ -5,7 +5,7 @@ async function command(action,params={}){
  try{
  const response=await fetch('/api/v1/command',{method:'POST',signal:controller.signal,headers:{'Content-Type':'application/json'},body:JSON.stringify(request),cache:'no-store'});
  const reply=await response.json();
- if(!response.ok||!['ok','accepted'].includes(reply.code)){const error=Error(reply.message||reply.code||('HTTP '+response.status));error.code=reply.code;throw error;}
+ if(!response.ok||!['ok','accepted'].includes(reply.code)){const key='error.'+reply.code;const error=Error(globalThis.I18N?.has(key)?I18N.t(key):reply.message||reply.code||('HTTP '+response.status));error.code=reply.code;throw error;}
  if(!action.endsWith('.get'))globalThis.UI?.invalidateStatus?.();
  return reply.data||{};
  }finally{clearTimeout(timer);}
@@ -29,5 +29,5 @@ async function api(path,data){
   if(path==='/wifi/config'){delete values.open_network;if(data.open_network)values.password='';else if(!values.password)delete values.password;}
   return command('config.set',{section:sections[path],values});
  }
- throw Error('不支持的操作');
+ throw Error(globalThis.I18N?.t('common.unsupported')||'Unsupported operation');
 }

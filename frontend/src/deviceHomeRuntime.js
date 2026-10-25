@@ -9,11 +9,11 @@
  });
  const start=UI.start;
  UI.start=async dev=>{
-  I18N.set('zh-CN');
   await start(dev);
   const header=document.querySelector('.topbar');if(header)header.hidden=true;
  };
  window.addEventListener('storage',event=>{
+  if(event.key==='phicomm.language'){I18N.set(event.newValue||'auto');return;}
   if(event.key!=='phicomm.appearance')return;
   if(event.newValue==='system'||!event.newValue)delete document.documentElement.dataset.theme;
   else document.documentElement.dataset.theme=event.newValue;

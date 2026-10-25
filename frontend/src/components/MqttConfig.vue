@@ -1,4 +1,6 @@
 <script setup>
+import {t} from '../i18n.js';
+
 import { ref, reactive, computed, onMounted } from 'vue'
 
 const props = defineProps({
@@ -58,29 +60,29 @@ const toggleExpand = () => {
   <div class="mqtt-config card">
     <div class="header" @click="toggleExpand">
       <h3>
-        MQTT 设置 
+        {{ t('p.6ec5731ad8b8') }}
         <span class="status-indicator" :class="{ connected: connected }"></span>
-        {{ connected ? '已连接' : '未连接' }}
+        {{ connected ? t('p.5be0323e8adc') : t('p.3d52574ce150') }}
       </h3>
       <button class="toggle-btn">{{ isExpanded ? '▼' : '▶' }}</button>
     </div>
     
     <div v-if="isExpanded" class="form-body">
       <div class="form-group">
-        <label>服务器地址 ({{ defaultHost }})</label>
+        <label>{{t('p.6e5fb26bc7b2')}}{{ defaultHost }})</label>
         <input v-model="config.host" :placeholder="defaultHost" :disabled="connected">
       </div>
       <div class="form-group">
-        <label>用户名</label>
-        <input v-model="config.username" placeholder="User" :disabled="connected">
+        <label>{{t('p.1a3f0617d6de')}}</label>
+        <input v-model="config.username" :placeholder="t('p.9365bcd27d6c')" :disabled="connected">
       </div>
       <div class="form-group">
-        <label>密码</label>
-        <input v-model="config.password" type="password" placeholder="Password" :disabled="connected">
+        <label>{{t('p.a621ab606db2')}}</label>
+        <input v-model="config.password" type="password" :placeholder="t('p.2deb75f492ce')" :disabled="connected">
       </div>
        <div class="actions">
-        <button v-if="!connected" @click="handleConnect" class="primary-btn">连接</button>
-        <button v-else @click="handleDisconnect" class="danger-btn">断开</button>
+        <button v-if="!connected" @click="handleConnect" class="primary-btn">{{t('p.a5574109f020')}}</button>
+        <button v-else @click="handleDisconnect" class="danger-btn">{{t('p.f33ac04eece6')}}</button>
       </div>
     </div>
   </div>

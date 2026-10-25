@@ -28,14 +28,15 @@ label{display:grid;gap:6px;font-size:14px;min-width:0}input[type=email]{font:inh
 .device-host-hint{display:flex;align-items:flex-start;gap:12px}.device-host-hint details{flex:1;min-width:0}.device-host-hint summary{cursor:pointer;overflow-wrap:anywhere}.device-host-hint p{margin-top:8px}.device-host-hint>button{flex-shrink:0}
 /* Mobile keeps the current device in view; the full list lives in a modal sheet. */
 @media(max-width:800px){
+ #app>.language-select{padding:0}
  .devices-panel,.device-heading{display:none}
- .console-topbar{gap:8px;padding:0 0 12px}.console-topbar .brand{min-width:0;flex:1 1 auto;flex-basis:auto}.console-topbar .brand .kind{display:none}.console-topbar .brand h1{font-size:18px;white-space:nowrap}.console-topbar .brand img{width:24px;height:24px}
+ .console-topbar{gap:8px;padding:0 0 8px}.console-topbar .brand{min-width:0;flex:1 1 auto;flex-basis:auto}.console-topbar .brand .kind{display:none}.console-topbar .brand h1{font-size:18px;white-space:nowrap}.console-topbar .brand img{width:24px;height:24px}
  .console-nav{gap:6px}.console-nav .status-pill,.console-nav .console-admin{display:none}.console-nav button,.console-nav>a{min-height:44px;padding:8px 12px}.console-nav .theme-toggle{width:44px;padding:8px}
- .platform-tabs{margin-bottom:12px}.platform-tabs button{min-height:44px}
+ .platform-tabs{margin-bottom:8px}.platform-tabs button{min-height:44px}
  .mobile-device-heading{display:flex;align-items:center;gap:8px;margin-bottom:12px;min-width:0}
  .device-picker-trigger{flex:1;min-width:0;justify-content:space-between;text-align:left;padding:8px 12px;min-height:60px}.current-device{display:grid;gap:2px;min-width:0}.current-device b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:15px}.current-device small{font-size:12px;font-weight:400;color:var(--muted)}.switch-device-label{display:flex;align-items:center;gap:4px;white-space:nowrap;font-size:12px;color:var(--accent)}
  .device-refresh{width:44px;min-height:44px;flex-shrink:0;padding:8px}
- .device-host-hint{padding:8px 10px;margin:0 0 12px;gap:8px;font-size:12px;align-items:center}.device-host-hint>button{min-height:44px;padding:8px;font-size:12px}.device-host-hint summary{line-height:1.5}
+ .device-host-hint{padding:6px 10px;margin:0 0 12px;gap:8px;font-size:12px;align-items:center}.device-host-hint>button{min-height:44px;padding:8px;font-size:12px}.device-host-hint summary{line-height:1.5}
 }
 
 .devices-panel>.add-device-entry{width:100%;margin-top:12px}

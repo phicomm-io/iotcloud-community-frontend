@@ -1,4 +1,6 @@
 <script setup>
+import {t} from '../i18n.js';
+
 import {computed} from 'vue';
 import {safeBannerURL} from '../banner';
 import AppIcon from './AppIcon.vue';
@@ -7,14 +9,14 @@ defineEmits(['dismiss']);
 const href=computed(()=>safeBannerURL(props.banner.url));
 </script>
 <template>
- <aside v-if="banner.enabled&&banner.text" class="platform-banner" aria-label="平台公告">
+ <aside v-if="banner.enabled&&banner.text" class="platform-banner" :aria-label="t('p.d29a8a2a1b33')">
   <span class="banner-symbol"><AppIcon name="guest" :size="20"/></span>
   <p>{{banner.text}}</p>
   <a v-if="href&&banner.label" class="banner-link" :href="href" target="_blank" rel="noopener noreferrer">{{banner.label}}<AppIcon name="arrow" :size="17"/></a>
-  <div v-if="dismissible" class="banner-actions" aria-label="公告提醒设置">
-   <button type="button" title="24 小时后再提醒" @click="$emit('dismiss','snooze')">稍后提醒</button>
-   <button type="button" title="在当前标签页中忽略此公告" @click="$emit('dismiss','ignore')">忽略</button>
-   <button type="button" title="不再显示此条公告" @click="$emit('dismiss','dismiss')">不再显示</button>
+  <div v-if="dismissible" class="banner-actions" :aria-label="t('p.458b7e1ac52e')">
+   <button type="button" :title="t('p.b22084fa19fc')" @click="$emit('dismiss','snooze')">{{t('p.879d8543c3f3')}}</button>
+   <button type="button" :title="t('p.08b11114c448')" @click="$emit('dismiss','ignore')">{{t('p.6e90ac940752')}}</button>
+   <button type="button" :title="t('p.2bf7a4cdd049')" @click="$emit('dismiss','dismiss')">{{t('p.a2d3a4eeefd7')}}</button>
   </div>
  </aside>
 </template>

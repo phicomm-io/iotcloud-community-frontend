@@ -1,4 +1,6 @@
 <script setup>
+import {t} from '../i18n.js';
+
 import { ref, computed, reactive, onMounted, watch } from 'vue'
 import TaskEditor from './TaskEditor.vue'
 
@@ -156,14 +158,14 @@ const getTask = (plugIndex, taskIndex) => {
 }
 
 const bitToDays = (bits) => {
-  if (bits === 0) return '一次'
-  if (bits === 127) return '每天'
-  const days = ['一','二','三','四','五','六','日']
+  if (bits === 0) return t('p.d736c7e45952')
+  if (bits === 127) return t('p.eea1694c235b')
+  const days = [t('p.51a75f4634df'),t('p.084b42f6e95e'),t('p.a4c3313deb18'),t('p.754a9d5828d5'),t('p.c9b87f516a38'),t('p.de07b5383874'),t('p.85217f7aff77')]
   let res = []
   for(let i=0; i<7; i++) {
     if ((bits >> i) & 1) res.push(days[i])
   }
-  return '周' + res.join('')
+  return t('p.5c553ec3f6db') + res.join('')
 }
 
 // Advanced Settings
@@ -291,7 +293,7 @@ const toggleTotalSocket = () => {
 
 // v2: reboot
 const rebootDevice = () => {
-    if (!confirm('确定要重启设备吗？')) return
+    if (!confirm(t('p.8065066f47cc'))) return
     emit('send-cmd', {
       mac: props.device.mac,
       payload: `reboot ${props.device.mac}`
@@ -300,7 +302,7 @@ const rebootDevice = () => {
 
 // v2: soft reboot
 const softRebootDevice = () => {
-    if (!confirm('确定要软重启设备吗？')) return
+    if (!confirm(t('p.882d368a4b21'))) return
     emit('send-cmd', {
       mac: props.device.mac,
       payload: `soft_reboot ${props.device.mac}`
@@ -313,7 +315,7 @@ const getV2SocketState = (index) => {
 }
 
 const getV2SocketName = (index) => {
-  return props.device.entityNames?.[`socket_${index}`] || `插口 ${index + 1}`
+  return props.device.entityNames?.[`socket_${index}`] || t('p.06e5bd727440',{v0:(index + 1)})
 }
 
 // Layout Control
@@ -351,41 +353,41 @@ const gridStyle = computed(() => {
       </div>
       <div class="stats-row">
         <div class="stat">
-          <label>功率</label>
-          <div class="value power-value"><span class="power-main">{{ formatPower }} W</span><span class="monthly-kwh">≈{{ monthlyKwh }}度/月</span></div>
+          <label>{{t('p.3993e09bcbbe')}}</label>
+          <div class="value power-value"><span class="power-main">{{ formatPower }} W</span><span class="monthly-kwh">≈{{ monthlyKwh }}{{t('p.9446ab9be656')}}</span></div>
         </div>
         <template v-if="isV2">
           <div class="stat">
-            <label>运行时间</label>
+            <label>{{t('p.5986e9d976e0')}}</label>
             <div class="value">{{ device.startupTime || '-' }}</div>
           </div>
           <div class="stat">
-            <label>总耗电量</label>
+            <label>{{t('p.86f74f625256')}}</label>
             <div class="value">{{ device.powerConsumption || '0' }} kWh</div>
           </div>
           <div class="stat">
-            <label>今日耗电</label>
+            <label>{{t('p.7fb9608d13ad')}}</label>
             <div class="value">{{ device.powerConsumptionToday || '0' }} kWh</div>
           </div>
           <div class="stat">
-            <label>昨日耗电</label>
+            <label>{{t('p.2c6926fcc328')}}</label>
             <div class="value">{{ device.powerConsumptionYesterday || '0' }} kWh</div>
           </div>
         </template>
         <template v-else>
           <div class="stat">
-            <label>运行时间</label>
+            <label>{{t('p.5986e9d976e0')}}</label>
             <div class="value">{{ formatTime(device.total_time) }}</div>
           </div>
         </template>
         
         <div class="stat-controls">
             <div class="layout-selector">
-                <select v-model="gridLayout" title="插口布局">
-                    <option value="auto">自动布局</option>
-                    <option value="1x6">1行 (6列)</option>
-                    <option value="2x3">2行 (3列)</option>
-                    <option value="3x2">3行 (2列)</option>
+                <select v-model="gridLayout" :title="t('p.5c39c59738ac')">
+                    <option value="auto">{{t('p.075737afad97')}}</option>
+                    <option value="1x6">{{t('p.c90c4d7470a5')}}</option>
+                    <option value="2x3">{{t('p.9701668e10bc')}}</option>
+                    <option value="3x2">{{t('p.9d89a5170d4b')}}</option>
                 </select>
             </div>
             <template v-if="isV2">
@@ -393,39 +395,39 @@ const gridStyle = computed(() => {
                 class="toggle-chip" 
                 :class="{ active: device.total_socket === 1 }"
                 @click="toggleTotalSocket"
-                title="总开关"
+                :title="t('p.f211affe535c')"
               >
-               ⚡ 总开关
+                {{t('p.f836b418cd28')}}
               </button>
               <button 
                 class="toggle-chip" 
                 :class="{ active: device.childLock === 1 }"
                 @click="toggleChildLock"
-                title="童锁"
+                :title="t('p.0f68010bc429')"
               >
-               👶 童锁
+                {{t('p.eac4629f0200')}}
               </button>
               <button 
                 class="toggle-chip" 
                 :class="{ active: device.led === 1 }"
                 @click="toggleLedLock"
-                title="LED指示灯"
+                :title="t('p.39e74a45bc34')"
               >
-               💡 LED
+                {{t('device.led')}}
               </button>
               <button 
                 class="toggle-chip danger" 
                 @click="softRebootDevice"
-                title="软重启设备"
+                :title="t('p.ad340b2bea4d')"
               >
-               🔃 软重启
+                {{t('p.5ddd1cfa72b6')}}
               </button>
               <button 
                 class="toggle-chip danger" 
                 @click="rebootDevice"
-                title="硬重启设备"
+                :title="t('p.aa6c5b1ec576')"
               >
-               🔄 重启
+                {{t('p.230c7a3f2486')}}
               </button>
             </template>
             <template v-else>
@@ -433,17 +435,17 @@ const gridStyle = computed(() => {
                 class="toggle-chip" 
                 :class="{ active: device.child_lock === 1 }"
                 @click="toggleChildLock"
-                title="童锁 (按键失效)"
+                :title="t('p.21d53244825f')"
               >
-               👶 童锁
+                {{t('p.eac4629f0200')}}
               </button>
               <button 
                 class="toggle-chip" 
                 :class="{ active: device.led_lock === 1 }"
                 @click="toggleLedLock"
-                title="夜间模式 (关闭LED)"
+                :title="t('p.09148812bd7d')"
               >
-               🌙 夜间
+                {{t('p.1c00917b4e2d')}}
               </button>
             </template>
         </div>
@@ -456,7 +458,7 @@ const gridStyle = computed(() => {
         <div class="plug-header">
           <div v-if="editingPlug !== i-1" class="plug-name" @click="startEdit(i-1)">
             {{ remarks[i-1] || getV2SocketName(i-1) }}
-            <span v-if="remarks[i-1]" class="remark-indicator" title="本地备注">*</span>
+            <span v-if="remarks[i-1]" class="remark-indicator" :title="t('p.ade80771a6d8')">*</span>
           </div>
           <input v-else 
             v-model="tempName" 
@@ -472,7 +474,7 @@ const gridStyle = computed(() => {
             :class="{ active: getV2SocketState(i-1) === 1 }"
             @click="togglePlug(i-1)"
           >
-            {{ getV2SocketState(i-1) === 1 ? 'ON' : 'OFF' }}
+            {{ t(getV2SocketState(i-1) === 1 ? 'state.on' : 'state.off') }}
           </button>
         </div>
       </div>
@@ -484,8 +486,8 @@ const gridStyle = computed(() => {
         <div class="plug-header">
           <template v-if="getPlug(i-1)">
             <div v-if="editingPlug !== i-1" class="plug-name" @click="startEdit(i-1)">
-              {{ remarks[i-1] || getPlug(i-1).name || `插口 ${i}` }}
-              <span v-if="remarks[i-1]" class="remark-indicator" title="本地备注">*</span>
+              {{ remarks[i-1] || getPlug(i-1).name || t('p.06e5bd727440',{v0:(i)}) }}
+              <span v-if="remarks[i-1]" class="remark-indicator" :title="t('p.ade80771a6d8')">*</span>
             </div>
             <input v-else 
               v-model="tempName" 
@@ -496,7 +498,7 @@ const gridStyle = computed(() => {
             >
           </template>
           <template v-else>
-            <div class="plug-name">插口 {{ i }} (未知)</div>
+            <div class="plug-name">{{t('p.c6613ed29291')}} {{ i }} {{t('p.944fa22ceebd')}}</div>
           </template>
         </div>
         
@@ -507,12 +509,12 @@ const gridStyle = computed(() => {
             @click="togglePlug(i-1)"
             :disabled="!getPlug(i-1)"
           >
-            {{ getPlug(i-1)?.on === 1 ? 'ON' : 'OFF' }}
+            {{ t(getPlug(i-1)?.on === 1 ? 'state.on' : 'state.off') }}
           </button>
           
           <div class="plug-actions">
             <button class="text-btn" @click="toggleTaskView(i-1)">
-              定时 {{ expandedTaskPlug === i-1 ? '▲' : '▼' }}
+              {{t('p.6a2b5eb8d433')}} {{ expandedTaskPlug === i-1 ? '▲' : '▼' }}
             </button>
           </div>
         </div>
@@ -531,31 +533,31 @@ const gridStyle = computed(() => {
 
     <!-- 简化版，后续可以添加更多设置 -->
     <details v-if="!isV2" class="advanced-settings">
-      <summary>高级设置 (设备 MQTT & OTA)</summary>
+      <summary>{{t('p.90a494e9e017')}}</summary>
       <div class="settings-content">
         <div class="settings-group">
-            <h4>设备 MQTT 配置 <button @click="querySettings" class="small-btn">查询当前</button></h4>
+            <h4>{{t('p.7ee7b8b10c92')}} <button @click="querySettings" class="small-btn">{{t('p.2d785d603990')}}</button></h4>
             <div class="form-row">
-                <label>服务器: <input v-model="deviceSettings.mqtt_uri" placeholder="www.mqtt.com"></label>
+                <label>{{t('p.81a3373e6926')}} <input v-model="deviceSettings.mqtt_uri" placeholder="www.mqtt.com"></label>
             </div>
             <div class="form-row">
-                <label>端口: <input v-model="deviceSettings.mqtt_port" type="number"></label>
+                <label>{{t('p.e78a09b2f2d3')}} <input v-model="deviceSettings.mqtt_port" type="number"></label>
             </div>
             <div class="form-row">
-                <label>用户: <input v-model="deviceSettings.mqtt_user"></label>
+                <label>{{t('p.0f29c8fea48e')}} <input v-model="deviceSettings.mqtt_user"></label>
             </div>
             <div class="form-row">
-                <label>密码: <input v-model="deviceSettings.mqtt_password" type="password"></label>
+                <label>{{t('p.08b7e701ee4e')}} <input v-model="deviceSettings.mqtt_password" type="password"></label>
             </div>
-            <button @click="saveMqttSettings" class="primary-btn">应用 MQTT 设置</button>
+            <button @click="saveMqttSettings" class="primary-btn">{{t('p.ecb0f19f9d79')}}</button>
         </div>
 
         <div class="settings-group">
-            <h4>固件升级 (OTA)</h4>
+            <h4>{{t('p.ac7045ab1b77')}}</h4>
             <div class="form-row">
                 <label>URL: <input v-model="deviceSettings.ota" placeholder="http://.../fw.bin"></label>
             </div>
-            <button @click="performOta" class="primary-btn">开始升级</button>
+            <button @click="performOta" class="primary-btn">{{t('p.d107bae3c1bb')}}</button>
         </div>
       </div>
     </details>

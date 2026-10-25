@@ -85,7 +85,7 @@ $('filterReset').onclick=()=>run(null,async()=>{
 function renderAuto(){
  const c=$('autoCard'),st=bindingStatus.linkage_status,peers=bindingStatus.peers||[];
  const head=h('div',{class:'card-head'},h('div',{},h('h2',{},h('a',{href:'#settings/linkage',i18n:'a1.auto'})),h('p',{class:'help',i18n:'a1.auto_lead'})),
-  h('div',{class:'row'},h('span',{class:'badge '+(st==='active'?'ok':st==='sensor_failed'?'warn':'')},t('s.link_'+st)),
+  h('div',{class:'row'},h('span',{class:'badge '+(st==='active'?'ok':st==='sensor_failed'?'warn':'')},t(['disabled','active','sensor_failed'].includes(st)?'s.link_'+st:'s.unknown')),
    h('a',{class:'btn',href:'#settings/linkage'},h('span',{},t('auto.settings')))));
  if(!peers.length){c.replaceChildren(head,h('div',{class:'empty'},h('p',{},t(UI.state?.fan_mode==='auto'?'auto.no_sensor':'a1.auto_empty')),
   h('a',{class:'btn',href:'#settings/binding',style:'margin-top:12px'},icon('link'),h('span',{},t('a1.auto_link')))));return;}
@@ -97,7 +97,7 @@ function renderAuto(){
  // replaceChildren() stringifies null, so build the list explicitly.
  const rows=[head,readings];
  if(st==='sensor_failed')rows.push(h('div',{class:'banner warn'},icon('alert'),h('span',{},t('a1.auto_failed'))));
- rows.push(h('div',{class:'row between'},meta,h('span',{class:'badge info'},t('a1.auto_speed',{p:bindingStatus.automatic_speed}))));
+ rows.push(h('div',{class:'row between'},meta,h('span',{class:'badge info'},t('a1.auto_speed',{p:Number.isFinite(bindingStatus.automatic_speed)?bindingStatus.automatic_speed:'—'}))));
  c.replaceChildren(...rows);
 }
 
@@ -195,8 +195,8 @@ function renderRing(s){
  }
  for(const svg of svgs){
   svg.dataset.feedbackSpeed=String(feedbackSpeed);svg.dataset.feedbackSource=touching?'target':'pwm';
-  svg.setAttribute('role','img');svg.removeAttribute('aria-hidden');svg.setAttribute('aria-label','A1 圆环导光预览：31 颗光源均匀分布，10 号在 6 点，25 和 26 号分列 12 点两侧');
-  svg.innerHTML=parts.join('')+'<text x="100" y="98" text-anchor="middle" class="ring-v">'+(enabled?(eff===0?feedbackSpeed:Math.round(brightness*100))+'%':t('state.off'))+'</text><text x="100" y="122" text-anchor="middle" class="ring-l">'+(eff===0?t(touching?'a1.feedback_target':'a1.feedback_pwm'):t('a1.effect.'+eff))+'</text>';
+  svg.setAttribute('role','img');svg.removeAttribute('aria-hidden');svg.setAttribute('aria-label',t('a1.ring_aria'));
+  svg.innerHTML=parts.join('')+'<text x="100" y="98" text-anchor="middle" class="ring-v">'+(enabled?(eff===0?feedbackSpeed:Math.round(brightness*100))+'%':t('state.off'))+'</text><text x="100" y="122" text-anchor="middle" class="ring-l">'+(eff===0?t(touching?'a1.feedback_target':'a1.feedback_pwm'):effectLabel(eff))+'</text>';
  }
 }
 function updateRingAnimation(){
@@ -210,9 +210,10 @@ function updateRingAnimation(){
   if(advanced.effect===2||advanced.effect===3||advanced.effect===5||previewTarget!==null)renderRing(UI.state);
  },50);
 }
+function effectLabel(effect){return t([0,1,2,3,4,5].includes(effect)?'a1.effect.'+effect:'s.unknown');}
 function renderLight(s){
  if(!lightDirty){$('ledEnabled').checked=s.led_enabled;$('ledAlways').checked=s.led_always_on;$('bright').value=s.brightness;color=[s.red,s.green,s.blue];renderLightControls();}
- $('effectNote').replaceChildren(t('a1.effect_note',{e:t('a1.effect.'+advanced.effect)})+' ',h('a',{href:'#settings/light'},t('a1.effect_change')));
+ $('effectNote').replaceChildren(t('a1.effect_note',{e:effectLabel(advanced.effect)})+' ',h('a',{href:'#settings/light'},t('a1.effect_change')));
  renderRing(s);
 }
 

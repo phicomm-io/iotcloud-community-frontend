@@ -1,4 +1,6 @@
 <script setup>
+import {t} from '../i18n.js';
+
 import { ref, nextTick, onBeforeUnmount, onMounted } from 'vue'
 import QRCode from 'qrcode'
 import { Html5QrcodeScanner, Html5Qrcode } from 'html5-qrcode'
@@ -56,7 +58,7 @@ const copyToClipboard = async (text) => {
         setTimeout(() => { copySuccess.value = false }, 2000)
     } catch (err) {
         console.error('Failed to copy:', err)
-        alert('复制失败，请重试')
+        alert(t('p.86ee28991b99'))
     }
 }
 
@@ -189,7 +191,7 @@ const processImport = (jsonStr) => {
         }
         
         clearUrlConfigParam()
-        importStatus.value = '配置导入成功！页面即将刷新...'
+        importStatus.value = t('p.bc3a0e940636')
         setTimeout(() => {
             close()
             emit('config-imported') // Parent can reload or we can reload page
@@ -197,7 +199,7 @@ const processImport = (jsonStr) => {
         }, 1500)
         
     } catch (e) {
-        importStatus.value = '导入失败: 格式错误'
+        importStatus.value = t('p.7390542a057b')
         console.error(e)
     }
 }
@@ -214,7 +216,7 @@ const tryImportFromUrl = () => {
         const jsonStr = decodeFromBase64Url(cfg)
         processImport(jsonStr)
     } catch (e) {
-        importStatus.value = '导入失败: URL 无效'
+        importStatus.value = t('p.d05662b210d0')
         console.error(e)
     }
 }
@@ -240,19 +242,19 @@ defineExpose({
 
 <template>
   <Transition name="toast-fade">
-    <div v-if="copySuccess" class="copy-toast">✅ 复制成功</div>
+    <div v-if="copySuccess" class="copy-toast">{{t('p.421932510971')}}</div>
   </Transition>
   <div v-if="showModal" class="modal-overlay" @click.self="close">
     <div class="modal-content">
       <div class="modal-header">
-        <h3>配置迁移</h3>
+        <h3>{{t('p.5ff8357759dd')}}</h3>
         <button class="close-btn" @click="close">×</button>
       </div>
       
       <div class="tabs">
-        <button :class="{ active: activeTab === 'export' }" @click="switchTab('export')">导出二维码</button>
-        <button :class="{ active: activeTab === 'scan' }" @click="switchTab('scan')">扫码导入</button>
-        <button :class="{ active: activeTab === 'paste' }" @click="switchTab('paste')">文本导入</button>
+        <button :class="{ active: activeTab === 'export' }" @click="switchTab('export')">{{t('p.a1f824b0dcb4')}}</button>
+        <button :class="{ active: activeTab === 'scan' }" @click="switchTab('scan')">{{t('p.8eb3038b8939')}}</button>
+        <button :class="{ active: activeTab === 'paste' }" @click="switchTab('paste')">{{t('p.34a29f3a1302')}}</button>
       </div>
       
       <div class="tab-content">
@@ -261,13 +263,13 @@ defineExpose({
             <div class="qr-container">
                 <canvas ref="qrCanvas"></canvas>
             </div>
-            <p>使用其他设备扫描此二维码同步配置</p>
+            <p>{{t('p.79ae0d01dc6c')}}</p>
             <textarea readonly v-model="exportText" class="code-area"></textarea>
-            <button @click="() => copyToClipboard(exportText)" class="copy-btn">复制文本</button>
+            <button @click="() => copyToClipboard(exportText)" class="copy-btn">{{t('p.befad318258f')}}</button>
             <div class="share-url">
-                <p>分享链接 (URL 编码)</p>
+                <p>{{t('p.4f0eea307472')}}</p>
                 <textarea readonly v-model="shareUrl" class="code-area"></textarea>
-                <button @click="() => copyToClipboard(shareUrl)" class="copy-btn">复制链接</button>
+                <button @click="() => copyToClipboard(shareUrl)" class="copy-btn">{{t('p.8e86f9b1d54f')}}</button>
             </div>
         </div>
         
@@ -279,8 +281,8 @@ defineExpose({
         
         <!-- Paste -->
         <div v-if="activeTab === 'paste'" class="paste-view">
-             <textarea v-model="importText" placeholder="在此粘贴配置 JSON..." class="code-area"></textarea>
-             <button @click="handlePasteImport" class="primary-btn">执行导入</button>
+             <textarea v-model="importText" :placeholder="t('p.75c57a7e6753')" class="code-area"></textarea>
+             <button @click="handlePasteImport" class="primary-btn">{{t('p.a99e3cae56ae')}}</button>
              <p v-if="importStatus" class="status-msg">{{ importStatus }}</p>
         </div>
       </div>

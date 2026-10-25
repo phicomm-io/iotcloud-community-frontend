@@ -1,3 +1,5 @@
+
+import {t} from './i18n.js';
 import {api, account, applyAccount} from './account';
 import {scopeKey} from './serverConfig';
 import {rememberLogin, savedPassword} from './connectionPreferences';
@@ -21,7 +23,7 @@ export async function startGitHub(link = false) {
   return_url: location.origin + location.pathname, browser_challenge:challenge, link,
  })});
  const authorization = new URL(result.authorization_url);
- if (authorization.origin !== 'https://github.com' || authorization.pathname !== '/login/oauth/authorize') throw Error('GitHub 授权地址无效');
+ if (authorization.origin !== 'https://github.com' || authorization.pathname !== '/login/oauth/authorize') throw Error(t('p.492f51daef7a'));
  sessionStorage.setItem(flowKey(result.ticket), JSON.stringify(proof));
  location.assign(authorization.href);
 }
@@ -29,7 +31,7 @@ export function githubProof(ticket) {
  let proof;
  try {proof = JSON.parse(sessionStorage.getItem(flowKey(ticket)));} catch {}
  if (!proof || proof.scope !== scopeKey() || Date.now() - proof.created > 600000 || !/^[a-f0-9]{64}$/.test(proof.verifier)) {
-  throw Error('登录请求已失效或不属于当前节点，请返回后重新使用 GitHub 登录。');
+  throw Error(t('p.681c784266e7'));
  }
  return proof;
 }

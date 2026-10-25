@@ -14,7 +14,7 @@ await new Promise(done=>server.listen(0,'127.0.0.1',done));
 const base=`http://127.0.0.1:${server.address().port}/iotcloud/`;
 await mkdir(evidence,{recursive:true});
 async function fixture(browser,{ua='Mozilla/5.0 Android Chrome/140.0',standalone=false,appleStandalone=false,gate=false,width=375,devices=[]}={}){
- const context=await browser.newContext({viewport:{width,height:740},hasTouch:true,userAgent:ua,serviceWorkers:'block'});
+ const context=await browser.newContext({locale:'zh-CN',viewport:{width,height:740},hasTouch:true,userAgent:ua,serviceWorkers:'block'});
  const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
  let release;const ready=new Promise(resolve=>{release=resolve;});if(!gate)release();
  await context.addInitScript(({standalone,appleStandalone})=>{

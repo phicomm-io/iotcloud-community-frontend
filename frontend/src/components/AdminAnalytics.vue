@@ -1,4 +1,6 @@
 <script setup>
+import {t} from '../i18n.js';
+
 import {ref,onMounted,onBeforeUnmount,computed} from 'vue';
 import {api} from '../account';
 const days=ref(7),data=ref(null),error=ref(''),busy=ref(false);
@@ -7,20 +9,20 @@ async function refresh(){const id=++sequence;busy.value=true;try{const next=awai
 onMounted(()=>{refresh();timer=setInterval(refresh,30000);});onBeforeUnmount(()=>{stopped=true;clearInterval(timer);});
 const trend=computed(()=>{const values=new Map((data.value?.trend||[]).map(x=>[x.name,x.count]));const now=new Date();return Array.from({length:data.value?.days||7},(_,i)=>{const date=new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate()-(data.value?.days||7)+1+i));const name=date.toISOString().slice(0,10);return {name,count:values.get(name)||0};});});
 const max=computed(()=>Math.max(1,...trend.value.map(x=>x.count)));
-const names={login:'成功登录',mqtt_connect:'MQTT 连接',device_view:'查看设备',desktop:'桌面',tablet:'平板',mobile:'手机','/':'设备首页','/login':'登录','/register':'注册','/guest':'自建 Broker','/admin':'管理后台','/settings':'平台设置','/guest/settings':'自建 Broker 设置'};
-const groups=[['models','设备型号访问','查看设备的次数'],['registered_models','已登记设备','当前有效登记数量，不受日期范围影响'],['pages','访问页面','页面浏览次数'],['referrers','访问来源','仅来源域名'],['browsers','浏览器','页面浏览次数'],['systems','操作系统','页面浏览次数'],['screens','屏幕类型','页面浏览次数'],['actions','使用事件','不包含控制指令内容']];
+const names={login:t('p.352264074c46'),mqtt_connect:t('p.b3ffbff70344'),device_view:t('p.8686a751eccd'),desktop:t('p.f48d334495f6'),tablet:t('p.2e48db143a3c'),mobile:t('p.2e07333c8c74'),'/':t('p.3676350d0e25'),'/login':t('p.1e2df9c3075a'),'/register':t('p.c4fb62202bad'),'/guest':t('p.9d4203bc7896'),'/admin':t('p.87354adb1c31'),'/settings':t('p.c49378a04488'),'/guest/settings':t('p.25b0f62671f7')};
+const groups=[['models',t('p.de347a31b792'),t('p.c26f46f29531')],['registered_models',t('p.7410fee5c5fc'),t('p.fd4916def959')],['pages',t('p.25674bd5909c'),t('p.bcf9b9047232')],['referrers',t('p.c8f605887106'),t('p.6f49b1f636dd')],['browsers',t('p.e19c3b9e266c'),t('p.bcf9b9047232')],['systems',t('p.360480034cc3'),t('p.bcf9b9047232')],['screens',t('p.dc6c27920234'),t('p.bcf9b9047232')],['actions',t('p.4e4944059d24'),t('p.a3e07f07e76c')]];
 function width(rows,count){return Math.max(2,Math.round(count/Math.max(1,...rows.map(x=>x.count))*100))+'%';}
 </script>
 <template>
-<section class="analytics" aria-label="访问统计">
- <header class="analytics-heading"><div><span class="eyebrow">平台概况</span><h2>访问统计</h2><p class="help">了解平台访问和设备使用情况</p></div><div class="analytics-filters"><label>统计范围<select v-model="days" @change="refresh"><option :value="1">今天</option><option :value="7">近 7 天</option><option :value="30">近 30 天</option><option :value="90">近 90 天</option></select></label><button :disabled="busy" @click="refresh">{{busy?'更新中…':'刷新统计'}}</button></div></header>
+<section class="analytics" :aria-label="t('p.3943942fd1d2')">
+ <header class="analytics-heading"><div><span class="eyebrow">{{t('p.3ff592a3e232')}}</span><h2>{{t('p.3943942fd1d2')}}</h2><p class="help">{{t('p.09890ce5ab30')}}</p></div><div class="analytics-filters"><label>{{t('p.878000ecadf6')}}<select v-model="days" @change="refresh"><option :value="1">{{t('p.d5f5a7a01073')}}</option><option :value="7">{{t('p.2261b06712a3')}}</option><option :value="30">{{t('p.f729bb3d3f7e')}}</option><option :value="90">{{t('p.0909522d9092')}}</option></select></label><button :disabled="busy" @click="refresh">{{busy?t('p.a0bacec44f47'):t('p.bc87a4121a08')}}</button></div></header>
  <p v-if="error" role="alert" class="banner warn">{{error}}</p>
  <template v-if="data">
- <div class="analytics-metrics"><article v-for="[key,title] in [['pageviews','浏览量'],['visitors','访客数'],['visits','访问次数'],['active','近 5 分钟活跃'],['events','使用事件']]" :key="key" class="card"><span>{{title}}</span><b>{{data[key].toLocaleString()}}</b></article></div>
- <section class="card analytics-chart"><div class="analytics-chart-heading"><h3>访问趋势</h3><span class="help">浏览量 · UTC</span></div><div class="analytics-bars" role="img" :aria-label="'每日浏览量：'+trend.map(x=>x.name+' '+x.count).join('，')"><div v-for="item in trend" :key="item.name" class="analytics-day" :title="item.name+'：'+item.count"><div class="analytics-bar" :style="{height:Math.max(1,item.count/max*100)+'%'}"></div></div></div><div class="analytics-axis help"><span>{{trend[0]?.name}}</span><span>{{trend.at(-1)?.name}}</span></div><details><summary>查看每日数据</summary><table><thead><tr><th>日期（UTC）</th><th>浏览量</th></tr></thead><tbody><tr v-for="item in trend" :key="item.name"><td>{{item.name}}</td><td>{{item.count}}</td></tr></tbody></table></details></section>
- <div class="analytics-breakdowns"><section v-for="[key,title,hint] in groups" :key="key" class="card"><header><h3>{{title}}</h3><p class="help">{{hint}}</p></header><ul v-if="data[key].length"><li v-for="row in data[key]" :key="row.name"><div class="analytics-row-fill" :style="{width:width(data[key],row.count)}"></div><span>{{names[row.name]||row.name}}</span><b>{{row.count.toLocaleString()}}</b></li></ul><p v-else class="analytics-empty help">此范围暂无数据</p></section></div>
- <p class="help analytics-note">访客按浏览器匿名标识去重，连续 30 分钟无活动后计为新访问；清除浏览器数据会计为新访客。事件保留 90 天，按 UTC 自然日统计。仅管理员可查看，不保存账号、设备 MAC、IP、密码或操作指令。统计从本功能启用后开始。</p>
- </template><p v-else-if="!error" role="status" class="help">正在加载统计…</p>
+ <div class="analytics-metrics"><article v-for="[key,title] in [['pageviews',t('p.cdf0bd9bccd4')],['visitors',t('p.cb67b74b1249')],['visits',t('p.0339c61fb3dc')],['active',t('p.2bcb6bda271a')],['events',t('p.4e4944059d24')]]" :key="key" class="card"><span>{{title}}</span><b>{{data[key].toLocaleString()}}</b></article></div>
+ <section class="card analytics-chart"><div class="analytics-chart-heading"><h3>{{t('p.4e64c7a5591a')}}</h3><span class="help">{{t('p.2f77ed5a9390')}}</span></div><div class="analytics-bars" role="img" :aria-label="t('p.5094e5c9cad4')+trend.map(x=>x.name+' '+x.count).join('，')"><div v-for="item in trend" :key="item.name" class="analytics-day" :title="item.name+'：'+item.count"><div class="analytics-bar" :style="{height:Math.max(1,item.count/max*100)+'%'}"></div></div></div><div class="analytics-axis help"><span>{{trend[0]?.name}}</span><span>{{trend.at(-1)?.name}}</span></div><details><summary>{{t('p.c3e146894c67')}}</summary><table><thead><tr><th>{{t('p.88c60a44e2fc')}}</th><th>{{t('p.cdf0bd9bccd4')}}</th></tr></thead><tbody><tr v-for="item in trend" :key="item.name"><td>{{item.name}}</td><td>{{item.count}}</td></tr></tbody></table></details></section>
+ <div class="analytics-breakdowns"><section v-for="[key,title,hint] in groups" :key="key" class="card"><header><h3>{{title}}</h3><p class="help">{{hint}}</p></header><ul v-if="data[key].length"><li v-for="row in data[key]" :key="row.name"><div class="analytics-row-fill" :style="{width:width(data[key],row.count)}"></div><span>{{names[row.name]||row.name}}</span><b>{{row.count.toLocaleString()}}</b></li></ul><p v-else class="analytics-empty help">{{t('p.d82eadffb8c6')}}</p></section></div>
+ <p class="help analytics-note">{{t('p.c1de5f5e31a8')}}</p>
+ </template><p v-else-if="!error" role="status" class="help">{{t('p.76d0853695be')}}</p>
 </section>
 </template>
 <style scoped>

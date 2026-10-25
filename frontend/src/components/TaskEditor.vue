@@ -1,5 +1,7 @@
 <script setup>
-import { reactive, watch, ref } from 'vue'
+import {t} from '../i18n.js';
+
+import { reactive, watch, ref, computed } from 'vue'
 
 const props = defineProps({
   task: Object,
@@ -17,7 +19,7 @@ const localTask = reactive({
   on: 0
 })
 
-const days = ['一', '二', '三', '四', '五', '六', '日']
+const days = computed(() => ['p.51a75f4634df', 'p.084b42f6e95e', 'p.a4c3313deb18', 'p.754a9d5828d5', 'p.c9b87f516a38', 'p.de07b5383874', 'p.85217f7aff77'].map(key => t(key)))
 
 // Init local state when editing starts or props change
 watch(() => props.task, (val) => {
@@ -57,13 +59,13 @@ const cancel = () => {
 }
 
 const formatRepeat = (bits) => {
-  if (bits === 0) return '一次'
-  if (bits === 127) return '每天'
+  if (bits === 0) return t('p.d736c7e45952')
+  if (bits === 127) return t('p.eea1694c235b')
   let res = []
   for(let i=0; i<7; i++) {
-    if ((bits >> i) & 1) res.push(days[i])
+    if ((bits >> i) & 1) res.push(days.value[i])
   }
-  return res.length > 0 ? '周' + res.join('') : '一次'
+  return res.length > 0 ? t('p.5c553ec3f6db') + res.join('') : t('p.d736c7e45952')
 }
 
 </script>
@@ -73,11 +75,11 @@ const formatRepeat = (bits) => {
     <div v-if="!editing" class="task-summary" @click="startEdit">
       <div v-if="task && task.on" class="active-task">
         <span class="time">{{ String(task.hour).padStart(2,'0') }}:{{ String(task.minute).padStart(2,'0') }}</span>
-        <span class="action" :class="task.action ? 'on' : 'off'">{{ task.action ? '开' : '关' }}</span>
+        <span class="action" :class="task.action ? 'on' : 'off'">{{ task.action ? t('p.39eae64cfc41') : t('p.5d0ae622f61f') }}</span>
         <span class="repeat">{{ formatRepeat(task.repeat) }}</span>
       </div>
       <div v-else class="empty-task">
-        任务 {{ index + 1 }} (未启用)
+        {{ t('task.empty', {number: index + 1}) }}
       </div>
     </div>
 
@@ -98,21 +100,21 @@ const formatRepeat = (bits) => {
 
       <div class="options">
         <label>
-            动作: 
+            {{ t('p.598c3cebbd17') }}
             <select v-model="localTask.action">
-                <option :value="1">开启</option>
-                <option :value="0">关闭</option>
+                <option :value="1">{{t('p.8da97ddda990')}}</option>
+                <option :value="0">{{t('p.3fd47edce45b')}}</option>
             </select>
         </label>
         <label>
-            启用: 
+            {{ t('p.c06be8e9e9c3') }}
             <input type="checkbox" v-model="localTask.on" :true-value="1" :false-value="0">
         </label>
       </div>
 
       <div class="actions">
-        <button @click="save" class="save-btn">保存</button>
-        <button @click="cancel" class="cancel-btn">取消</button>
+        <button @click="save" class="save-btn">{{t('p.a3030bf8f16d')}}</button>
+        <button @click="cancel" class="cancel-btn">{{t('p.2cd0f3be8738')}}</button>
       </div>
     </div>
   </div>

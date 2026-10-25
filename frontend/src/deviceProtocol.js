@@ -1,3 +1,5 @@
+
+import {t} from './i18n.js';
 export const requestId = () => Array.from(crypto.getRandomValues(new Uint8Array(16)), b=>b.toString(16).padStart(2,"0")).join("");
 export const userKey = username => "u_" + [...new TextEncoder().encode(username)].map(b => b.toString(16).padStart(2,"0")).join("");
 export const deviceKey = d => d.namespace === "account" ? `account:${d.username}:${d.mqtt_username || d.username}:${d.mac}` : d.mac;
@@ -9,7 +11,7 @@ export function normalizeMAC(value) {
       s,
     )
   )
-    throw new Error("MAC 地址格式不正确");
+    throw new Error(t('p.d87efef93be5'));
   return s.replace(/[:-]/g, "").toLowerCase();
 }
 export function deviceEntry(value) {
@@ -23,8 +25,8 @@ export function deviceEntry(value) {
       ? ["v1", "v2"].includes(version)
       : version === "v2")
   )
-    throw new Error("型号或协议不正确");
-  if (d.namespace && (d.namespace !== "account" || !d.username)) throw new Error("账号主题缺少归属");
+    throw new Error(t('p.4baaf7d5f598'));
+  if (d.namespace && (d.namespace !== "account" || !d.username)) throw new Error(t('p.c384a9d1db4f'));
   return { mac, model, version, ...(d.username ? {username:d.username} : {}), ...(d.namespace ? { namespace: d.namespace, username: d.username, ...(d.mqtt_username ? { mqtt_username: d.mqtt_username } : {}) } : {}), ...(d.status ? { status: d.status } : {}) };
 }
 export function localDevices(storage = localStorage) {
@@ -33,7 +35,7 @@ export function localDevices(storage = localStorage) {
       storage.getItem("ztc1_devices") ||
       "[]",
   );
-  if (!Array.isArray(list)) throw new Error("设备列表格式不正确");
+  if (!Array.isArray(list)) throw new Error(t('p.048d76aaefef'));
   const unique = new Map();
   for (const raw of list) {
     const d = deviceEntry(raw);
@@ -126,7 +128,7 @@ export function applyMessage(d, state, topic, message, now = Date.now()) {
 
 export function command(d, cmd) {
  if(d.version === "v2") {
-  if(!cmd.action || !/^[a-z_.]+$/.test(cmd.action)) throw new Error("不支持的命令");
+  if(!cmd.action || !/^[a-z_.]+$/.test(cmd.action)) throw new Error(t('p.6a9c930be875'));
   return {topic:baseTopic(d)+"/command",payload:JSON.stringify({request_id:cmd.request_id || requestId(),action:cmd.action,params:cmd.params || {}})};
  }
 
@@ -136,7 +138,7 @@ export function command(d, cmd) {
   if(plug && [0,1].includes(cmd[plug]?.on))text=`set socket ${mac} ${plug.slice(-1)} ${cmd[plug].on}`;
   else if(cmd.child_lock && [0,1].includes(cmd.child_lock.on))text=`set child_lock ${mac} ${cmd.child_lock.on}`;
   else if(cmd.led_lock && [0,1].includes(cmd.led_lock.on))text=`set led ${mac} ${cmd.led_lock.on}`;
-  else throw new Error("该 Legacy 设备不支持此操作");
+  else throw new Error(t('p.2a576928014b'));
   return {topic:`device/ztc1/${mac}/set`,payload:text};
  }
  return {topic:`device/ztc1/${d.mac}/set`,payload:JSON.stringify({...cmd,mac:d.mac})};

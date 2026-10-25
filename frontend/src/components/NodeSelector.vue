@@ -1,13 +1,16 @@
 <script setup>
+import {t} from '../i18n.js';
+
 import {ref} from 'vue';
 import {nodes,currentNode,selectNode} from '../serverConfig';
 const selected=ref(currentNode()),error=ref('');
+const labels={china:'p.fefdd0fd8715',us:'p.74b94f25d109'};
 function change(event){try{selectNode(event.target.value);}catch(e){error.value=e.message;selected.value=currentNode();}}
 </script>
 <template>
- <aside class="node-bar" aria-label="平台节点">
-  <label>节点 <select :value="selected" aria-label="选择平台节点" @change="change"><option v-if="selected==='custom'" value="custom" disabled>本站 / 自定义</option><option v-for="node in nodes" :key="node.id" :value="node.id">{{node.label}}</option></select></label>
-  <span>China 与 US 的账号、设备和数据独立，需分别注册。</span>
+ <aside class="node-bar" :aria-label="t('p.1ab0e827e16e')">
+  <label>{{t('p.2410d860f093')}} <select :value="selected" :aria-label="t('p.59f8094da88a')" @change="change"><option v-if="selected==='custom'" value="custom" disabled>{{t('p.1f409c80aae0')}}</option><option v-for="node in nodes" :key="node.id" :value="node.id">{{labels[node.id]?t(labels[node.id]):node.label}}</option></select></label>
+  <span>{{t('p.53a80b2ecfbe')}}</span>
   <span v-if="error" role="alert">{{error}}</span>
  </aside>
 </template>

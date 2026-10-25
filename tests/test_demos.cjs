@@ -35,7 +35,7 @@ const server=http.createServer((req,res)=>{let file=path.resolve(root,'.'+new UR
    await frame.locator('#filterCard').waitFor({state:'visible'});
    await frame.locator('#filterCard summary').click();await frame.locator('#filterLifetime').fill('6000');await frame.locator('#filterSave').click();
    await frame.locator('body').evaluate(()=>new Promise((resolve,reject)=>{let n=0;const check=()=>{if(UI.state.filter.lifetime_hours===6000)resolve();else if(++n>100)reject(Error('platform filter form did not submit'));else setTimeout(check,50);};check();}));
-   await frame.locator('#filterReset').click();await frame.getByRole('dialog').getByRole('button',{name:'更换滤芯后重置'}).click();
+   await frame.locator('#filterReset').click();await frame.getByRole('dialog').getByRole('button',{name:/Reset after replacing|更换滤芯后重置/}).click();
    await frame.locator('body').evaluate(()=>new Promise((resolve,reject)=>{let n=0;const check=()=>{if(UI.state.filter.used_seconds===0)resolve();else if(++n>100)reject(Error('platform filter reset failed'));else setTimeout(check,50);};check();}));
   }
   else if(model==='daikin'){
