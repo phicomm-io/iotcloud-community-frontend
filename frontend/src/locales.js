@@ -201,8 +201,8 @@ const messages = {
     "从一台设备开始"
   ],
   "p.48e36ea6f1e3": [
-    "Enter the device IP above to manage it locally.",
-    "在上方填写设备 IP，开始本地管理。"
+    "Open Local connection above to manage a device locally.",
+    "点击上方“本地连接”，开始本地管理。"
   ],
   "p.17784e8330b1": [
     "Connect to a broker and add devices in Settings.",
@@ -1650,7 +1650,7 @@ const messages = {
   ],
   "p.3d3b06d22814": [
     "Local connection",
-    "本地直连"
+    "本地连接"
   ],
   "p.17821a5cda93": [
     "No account · No backend",

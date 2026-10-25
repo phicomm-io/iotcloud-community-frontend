@@ -2,20 +2,25 @@
 import {createServer} from 'node:http';
 import {readFile,mkdir} from 'node:fs/promises';
 import {resolve,extname} from 'node:path';
+import {networkInterfaces} from 'node:os';
 import assert from 'node:assert/strict';
 import {chromium,webkit,expect} from '@playwright/test';
 const root=resolve(process.env.PHICOMM_OTA_DIST||'dist'),evidence=resolve('../build/ota-conversion');
 const types={'.html':'text/html','.js':'text/javascript','.css':'text/css','.json':'application/json','.svg':'image/svg+xml','.webmanifest':'application/manifest+json'};
+let deviceHTTP;
 const server=createServer(async(req,res)=>{
+ if(req.url.startsWith('/api/v1/'))return deviceHTTP(req,res);
  try{const path=new URL(req.url,'http://local').pathname,file=resolve(root,'.'+(path==='/'?'/index.html':path));assert(file.startsWith(root+'/'));res.setHeader('Content-Type',types[extname(file)]||'application/octet-stream');res.end(await readFile(file));}catch{res.writeHead(404).end();}
 });
-await new Promise(done=>server.listen(0,'127.0.0.1',done));
-const origin=`http://127.0.0.1:${server.address().port}`,address='http://192.168.1.115',mac='aabbccdd0115',password='fixture-conversion-web';
+const fixtureIP=Object.values(networkInterfaces()).flat().find(i=>i.family==='IPv4'&&!i.internal&&/^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(i.address))?.address;
+if(!fixtureIP)throw Error('No private IPv4 interface for the local HTTP fixture');
+await new Promise(done=>server.listen(0,'0.0.0.0',done));
+const origin=`http://127.0.0.1:${server.address().port}`,address=`http://${fixtureIP}:${server.address().port}`,mac='aabbccdd0115',password='fixture-conversion-web';
 const bytes=Buffer.from('PHOTA001 — test-only signed-upload transport fixture');
 await mkdir(evidence,{recursive:true});
 const engines=process.env.BROWSER?[[process.env.BROWSER,{chromium,webkit}[process.env.BROWSER]]]:[['chromium',chromium],['webkit',webkit]];
 try{for(const [engine,type] of engines){
- const browser=await type.launch();
+ const browser=await type.launch(engine==='webkit'&&process.env.PHICOMM_WEBKIT_EXECUTABLE_PATH?{executablePath:process.env.PHICOMM_WEBKIT_EXECUTABLE_PATH}:{});
  try{for(const language of ['zh-CN','en'])for(const width of [375,1280]){
   const context=await browser.newContext({locale:language,viewport:{width,height:900},serviceWorkers:'block'}),page=await context.newPage(),errors=[],uploads=[],sentBytes=[];
   // WebKit's intercepted Blob requests can omit postDataBuffer. Observe the
@@ -28,31 +33,36 @@ try{for(const [engine,type] of engines){
   });
   page.on('pageerror',e=>errors.push(e.message));
   let webPassword='';
-  const state=()=>({device_id:mac,model:'daikin',version:'1.0.0',firmware_variant:'full',name:'Conversion fixture',web_password_set:!!webPassword,ip:'192.168.1.115',wifi_connected:true,mqtt_connected:false,sensors:{}});
+  const state=()=>({device_id:mac,model:'daikin',version:'1.0.0',firmware_variant:'full',name:'Conversion fixture',web_password_set:!!webPassword,ip:fixtureIP,wifi_connected:true,mqtt_connected:false,sensors:{}});
+  // All device traffic terminates at this process, including Basic requests
+  // which WebKit cannot reliably fulfill through a route-only fixture.
+  deviceHTTP=async(req,res)=>{
+   const path=new URL(req.url,address).pathname,headers={'Content-Type':'application/json','Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'Authorization, Content-Type, X-IoTCloud-Target-Variant, X-IoTCloud-Confirm','Access-Control-Allow-Methods':'GET, POST, OPTIONS'};
+   const reply=(status,json)=>res.writeHead(status,headers).end(json?JSON.stringify(json):'');
+   if(req.method==='OPTIONS')return reply(204);
+   if(webPassword&&req.headers.authorization!=='Basic '+Buffer.from('admin:'+webPassword).toString('base64'))return reply(401,{code:'unauthorized'});
+   const chunks=[];for await(const chunk of req)chunks.push(chunk);const body=Buffer.concat(chunks);
+   if(path.startsWith('/api/v1/ota/')){uploads.push({path,headers:req.headers,bytes:body});return reply(202,{code:'accepted'});}
+   let data=state();
+   if(path==='/api/v1/info')data={device_id:mac,model:'daikin',api_version:1,firmware_variant:'full'};
+   if(path==='/api/v1/command'){
+    const command=JSON.parse(body.toString());
+    if(command.action==='capabilities.get')data={model:'daikin',firmware_variant:'full',ota_variant_conversion:'full-to-hub',actions:['status.get','config.get','config.set']};
+    else if(command.action==='config.set'&&command.params.section==='auth'){webPassword=command.params.values.password;data={};}
+    else if(!['status.get','config.get'].includes(command.action))data={};
+   }
+   return reply(200,{code:'ok',data});
+  };
   await context.route('**/*',async route=>{
    const request=route.request(),url=new URL(request.url());
-   if(url.origin===address){
-    const headers={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'Authorization, Content-Type, X-IoTCloud-Target-Variant, X-IoTCloud-Confirm','Access-Control-Allow-Methods':'GET, POST, OPTIONS'};
-    if(request.method()==='OPTIONS')return route.fulfill({status:204,headers});
-    const auth=request.headers().authorization;
-    if(webPassword&&auth!=='Basic '+Buffer.from('admin:'+webPassword).toString('base64'))return route.fulfill({status:401,json:{code:'unauthorized'},headers});
-    if(url.pathname.startsWith('/api/v1/ota/')){uploads.push({path:url.pathname,headers:request.headers(),bytes:request.postDataBuffer()});return route.fulfill({status:202,json:{code:'accepted'},headers});}
-    let data=state();
-    if(url.pathname==='/api/v1/info')data={device_id:mac,model:'daikin',api_version:1,firmware_variant:'full'};
-    if(url.pathname==='/api/v1/command'){
-     const command=request.postDataJSON();
-     if(command.action==='capabilities.get')data={model:'daikin',firmware_variant:'full',ota_variant_conversion:'full-to-hub',actions:['status.get','config.get','config.set']};
-     else if(command.action==='config.set'&&command.params.section==='auth'){webPassword=command.params.values.password;data={};}
-     else if(!['status.get','config.get'].includes(command.action))data={};
-    }
-    return route.fulfill({json:{code:'ok',data},headers});
-   }
+   if(url.origin===address)return route.continue();
    if(url.pathname==='/config.json')return route.fulfill({json:{}});
    if(url.pathname.startsWith('/api/'))return route.fulfill({json:{}});
    if(url.origin!==origin)return route.abort();
    return route.continue();
   });
   await page.goto(origin+'/#/local');
+  await page.getByRole('button',{name:language==='en'?'Local connection':'本地连接',exact:true}).click();
   const connect=page.locator('.local-connect form');await connect.locator('input').first().fill(address);await connect.locator('button[type=submit],button:not([type])').click();
   const frame=page.frameLocator('iframe');await expect(frame.locator('#homePage')).toBeVisible();
   await frame.locator('.tabs a[data-tab=settings]').click();await frame.locator('.side a[href="#settings/firmware"]').click();

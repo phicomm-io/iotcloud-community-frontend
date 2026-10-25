@@ -8,7 +8,7 @@ export default defineConfig({
     headless: true,
     // These existing behavior scenarios assert Chinese labels explicitly.
     locale: "zh-CN",
-    channel: "chromium",
+    channel: process.env.BROWSER === "webkit" ? undefined : "chromium",
   },
   reporter: "list",
 });
