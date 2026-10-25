@@ -170,6 +170,7 @@ UI.statusParams=()=>{
  return UI.caps?.status_views?.includes('live')&&loadedGeneration===fullGeneration&&Date.now()-lastFullAt<ttl?{view:'live'}:{};
 };
 UI.control=async(action,params,patch)=>{
+ if(!patch||typeof patch!=='object'||Array.isArray(patch)||!Object.keys(patch).length)throw Error(t('error.invalid_params'));
  if(pendingControl){UI.device.onStatus?.(UI.state);throw Error(t('control.pending'));}
  pendingControl=patch;UI.controlBusy=true;
  const render=()=>{if(UI.device.onStatus)UI.device.onStatus(UI.state);};

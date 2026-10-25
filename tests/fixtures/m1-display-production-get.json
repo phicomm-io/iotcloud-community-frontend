@@ -1,0 +1,16 @@
+{
+  "revision": 1,
+  "selected_source": "user",
+  "double_click": "switch_display",
+  "lanes": [
+    {"slot":0,"source":"api","device_id":"","metric":"co2","unit":"ppm","decimals":2,"scale":1000,"ttl_seconds":20,"color":{"mode":"thresholds","low":1000,"high":1500}},
+    {"slot":1,"source":"api","device_id":"","metric":"custom","unit":"W","decimals":1,"scale":1000,"ttl_seconds":4,"color":{"mode":"fixed","value":"green"}}
+  ],
+  "runtime": {
+    "profile":"dual","selected_source":"user","mcu_supported":true,"confirmed":true,"confirmation":"mcu_readback",
+    "lanes":[
+      {"slot":0,"valid":true,"value":1234,"unit":"ppm","age_ms":1250,"remaining_ttl_seconds":19,"effective":true,"reason":"ok","number":123,"format":1,"color":"yellow","confirmed":true},
+      {"slot":1,"valid":true,"value":1200,"unit":"W","age_ms":1250,"remaining_ttl_seconds":3,"effective":true,"reason":"ok","number":12,"format":2,"color":"green","confirmed":true}
+    ]
+  }
+}

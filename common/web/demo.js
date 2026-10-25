@@ -25,9 +25,26 @@ const create=model=>{
  });
  if(model==='daikin')Object.assign(state,{hardware_model:'BRY88AX151K',indicator_enabled:true,sensors:Object.fromEntries([['pm25',18],['pm10',28],['co2',650],['temperature',25],['humidity',48],['tvoc',50]].map(([key,value])=>[key,{valid:true,value,age_ms:200}]))});
  if(model==='daikin')Object.assign(state,{indicator_rules_supported:true,indicator_rules_custom:false,system_indicator:'ready',indicator_rules:{pm_source:'pm25',...Object.fromEntries([['co2',1000],['tvoc',300],['pm',50],['formaldehyde',.1]].map(([key,threshold])=>[key,[{threshold,op:'gt',mode:'on'}]]))}});
- const actions=['status.get','capabilities.get','config.get','config.set','logs.get','ota.start','schedules.get','schedules.put','schedules.delete','schedules.enable','night.get','night.set','time.get','time.set','ota.sources.get','ota.check','ota.check.get','ota.install','ota.notes','ota.notes.get','ota.status.get',...(model==='tc1'?['outlet.set','indicator.set','child_lock.set','buttons.get','buttons.set']:model==='daikin'?['indicator.set','binding.status.get']:model==='m1'?['display.set','binding.get','binding.status.get']:['light_effect.next','light_effect.select','light_always.set','filter.get','filter.set','filter.reset','fan.set','fan.panel','fan.mode.set','fan.mode.toggle','light.set','child_lock.set','buttons.get','buttons.set','binding.get','binding.set','binding.status.get','binding.probe','linkage.get','linkage.set','light_effect.get','light_effect.set'])].filter(action=>model!=='daikin'||!action.startsWith('ota.'));
+ const actions=['status.get','capabilities.get','config.get','config.set','logs.get','ota.start','schedules.get','schedules.put','schedules.delete','schedules.enable','night.get','night.set','time.get','time.set','ota.sources.get','ota.check','ota.check.get','ota.status.get','ota.install','ota.notes','ota.notes.get',...(model==='tc1'?['outlet.set','indicator.set','child_lock.set','buttons.get','buttons.set']:model==='daikin'?['indicator.set','binding.status.get']:model==='m1'?['display.set','display_source.get','display_source.set','display_data.set','binding.get','binding.status.get']:['light_effect.next','light_effect.select','light_always.set','filter.get','filter.set','filter.reset','fan.set','fan.panel','fan.mode.set','fan.mode.toggle','light.set','child_lock.set','buttons.get','buttons.set','binding.get','binding.set','binding.status.get','binding.probe','linkage.get','linkage.set','light_effect.get','light_effect.set'])].filter(action=>model!=='daikin'||!action.startsWith('ota.'));
  const fixtures={'night.get':{windows:[],revision:1},'buttons.get':{items:[],capacity:model==='a1'?102:68},'schedules.get':{items:[],capacity:8,count:0,next:0},'time.get':{timezone_minutes:480},'logs.get':{records:[{sequence:1,event:'demo_boot',level:'info',module:'system',uptime_ms:1000}],next:1,latest:1},'power.get':{power_watts:36,energy_kwh:.28,powers:[30,35,36]},'binding.get':{sensor_transport:'lan',session_protocol:2,max_peers:4,peers:[],members:[],group:'',revision:1},'binding.status.get':{average:{valid:true,sample_count:1,configured_count:1,temperature:25,humidity:48,pm25:18,formaldehyde:.025},peers:[],members:[],linkage_status:'disabled',clock_valid:true,available:0,automatic_on:false,automatic_speed:0},'linkage.get':{hysteresis_enabled:0,fallback_speed:30,enabled:0,mode:1,metrics:1,on_metrics:1,off_metrics:1,statistic:0,on_enabled:0,off_enabled:0,on_all:0,off_all:1,fixed_speed:60,min_speed:20,max_speed:100,debounce_seconds:15,min_switch_seconds:60,on_pm:50,off_pm:35,on_hcho:.1,off_hcho:.08,target_pm:35,target_hcho:.08,low_pm:35,high_pm:150,low_hcho:.08,high_hcho:.3,kp:20,ki:.02,kd:0,revision:1},'light_effect.get':{effect:0,speed:5,segments:1,follow_fan:0,quality_pm:35,quality_hcho:.08,segment:[{source:0,display:2,minimum:-10,maximum:50,suitable_low:18,suitable_high:26,colors:[[0,0,255],[0,255,0],[255,0,0]]}],revision:1},'wifi.scan.get':{scanning:false,networks:[{ssid:'Demo Wi-Fi',rssi:-40,security:3}]},'ota.sources.get':{sources:['github','cn','global']},'ota.check.get':{state:'idle',available:false}};
  let nextScheduleId=1;
+ let display={revision:1,selected_source:'original',double_click:'none',lanes:[0,1].map(slot=>({slot,source:'none',device_id:'',metric:'custom',unit:'',decimals:0,scale:1,ttl_seconds:20,color:{mode:'fixed',value:'off'}}))};
+ const leases={};
+ function screenRead(){
+  const units={temperature:'°C',humidity:'%',pm25:'µg/m³',formaldehyde:'mg/m³',co2:'ppm',pressure:'Pa'};
+  return {...structuredClone(display),runtime:{profile:'dual',selected_source:display.selected_source,mcu_supported:true,confirmed:false,confirmation:'pending_mcu_readback',lanes:display.lanes.map(lane=>{
+   const lease=leases[lane.slot],age=lease?Math.max(0,performance.now()-lease.started):0;
+   const expired=lease&&age>=lease.ttl_seconds*1000;
+   let value=lane.source==='api'&&!expired?lease?.value:lane.source==='local'&&units[lane.metric]===lane.unit?state[lane.metric]:null;
+   if(!Number.isFinite(value))value=null;
+   const number=value===null?null:Math.round(value/lane.scale*10**lane.decimals),out=number!==null&&(number<0||number>999),valid=value!==null&&!out;
+   const color=!valid?null:lane.color.mode==='fixed'?lane.color.value:value<lane.color.low?'green':value<lane.color.high?'yellow':'red';
+   return {slot:lane.slot,valid,value:valid?value:null,unit:lane.unit,age_ms:valid?Math.floor(age):null,
+    remaining_ttl_seconds:valid?(lane.source==='api'?Math.max(0,Math.ceil(lease.ttl_seconds-age/1000)):lane.ttl_seconds):0,
+    effective:false,reason:lane.source==='none'?'disabled':out?'out_of_range':expired?'stale':valid?'ok':'missing',
+    number:valid?number:null,format:valid?lane.decimals:null,color,confirmed:false};
+  })}};
+ }
  function command(action,p={}){
   const schedule=fixtures['schedules.get'];
   for(const x of schedule.items)if(x.trigger==='countdown'&&x.enabled){x.remaining_seconds=Math.max(0,x.seconds-Math.floor((performance.now()-x.started)/1000));if(!x.remaining_seconds){x.enabled=false;x.state='executed';state.fan_on=false;state.applied_speed=state.percentage=0;state.fan_state='off';}}
@@ -40,6 +57,16 @@ const create=model=>{
    return structuredClone(f);
   }
   if(action==='status.get')return structuredClone(state);
+  if(model==='m1'&&action==='display_source.get')return screenRead();
+  if(model==='m1'&&action==='display_source.set'){
+   if(p.revision!==display.revision)throw Error('busy');
+   display={...structuredClone(p),revision:display.revision+1};delete leases[0];delete leases[1];return null;
+  }
+  if(model==='m1'&&action==='display_data.set'){
+   const lane=display.lanes[p.slot];
+   if(p.revision!==display.revision||lane?.source!=='api'||p.ttl_seconds>lane.ttl_seconds)throw Error('invalid_params');
+   if(p.ttl_seconds===0)delete leases[p.slot];else leases[p.slot]={...structuredClone(p),started:performance.now()};return null;
+  }
   if(action==='capabilities.get')return {model,actions,...(model==='a1'?{button_keys:['power','wifi','combination'],schedule_countdown:true}:model==='daikin'?{indicator_rules_supported:true}:{})};
   if(action==='config.get')return structuredClone(state);
   if(action==='config.set'){
