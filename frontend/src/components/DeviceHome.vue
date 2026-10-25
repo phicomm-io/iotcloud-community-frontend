@@ -3,7 +3,7 @@ import {t} from '../i18n.js';
 
 import {ref,onMounted,onBeforeUnmount} from 'vue';
 import pages from 'virtual:device-pages';
-const props=defineProps({device:Object,sensorSources:{type:Array,default:()=>[]}});
+const props=defineProps({device:Object,sensorSources:{type:Array,default:()=>[]},displaySources:{type:Array,default:()=>[]}});
 const emit=defineEmits(['command','settings','upload','resource']);
 const uploads=new Map();
 const frame=ref(),height=ref(700);
@@ -12,7 +12,7 @@ function receive(event){
  if(event.data?.type==='device-height'){height.value=Math.max(200,Math.min(12000,Number(event.data.height)||700));return;}
  if(event.data?.type==='device-settings'){emit('settings');return;}
  if(event.data?.type==='device-sensor-sources'){
-  if(typeof event.data.id==='string')event.source.postMessage({type:'device-sensor-sources-result',id:event.data.id,sources:JSON.parse(JSON.stringify(props.sensorSources))},location.origin);
+  if(typeof event.data.id==='string')event.source.postMessage({type:'device-sensor-sources-result',id:event.data.id,sources:JSON.parse(JSON.stringify(event.data.kind==='display'?props.displaySources:props.sensorSources))},location.origin);
   return;
  }
  if(event.data?.type==='device-upload-abort'){uploads.get(event.data.id)?.();uploads.delete(event.data.id);return;}

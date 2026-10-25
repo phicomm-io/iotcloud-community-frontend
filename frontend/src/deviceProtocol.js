@@ -63,6 +63,10 @@ const merge = (state, data) => {
         "username",
         "namespace",
         "mqtt_username",
+        "sensorAt",
+        "sensorFresh",
+        "co2SensorAt",
+        "co2Scd40At",
       ].includes(key)
     )
       if (/^plug_[0-5]$/.test(key) && value && typeof value === "object") {
@@ -86,15 +90,36 @@ const json = (value) => {
     return null;
   }
 };
+function mergeStatus(state,data,now){
+ // Partial status updates must not renew an older CO2 representation.
+ if(state.co2SensorAt===undefined&&state.sensors?.co2)state.co2SensorAt=state.sensorAt??null;
+ if(state.co2Scd40At===undefined&&state.scd40)state.co2Scd40At=state.sensorAt??null;
+ merge(state,data);
+ if(data.sensors?.co2&&typeof data.sensors.co2==='object'&&Object.hasOwn(data.sensors.co2,'value'))state.co2SensorAt=now;
+ if(data.scd40&&typeof data.scd40==='object'&&Object.hasOwn(data.scd40,'co2_ppm'))state.co2Scd40At=now;
+ const measurements=['temperature','humidity','pm25','formaldehyde','co2','pm10','tvoc','pressure','power_watts','energy_kwh'].some(key=>Number.isFinite(data[key]))||
+  ['sensors','scd40','barometer'].some(key=>data[key]&&typeof data[key]==='object'&&!Array.isArray(data[key])&&Object.keys(data[key]).length>0);
+ // A successful empty/metadata response is not a new physical sample.
+ if(measurements){state.sensorAt=now;state.sensorFresh=data.sensor_valid===true;}
+ else if(data.sensor_valid===false)state.sensorFresh=false;
+}
+// LAN status is a full snapshot. Explicitly clear absent CO2 receipts so a
+// previous MQTT representation cannot supply its timestamp after the merge.
+export function statusSnapshot(data,now=Date.now()){
+ if(!data||typeof data!=='object'||Array.isArray(data))return null;
+ return {...data,sensorAt:now,sensorFresh:data.sensor_valid===true,
+  co2SensorAt:data.sensors?.co2&&typeof data.sensors.co2==='object'&&Object.hasOwn(data.sensors.co2,'value')?now:null,
+  co2Scd40At:data.scd40&&typeof data.scd40==='object'&&Object.hasOwn(data.scd40,'co2_ppm')?now:null};
+}
 export function applyMessage(d, state, topic, message, now = Date.now()) {
  if(d.version === "v2") {
   const base=baseTopic(d); if(!topic.startsWith(base+"/")) return false;
   const leaf=topic.slice(base.length+1), data=json(String(message));
   if(leaf === "availability") {state.available=String(message)==="online"; if(!state.available)state.sensorFresh=false;}
-  else if(leaf === "state" && data) {merge(state,data);state.sensorAt=now;state.sensorFresh=data.sensor_valid===true;}
+  else if(leaf === "state" && data) mergeStatus(state,data,now);
   else if(leaf === "sensor" && data) {merge(state,data);if(d.model==="tc1"){state.power_watts=Number(data.power);state.energy_kwh=Number(data.powerConsumption);}}
   else if(leaf === "capabilities" && data) state.capabilities=data;
-  else if(leaf === "result" && data) {state.result=data; if(data.code==="ok" && state.pending?.[data.request_id]==="status.get") {merge(state,data.data);state.sensorAt=now;state.sensorFresh=data.data.sensor_valid===true;}}
+  else if(leaf === "result" && data) {state.result=data; const payload=data.data; if(data.code==="ok" && state.pending?.[data.request_id]==="status.get" && payload && typeof payload==="object" && !Array.isArray(payload)) mergeStatus(state,payload,now);}
   return true;
  }
 

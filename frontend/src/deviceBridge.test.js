@@ -39,6 +39,9 @@ test('sensor source replies require the current parent and origin and are cancel
   const reply=origin=>f.w.dispatchEvent(new f.w.MessageEvent('message',{source:f.w,origin,data:{type:'device-sensor-sources-result',id:message.id,sources:[{device_id:'123456abcdef'}]}}));
   reply('https://unrelated.test');await Promise.resolve();assert.equal(completed,false);
   reply('https://platform.test');assert.deepEqual(JSON.parse(JSON.stringify(await result)),[{device_id:'123456abcdef'}]);
+  const display=f.w.getDeviceSensorSources('display'),typed=f.sent.at(-1);assert.equal(typed.kind,'display');
+  f.w.dispatchEvent(new f.w.MessageEvent('message',{source:f.w,origin:'https://platform.test',data:{type:'device-sensor-sources-result',id:typed.id,sources:[{device_id:'123456abcdef',metric:'power',unit:'W',value:42}]}}));
+  assert.deepEqual(JSON.parse(JSON.stringify(await display)),[{device_id:'123456abcdef',metric:'power',unit:'W',value:42}]);
   const cancelled=f.w.getDeviceSensorSources();f.w.dispatchEvent(new f.w.Event('pagehide'));
   assert.deepEqual(JSON.parse(JSON.stringify(await cancelled)),[]);
  }finally{f.dom.window.close();}

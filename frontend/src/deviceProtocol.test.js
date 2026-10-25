@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {deviceEntry,userKey,baseTopic,topics,command,applyMessage,normalizeMAC} from './deviceProtocol.js';
+import {co2SourceCandidates} from './sensorSources.js';
 test('current TMCP roots and request envelope for all models',()=>{for(const model of ['tc1','m1','a1','daikin']){const d=deviceEntry({mac:'AA:BB:CC:DD:EE:FF',model,username:'alice',version:'v2'});const base=`phicomm/v2/${userKey('alice')}/${model}/aabbccddeeff`;assert.equal(baseTopic(d),base);assert.deepEqual(topics(d),[base+'/#']);const c=command(d,{action:'status.get',request_id:'test-1'});assert.equal(c.topic,base+'/command');assert.deepEqual(JSON.parse(c.payload),{request_id:'test-1',action:'status.get',params:{}});const state={};assert(applyMessage(d,state,base+'/state',JSON.stringify({name:'demo',sensor_valid:true,temperature:22}),1000));assert.equal(state.temperature,22);assert.equal(state.sensorAt,1000);assert.equal(applyMessage(d,state,base.replace(userKey('alice'),userKey('bob'))+'/state','{}'),false);assert.equal(applyMessage(d,state,`phicomm/${model}/aabbccddeeff/state`,'{}'),false);}});
 test('Legacy TC1 identities and original JSON control remain supported',()=>{const d=deviceEntry({mac:'AABBCCDDEEFF',version:'v1'});assert(topics(d).includes('device/ztc1/AA:BB:CC:DD:EE:FF/state'));const c=command(d,{plug_0:{on:1}});assert.equal(c.topic,'device/ztc1/aabbccddeeff/set');assert.equal(JSON.parse(c.payload).plug_0.on,1);const state={};assert(applyMessage(d,state,'device/ztc1/AABBCCDDEEFF/state','{"plug_0":{"on":1}}'));assert.equal(state.plug_0.on,1);assert(!applyMessage(d,state,'device/ztc1/001122334455/state','{}'));});
 test('obsolete project versions and mixed MAC syntax rejected',()=>{assert.throws(()=>deviceEntry({model:'m1',mac:'aabbccddeeff',version:'community'}));assert.throws(()=>deviceEntry({model:'a1',mac:'aabbccddeeff',version:'v1'}));assert.throws(()=>normalizeMAC('AA:BB-CC:DD:EE:FF'));});
@@ -13,6 +14,46 @@ test('known firmware variants survive device list normalization without altering
  assert.equal(deviceEntry({mac:'aabbccddeeff',firmware_variant:'unknown'}).firmware_variant,undefined);
 });
 test('result query merges only matching status receipts',()=>{const d=deviceEntry({mac:'aabbccddeeff',model:'m1'}),state={pending:{q:'status.get'}};applyMessage(d,state,baseTopic(d)+'/result',JSON.stringify({request_id:'q',code:'ok',data:{sensor_valid:false,temperature:1}}),10);assert.equal(state.temperature,1);assert.equal(state.sensorFresh,false);applyMessage(d,state,baseTopic(d)+'/state','{"__proto__":{"polluted":true},"model":"tc1"}');assert.equal({}.polluted,undefined);assert.equal(state.model,undefined);});
+test('malformed status results cannot throw, overwrite measurements or renew freshness',()=>{
+ const d=deviceEntry({mac:'aabbccddeeff',model:'m1'}),topic=baseTopic(d)+'/result';
+ for(const payload of [undefined,null,[],42,'bad',false,{}]){
+  const state={pending:{q:'status.get'},temperature:22,sensorAt:5,sensorFresh:false};
+  const result={request_id:'q',code:'ok',data:payload};
+  assert.doesNotThrow(()=>applyMessage(d,state,topic,JSON.stringify(result),100));
+  assert.equal(state.temperature,22);assert.equal(state.sensorAt,5);assert.equal(state.sensorFresh,false);
+  assert.equal(state.result.request_id,'q','result remains available for request correlation');
+ }
+ const state={pending:{q:'status.get'}};
+ applyMessage(d,state,topic,JSON.stringify({request_id:'q',code:'ok',data:{sensor_valid:true,temperature:23}}),200);
+ assert.equal(state.temperature,23);assert.equal(state.sensorAt,200);assert.equal(state.sensorFresh,true);
+});
+test('empty and metadata-only state receipts cannot revive an expired physical CO2 source',()=>{
+ const target=deviceEntry({mac:'123456abcdef',model:'m1',username:'alice'}),source=deviceEntry({mac:'aabbccddeeff',model:'daikin',username:'alice'});
+ for(const leaf of ['state','result'])for(const payload of [{},{name:'Updated name'},{sensor_valid:true},{sensors:{}},{sensorAt:21000,sensorFresh:true}]){
+  const state={pending:{q:'status.get'},sensorAt:1000,sensorFresh:false,sensors:{co2:{value:800,unit:'ppm',valid:true,age_ms:0}}};
+  applyMessage(source,state,baseTopic(source)+'/'+leaf,JSON.stringify(leaf==='result'?{request_id:'q',code:'ok',data:payload}:payload),21000);
+  assert.equal(state.sensorAt,1000);assert.equal(state.sensorFresh,false);
+  assert.deepEqual(co2SourceCandidates([source,target],{[source.mac]:state},target,'alice',21000),[]);
+  const live={sensor_valid:true,sensors:{co2:{value:900,unit:'ppm',valid:true,age_ms:0}}};
+  applyMessage(source,state,baseTopic(source)+'/'+leaf,JSON.stringify(leaf==='result'?{request_id:'q',code:'ok',data:live}:live),22000);
+  assert.equal(state.sensorAt,22000);assert.equal(state.sensorFresh,true);
+  assert.equal(co2SourceCandidates([source,target],{[source.mac]:state},target,'alice',22000)[0].ppm,900);
+ }
+});
+test('partial readings keep independent CO2 receipt times and new complete CO2 samples remain usable',()=>{
+ const target=deviceEntry({mac:'123456abcdef',model:'m1',username:'alice'}),source=deviceEntry({mac:'aabbccddeeff',model:'daikin',username:'alice'});
+ for(const leaf of ['state','result'])for(const initial of [{sensors:{co2:{value:800,unit:'ppm',valid:true,age_ms:0}}},{scd40:{ready:true,valid:true,co2_ppm:800,age_ms:0}}]){
+  for(const payload of [{temperature:22},{barometer:{ready:true}},{scd40:{ready:true}},{sensors:{humidity:{value:50,unit:'%',valid:true,age_ms:0}}}]){
+   const state={pending:{q:'status.get'},sensorAt:1000,...structuredClone(initial)};
+   const send=(data,now)=>applyMessage(source,state,baseTopic(source)+'/'+leaf,JSON.stringify(leaf==='result'?{request_id:'q',code:'ok',data}:data),now);
+   send(payload,21000);assert.deepEqual(co2SourceCandidates([source,target],{[source.mac]:state},target,'alice',21000),[],JSON.stringify([leaf,initial,payload]));
+   send({sensors:{co2:{value:900,unit:'ppm',valid:true,age_ms:0}}},22000);
+   assert.equal(co2SourceCandidates([source,target],{[source.mac]:state},target,'alice',22000)[0].ppm,900);
+   send({scd40:{ready:true,valid:true,co2_ppm:1000,age_ms:0}},23000);
+   assert.equal(co2SourceCandidates([source,target],{[source.mac]:state},target,'alice',23000)[0].ppm,1000,'the newest complete representation wins');
+  }
+ }
+});
 test('Legacy HA text mode keeps original uppercase topics and controls',()=>{const d=deviceEntry({mac:'aabbccddeeff',version:'v1'}),state={};assert(applyMessage(d,state,'homeassistant/switch/AABBCCDDEEFF/socket_2/state','set socket AABBCCDDEEFF 2 1'));assert.equal(state.plug_2.on,1);assert.deepEqual(command({...d,...state},{plug_2:{on:0}}),{topic:'device/ztc1/AABBCCDDEEFF/set',payload:'set socket AABBCCDDEEFF 2 0'});assert(!applyMessage(d,state,'homeassistant/switch/001122334455/socket_2/state','set socket AABBCCDDEEFF 2 0'));});
 test('migrated HA outlet names survive retained state replay and later status updates',()=>{
  const d=deviceEntry({mac:'d0bae4632b42',version:'v1'}),state={};

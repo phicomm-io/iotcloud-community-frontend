@@ -8,7 +8,7 @@ import {account,api,restoreAccount} from './account';
 import {server,scopeKey} from './serverConfig';
 import {track} from './analytics';
 import {autoConnect,setAutoConnect,rememberLogin,savedPassword,forgetLogin} from './connectionPreferences';
-import {userKey,requestId,deviceKey,deviceEntry,localDevices,topics,applyMessage,command} from './deviceProtocol';
+import {userKey,requestId,deviceKey,deviceEntry,localDevices,topics,applyMessage,statusSnapshot,command} from './deviceProtocol';
 import {createDeviceTransport,loadPreference,savePreference,localAddress} from './deviceConnection';
 import {deviceType} from './devicePresentation';
 import {saveDeviceName} from './deviceName';
@@ -18,6 +18,7 @@ import DevicePicker from './components/DevicePicker.vue';
 import AppIcon from './components/AppIcon.vue';
 import DeviceHome from './components/DeviceHome.vue';
 import {co2SourceCandidates} from './sensorSources.js';
+import {applyTypedSensorFeed,displaySourceCandidates,typedSensorTopic} from './sensorFeed.js';
 import PlatformSettings from './components/PlatformSettings.vue';
 import ThemeToggle from './components/ThemeToggle.vue';
 import LocalConnect from './components/LocalConnect.vue';
@@ -52,8 +53,9 @@ const showDeviceHint=computed(()=>{if(!differentMqttHost.value||page.value!=='ho
 function dismissDeviceHint(){hintDismissed.value=hintKey.value;try{localStorage.setItem(hintKey.value,'1');}catch{}}
 const addForm=reactive({mac:'',model:'tc1',version:'v2'});
 const lanConnections=reactive({}),lanStates=reactive({}),devicePreferences=reactive({});
+const sensorFeeds=reactive({});
 const webPasswords=new Map();let preferenceScope='';
-const transport=createDeviceTransport({records:lanConnections,onStatus:(key,state)=>{lanStates[key]={...state,available:true,lan_connected:true,sensorAt:Date.now(),sensorFresh:state.sensor_valid===true};}});
+const transport=createDeviceTransport({records:lanConnections,onStatus:(key,state)=>{const snapshot=statusSnapshot(state);if(snapshot)lanStates[key]={...snapshot,available:true,lan_connected:true};}});
 const viewStates=computed(()=>Object.fromEntries(list.value.map(d=>{const k=deviceKey(d);return [k,lanConnections[k]?.ready?{...states[k],...lanStates[k]}:states[k]||{}];})));
 const activeConnected=computed(()=>!!active.value&&(connected.value||lanConnections[deviceKey(active.value)]?.ready));
 function updateConnections(force=false){
@@ -96,6 +98,9 @@ const localHubURL=computed(()=>{
  try{return localAddress(lan.address)+'/iotcloud/#/';}catch{return '';}
 });
 const sensorSources=computed(()=>co2SourceCandidates(list.value,viewStates.value,active.value,connection.username,now.value));
+// A live feed can arrive between the one-second UI ticks. Use the current
+// receipt clock too, so a new sample is never compared with the previous tick.
+const displaySources=computed(()=>displaySourceCandidates(list.value,viewStates.value,sensorFeeds,active.value,connection.username,Math.max(now.value,Date.now())));
 
 watch(page,value=>track('pageview',thirdParty.value?(value==='settings'?'/guest/settings':'/guest'):(value==='settings'?'/settings':'/')));
 watch(()=>active.value?deviceKey(active.value):'',value=>{if(value)track('device_view',thirdParty.value?'/guest':'/',active.value.model);});
@@ -131,14 +136,14 @@ watch(()=>[connection.host,connection.username],()=>{if(thirdParty.value){discon
 const connectionOwner=()=>thirdParty.value?'guest:'+connection.host+':'+connection.username:account.username;
 function manualDisconnect(){setAutoConnect(connectionOwner(),false);disconnect();}
 function manualConnect(){setAutoConnect(connectionOwner(),true);connect();}
-function disconnect(){busy.value=false;for(const {reply,timeout} of replies.values()){clearTimeout(timeout);reply({code:'offline',message:t('p.d830845257a1')});}replies.clear();client?.end(true);client=null;connected.value=false;}
-function subscribe(){if(demoMode)return;if(thirdParty.value)client?.subscribe(`phicomm/v2/${connection.username?userKey(connection.username):'local'}/discovery/+`,{qos:1});for(const d of list.value.filter(d=>!d.status||d.status==='active'))client?.subscribe(topics(d),{qos:1},(e,g)=>{if(e||g?.some(x=>x.qos===128))error.value=t('p.d5aa311ed18a');});}
+function disconnect(){busy.value=false;for(const {reply,timeout} of replies.values()){clearTimeout(timeout);reply({code:'offline',message:t('p.d830845257a1')});}replies.clear();for(const key of Object.keys(sensorFeeds))delete sensorFeeds[key];client?.end(true);client=null;connected.value=false;}
+function subscribe(){if(demoMode)return;if(thirdParty.value)client?.subscribe(`phicomm/v2/${connection.username?userKey(connection.username):'local'}/discovery/+`,{qos:1});if(list.value.some(d=>d.model==='m1'&&d.version==='v2'))client?.subscribe(typedSensorTopic(connection.username),{qos:0});for(const d of list.value.filter(d=>!d.status||d.status==='active'))client?.subscribe(topics(d),{qos:1},(e,g)=>{if(e||g?.some(x=>x.qos===128))error.value=t('p.d5aa311ed18a');});}
 async function refresh(){try{list.value=(localMode?savedLocalDevices():thirdParty.value?localDevices(guestStorage).map(d=>({...d,username:connection.username})):await api('/devices')).map(deviceEntry);if(!list.value.some(d=>deviceKey(d)===selected.value))selected.value=list.value[0]?deviceKey(list.value[0]):'';if(connected.value)subscribe();listReady.value=true;updateConnections();}catch(e){error.value=e.message;}}
 function connect(){if(demoMode){connected.value=true;busy.value=false;for(const d of list.value)Object.assign(states[deviceKey(d)]||={},demoDevices[d.model].state);return;}if(!thirdParty.value&&connection.password)rememberLogin(account.username,connection.password);disconnect();error.value='';if(location.protocol==='https:'&&!connection.host.startsWith('wss://')){error.value=t('p.22211d965247');return;}if(!/^wss?:\/\//.test(connection.host)){error.value=t('p.5da207244bf4');return;}busy.value=true;
  client=mqtt.connect(connection.host,{username:connection.username,password:connection.password,clientId:'web_'+requestId(),connectTimeout:5000,reconnectPeriod:3000,clean:true});
  client.on('connect',()=>{connected.value=true;busy.value=false;subscribe();track('mqtt_connect',thirdParty.value?'/guest':'/');});
  client.on('close',()=>{connected.value=false;busy.value=false;});client.on('error',()=>{error.value=t('p.cc9962611a5b');busy.value=false;});
- client.on('message',(topic,payload)=>{if(thirdParty.value && topic.startsWith(`phicomm/v2/${connection.username?userKey(connection.username):'local'}/discovery/`)){try{const a=JSON.parse(payload.toString());if(a.protocol!=='tmcp'||a.protocol_version!==2||a.version!=='v2')return;const d=deviceEntry({mac:topic.split('/')[4],model:a.model,version:'v2',username:connection.username});if(!list.value.some(x=>deviceKey(x)===deviceKey(d))){list.value.push(d);updateConnections();localStorage.setItem(guestKey(),JSON.stringify(list.value));if(!selected.value)selected.value=deviceKey(d);subscribe();sendTo(d,'status.get');}}catch{}return;}for(const d of list.value){const s=states[deviceKey(d)] ||= {};if(applyMessage(d,s,topic,payload.toString())){if(s.ip)updateConnections();if(topic.endsWith('/result')){const pending=replies.get(s.result?.request_id);if(pending&&pending.key===deviceKey(d)){clearTimeout(pending.timeout);replies.delete(s.result.request_id);pending.reply(s.result);}delete s.pending?.[s.result?.request_id];}break;}}});
+ client.on('message',(topic,payload,packet)=>{if(applyTypedSensorFeed(sensorFeeds,topic,payload.toString(),{username:connection.username,retained:packet?.retain===true,deviceIds:list.value.filter(d=>d.version==='v2').map(d=>d.mac)}))return;if(thirdParty.value && topic.startsWith(`phicomm/v2/${connection.username?userKey(connection.username):'local'}/discovery/`)){try{const a=JSON.parse(payload.toString());if(a.protocol!=='tmcp'||a.protocol_version!==2||a.version!=='v2')return;const d=deviceEntry({mac:topic.split('/')[4],model:a.model,version:'v2',username:connection.username});if(!list.value.some(x=>deviceKey(x)===deviceKey(d))){list.value.push(d);updateConnections();localStorage.setItem(guestKey(),JSON.stringify(list.value));if(!selected.value)selected.value=deviceKey(d);subscribe();sendTo(d,'status.get');}}catch{}return;}for(const d of list.value){const s=states[deviceKey(d)] ||= {};if(applyMessage(d,s,topic,payload.toString())){if(s.ip)updateConnections();if(topic.endsWith('/result')){const pending=replies.get(s.result?.request_id);if(pending&&pending.key===deviceKey(d)){clearTimeout(pending.timeout);replies.delete(s.result.request_id);pending.reply(s.result);}delete s.pending?.[s.result?.request_id];}break;}}});
  if(thirdParty.value)localStorage.setItem('tmcp_broker',JSON.stringify({host:connection.host,username:connection.username}));
 }
 function legacyRequest({action,params={}},reply,d){
@@ -195,7 +200,7 @@ onBeforeUnmount(()=>{disconnect();clearInterval(timer);clearInterval(poll);clear
 <button class="device-picker-trigger" type="button" aria-haspopup="dialog" :aria-label="t('p.e7819c97f607',{v0:(displayName(active))})" @click="devicePicker.open()"><span class="current-device"><b :title="displayName(active)">{{displayName(active)}}</b><small>{{!activeConnected?t('p.5e8b7d10afc5'):active.lan_connected?t('p.a2d6d3fd2463'):active.available===false?t('p.be1b4f3c6c1c'):active.available===true?t('p.b9086662b1df'):t('p.21a94004577c')}}</small></span><span class="switch-device-label">{{t('p.28465d512f3a')}}<AppIcon name="arrow" :size="16"/></span></button>
 <button class="device-refresh" type="button" :aria-label="t('p.f51eeae36b84')" :disabled="!activeConnected" @click="home?.refresh()"><AppIcon name="refresh"/></button>
 </div><div class="device-heading"><div><h2>{{displayName(active)}}</h2><p class="help">{{deviceType(active)}}</p></div><span class="badge" :class="active.available===true&&activeConnected?'ok':''">{{!activeConnected?t('p.5e8b7d10afc5'):active.lan_connected?t('p.a2d6d3fd2463'):active.available===false?t('p.be1b4f3c6c1c'):active.available===true?t('p.b9086662b1df'):t('p.21a94004577c')}}</span><button :disabled="!activeConnected" @click="home?.refresh()">{{t('p.802a407c7743')}}</button></div>
-<DeviceHome ref="home" :key="selected" :device="active" :sensor-sources="sensorSources" @command="deviceCommand" @upload="uploadDevice" @resource="deviceResource" @settings="openSettings()"/>
+<DeviceHome ref="home" :key="selected" :device="active" :sensor-sources="sensorSources" :display-sources="displaySources" @command="deviceCommand" @upload="uploadDevice" @resource="deviceResource" @settings="openSettings()"/>
 </div><section v-else class="surface empty-control"><h2>{{t('p.7549828062bc')}}</h2><p>{{localMode?t('p.48e36ea6f1e3'):t('p.17784e8330b1')}}</p><button @click="openSettings('devices')">{{t('p.3aea0927d015')}}</button></section></div>
 <DevicePicker ref="devicePicker" :devices="list" :selected="selected" :states="viewStates" :device-name="displayName" :connected="connected" :now="now" @select="selected=$event" @refresh="refresh" @add="openSettings('devices')"/>
 </template>

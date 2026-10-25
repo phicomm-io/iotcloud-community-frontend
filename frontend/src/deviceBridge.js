@@ -7,9 +7,9 @@ const t=(id,args={})=>{if(globalThis.I18N){I18N.extend(bridgeMessages);return I1
 
  const pending=new Map();
  const sourceReads=new Map();
- window.getDeviceSensorSources=()=>new Promise(resolve=>{
+ window.getDeviceSensorSources=kind=>new Promise(resolve=>{
   const id=crypto.randomUUID(),timer=setTimeout(()=>{sourceReads.delete(id);resolve([]);},5000);
-  sourceReads.set(id,{resolve,timer});parent.postMessage({type:'device-sensor-sources',id},parent.location.origin);
+  sourceReads.set(id,{resolve,timer});parent.postMessage({type:'device-sensor-sources',id,kind:kind==='display'?'display':'co2'},parent.location.origin);
  });
  window.addEventListener('message',event=>{
   if(event.source!==parent||event.origin!==parent.location.origin||event.data?.type!=='device-sensor-sources-result')return;
