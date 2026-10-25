@@ -352,7 +352,8 @@ function mqttPage(dev){
  });
  const broker=card('mqtt.broker',null,form);
  const heading=broker.querySelector('.card-head');heading.classList.add('broker-card-head');
- heading.append(h('a',{class:'btn broker-platform-link',href:'https://phicomm-io.github.io/iotcloud/#/',target:'_blank',rel:'noopener noreferrer'},h('span',{i18n:'import.platform'}),icon('external')));
+ const hub=!UI.embedded&&UI.caps?.model==='daikin'&&UI.caps.firmware_variant==='hub';
+ heading.append(h('a',{class:'btn broker-platform-link',href:hub?'/iotcloud/#/':'https://phicomm-io.github.io/iotcloud/#/',target:hub?null:'_blank',rel:hub?null:'noopener noreferrer'},h('span',{i18n:hub?'nav.hub':'import.platform'}),icon('external')));
  return {el:h('div',{class:'stack'},pageHead('nav.mqtt','mqtt.lead'),sum,imported,broker),
   status(s){sum.replaceChildren(summary([['mqtt.status',!s.mqtt_host?t('state.off'):s.mqtt_connected?t('state.ready'):t('s.'+(s.mqtt_status||'connecting')),!s.mqtt_host?'':s.mqtt_connected?'ok':'warn'],
    ['mqtt.host',s.mqtt_host?s.mqtt_host+':'+s.mqtt_port:'—'],['mqtt.mode',t(s.mqtt_topic_mode==='legacy'?'mqtt.mode_legacy':'mqtt.mode_tmcp')],['mqtt.user',s.mqtt_user||'—']]));},
@@ -693,6 +694,10 @@ UI.start=async dev=>{
   h('div',{id:'banners'}));
  UI.caps=await command('capabilities.get').catch(()=>({actions:[]}));
  if(dev.capabilities)dev.capabilities(UI.caps);
+ if(!UI.embedded&&UI.caps.model==='daikin'&&UI.caps.firmware_variant==='hub'){
+  const tabs=document.querySelector('.tabs');tabs.classList.add('hub-tabs');
+  tabs.append(h('a',{class:'hub-management-entry',href:'/iotcloud/#/'},icon('link'),h('span',{i18n:'nav.hub'})));
+ }
  const pages=$('pages');
  // Pages the framework builds for every product.
  const builders={network:wifiPage,mqtt:mqttPage,firmware:firmwarePage,diagnostics:diagnosticsPage,maintenance:maintenancePage,logs:logsPage};

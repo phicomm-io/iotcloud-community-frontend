@@ -41,7 +41,7 @@ function renameDevice(d,name,done){
 }
 const settingsSection=ref(route.query.github==='linked'?'account':'connection');
 function openSettings(section='connection'){settingsSection.value=section;page.value='settings';window.scrollTo({top:0});}
-const deviceBroker=reactive({host:'',port:''});
+const deviceBroker=reactive({host:'',port:'',hub:false});
 const page=ref(route.query.github==='linked'?'settings':'home'),thirdParty=ref(localMode||route.name==='Guest'),list=ref([]),selected=ref(''),states=reactive({}),connected=ref(false),error=ref(''),notice=ref(''),busy=ref(false),now=ref(Date.now());
 const connection=reactive({host:`${location.protocol==='https:'?'wss':'ws'}://${location.host}/mqtt`,username:'',password:''});
 const mqttDeviceHost=computed(()=>{try{return new URL(connection.host).hostname;}catch{return '';}});
@@ -89,6 +89,12 @@ async function deviceCommand(request,reply,target=active.value,options={}){
  reply(result);
 }
 const active=computed(()=>{const d=list.value.find(x=>deviceKey(x)===selected.value);return d?{...viewStates.value[deviceKey(d)],...d}:null;});
+const localHubURL=computed(()=>{
+ if(!localMode||active.value?.model!=='daikin')return '';
+ const lan=lanConnections[deviceKey(active.value)];
+ if(!lan?.ready||lan.info?.model!=='daikin'||lan.info?.firmware_variant!=='hub')return '';
+ try{return localAddress(lan.address)+'/iotcloud/#/';}catch{return '';}
+});
 const sensorSources=computed(()=>co2SourceCandidates(list.value,viewStates.value,active.value,connection.username,now.value));
 
 watch(page,value=>track('pageview',thirdParty.value?(value==='settings'?'/guest/settings':'/guest'):(value==='settings'?'/settings':'/')));
@@ -166,7 +172,7 @@ function legacyRequest({action,params={}},reply,d){
 }
 function sendTo(d,action,params={}){deviceCommand({action,params},r=>{if(!['ok','accepted'].includes(r.code))error.value=r.message||r.code;},d);}
 async function localConnected(d){await refresh();selected.value=deviceKey(d);updateConnections(true);page.value='home';}
-async function changeMode(){if(localMode){connection.host='';await refresh();return;}transport.retain([]);for(const k of Object.keys(lanStates))delete lanStates[k];for(const k of Object.keys(states))delete states[k];Object.assign(deviceBroker,{host:'',port:''});disconnect();notice.value='';error.value='';if(thirdParty.value){Object.assign(connection,{host:`${location.protocol==='https:'?'wss':'ws'}://${location.host}/mqtt`,username:'',password:''},JSON.parse(localStorage.getItem('tmcp_broker')||'{}'));}else{const s=await api('/register/status');try{const u=new URL(s.mqtt_uri.includes('://')?s.mqtt_uri:'mqtt://'+s.mqtt_uri);if(u.protocol==='mqtt:'&&u.hostname&&!u.username&&!u.password)Object.assign(deviceBroker,{host:u.hostname,port:Number(u.port||1883)});}catch{}Object.assign(connection,{host:server.mqttWS||s.mqtt_ws_uri||`${location.protocol==='https:'?'wss':'ws'}://${location.host}/mqtt`,username:account.mqttUsername||account.username,password:account.password||savedPassword(account.username)});}await refresh();if(demoMode||(autoConnect(connectionOwner())&&connection.password))connect();}
+async function changeMode(){if(localMode){connection.host='';await refresh();return;}transport.retain([]);for(const k of Object.keys(lanStates))delete lanStates[k];for(const k of Object.keys(states))delete states[k];Object.assign(deviceBroker,{host:'',port:'',hub:false});disconnect();notice.value='';error.value='';if(thirdParty.value){Object.assign(connection,{host:`${location.protocol==='https:'?'wss':'ws'}://${location.host}/mqtt`,username:'',password:''},JSON.parse(localStorage.getItem('tmcp_broker')||'{}'));}else{const s=await api('/register/status');try{const u=new URL(s.mqtt_uri.includes('://')?s.mqtt_uri:'mqtt://'+s.mqtt_uri);if(u.protocol==='mqtt:'&&u.hostname&&!u.username&&!u.password)Object.assign(deviceBroker,{host:u.hostname,port:Number(u.port||1883),hub:s.hub===true&&u.hostname===location.hostname&&Number(u.port||1883)===1883});}catch{}Object.assign(connection,{host:server.mqttWS||s.mqtt_ws_uri||`${location.protocol==='https:'?'wss':'ws'}://${location.host}/mqtt`,username:account.mqttUsername||account.username,password:account.password||savedPassword(account.username)});}await refresh();if(demoMode||(autoConnect(connectionOwner())&&connection.password))connect();}
 async function add(){try{const d=deviceEntry({...addForm,version:addForm.model==='tc1'?addForm.version:'v2',...(thirdParty.value?{username:connection.username}:{})});if(thirdParty.value){if(list.value.some(x=>x.mac===d.mac))throw Error(t('p.bf5557c8f16a'));localStorage.setItem(guestKey(),JSON.stringify([...list.value,d]));}else await api('/devices',{method:'POST',body:JSON.stringify(d)});await refresh();addForm.mac='';}catch(e){error.value=e.message;}}
 async function remove(d){if(!confirm(t('p.4c8411974d35',{v0:(d.mac)})))return;try{client?.unsubscribe(topics(d));if(thirdParty.value)localStorage.setItem(guestKey(),JSON.stringify(list.value.filter(x=>deviceKey(x)!==deviceKey(d))));else await api(`/devices/${d.namespace?'scoped/':''}${d.mac}${d.namespace?'?mqtt_username='+encodeURIComponent(d.mqtt_username||d.username):''}`,{method:'DELETE'});await refresh();}catch(e){error.value=e.message;}}
 async function logout(){try{await api('/auth/logout',{method:'POST',body:'{}'});}catch(e){error.value=e.message;}account.username=null;account.mqttUsername=null;account.isAdmin=false;account.aliases=[];account.githubLogin='';account.password='';forgetLogin();disconnect();await router.replace('/login');}
@@ -182,6 +188,7 @@ onBeforeUnmount(()=>{disconnect();clearInterval(timer);clearInterval(poll);clear
 <div v-if="showDeviceHint" role="status" class="feedback device-host-hint"><details><summary>{{t('p.390bf998195f')}}<strong>{{mqttDeviceHost}}</strong></summary><p>{{t('p.af0f3d5d3468')}}</p></details><button type="button" @click="dismissDeviceHint">{{t('p.348f1cf1243e')}}</button></div>
 <p v-if="error" role="alert" class="feedback error">{{error}}</p><p v-if="notice" role="status" class="feedback">{{notice}}</p>
 <LocalConnect v-if="localMode" @connected="localConnected"/>
+<section v-if="localHubURL" class="card local-hub-entry" aria-labelledby="local-hub-title"><h2 id="local-hub-title">{{t('hub.manage')}}</h2><p class="help">{{t('hub.localHelp')}}</p><a class="btn primary" :href="localHubURL" target="_blank" rel="noopener noreferrer">{{t('hub.manage')}}</a></section>
 <template v-if="page==='home'">
 <div class="dashboard-grid"><aside class="surface devices-panel"><h2>{{t('p.e1506406a5bd')}}</h2><button class="add-device-entry" type="button" @click="openSettings('devices')"><AppIcon name="plus" :size="17"/>{{t('p.3aea0927d015')}}</button><ul class="device-list"><li v-for="d in list" :key="deviceKey(d)" class="device-list-item"><button class="device-select" :aria-pressed="selected===deviceKey(d)" @click="selected=deviceKey(d)"><DeviceSummary :device="d" :state="viewStates[deviceKey(d)]||{}" :name="displayName(d)" :connected="connected" :now="now"/></button><button class="device-rename btn ghost icon" :aria-label="t('p.0237e5999393',{v0:(displayName(d))})" @click="nameDialog.open(d,displayName(d))"><AppIcon name="edit" :size="15"/></button></li></ul><button @click="refresh">{{t('p.e28be7098db1')}}</button><p v-if="!list.length" class="helper-text">{{t('p.c31cc68bb6bb')}}</p></aside>
 <div v-if="active" class="device-area"><div class="mobile-device-heading">
@@ -199,3 +206,7 @@ onBeforeUnmount(()=>{disconnect();clearInterval(timer);clearInterval(poll);clear
 <DeviceNameDialog ref="nameDialog" @save="renameDevice"/>
 <footer class="console-footer copyright">Copyright &copy; Phicomm Community · <a href="https://github.com/phicomm-io/iotcloud-community-mqtt" target="_blank" rel="noopener noreferrer">{{t('p.8ea335ab405f')}}</a> · <a href="https://phicomm-io.github.io" target="_blank" rel="noopener noreferrer">{{t('p.3f2111a48779')}}</a></footer></main>
 </template>
+
+<style scoped>
+.local-hub-entry{display:grid;gap:12px;margin:20px 0}.local-hub-entry>.btn{justify-self:start}
+</style>

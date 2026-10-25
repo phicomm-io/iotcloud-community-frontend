@@ -94,6 +94,11 @@ test('cold root and embedded pages work locally with Basic auth, typed controls 
     await expect.poll(()=>body.evaluate(()=>window.UI?.state?.model)).toBe(model==='root'?'daikin':model);
     assert.equal(await body.evaluate(()=>I18N.lang),language);
     assert.equal(await body.evaluate(()=>!!UI.embedded),model!=='root');
+    const firmwareLink=view.locator('.copyright [data-i18n="footer.firmware"]'),websiteLink=view.locator('.copyright [data-i18n="footer.website"]');
+    for(const selected of [language,language==='en'?'zh-CN':'en',language]){
+     await body.evaluate((node,value)=>I18N.set(value),selected);
+     await expect(firmwareLink).toHaveText(selected==='en'?'Firmware repository':'固件仓库');await expect(websiteLink).toHaveText(selected==='en'?'Project website':'项目网站');
+    }
     if(model==='tc1'){
      await view.locator('#socket0').click();await expect.poll(()=>writes.length).toBe(1);
      assert.equal(writes[0].action,'outlet.set');assert.deepEqual(writes[0].params,{index:0,on:false});
