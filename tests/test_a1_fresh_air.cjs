@@ -10,6 +10,7 @@ test('Fresh air capability, mapping preview, revisions and independent automatic
   const mapping={pulses_per_rev:2,revision:1,on:false,speed:60,mode:'manual',coupling:0,cap_ratio:100,boost_ratio:100,active_low:false,a:1,b:0,pwm_min:0,pwm_max:100};
   const policy={revision:1,enabled:1,metrics:4,mode:1,statistic:0,min_speed:20,max_speed:100,fallback_speed:30,low_co2:800,high_co2:2000,target_co2:1000,on_co2:1500};
   w.fetch=async(url,options)=>{const r=JSON.parse(options.body);writes.push(r);let data={linkage_status:'disabled',effect:0};
+   if(r.action==='binding.status.get')data={average:{valid:true,co2_valid:true,fields:{pm25:true,formaldehyde:true,co2:true}}};
    if(r.action==='fresh_air.config.get')data={...mapping};
    if(r.action==='fresh_air.config.set'){assert.equal(r.params.revision,mapping.revision);Object.assign(mapping,r.params);mapping.revision++;data={...mapping};}
    if(r.action==='linkage.get')data={...policy};

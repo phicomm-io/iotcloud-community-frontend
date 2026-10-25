@@ -40,7 +40,7 @@ function renderFan(s){
 }
 
 /* Filter usage is owned by the device, including across browser sessions. */
-let filterBusy=false,filterDirty=false;
+let filterBusy=false,filterDirty=false,filterModelDirty=false;
 function renderFilter(s){
  const f=s.filter,card=$('filterCard');card.hidden=!f||!Number.isFinite(f.remaining_percent);
  if(card.hidden)return;
@@ -51,15 +51,30 @@ function renderFilter(s){
  const badge=$('filterBadge');badge.className='badge '+(f.replacement_due?'warn':'ok');
  badge.textContent=t(remaining===0?'filter.expired':f.replacement_due?'filter.due':'filter.normal');
  if(!filterDirty&&document.activeElement!==$('filterLifetime'))$('filterLifetime').value=f.lifetime_hours;
- const locked=filterBusy||s.ota_active||s.reboot_pending||s.wifi_trial_active;
+ const extended=Number.isFinite(f.weighted_remaining_percent)&&Number.isFinite(f.air_volume_m3_estimate);
+ $('filterEstimates').hidden=!extended;
+ $('filterHint').textContent=t(extended?'filter.dual_hint':'filter.hint');
+ if(extended){
+  $('filterEstimateValues').replaceChildren(summary([
+   ['filter.current_model',t(f.model==='weighted_estimate'?'filter.weighted':'filter.runtime')],
+   ['filter.time_remaining',f.time_remaining_percent+'%'],['filter.weighted_remaining',f.weighted_remaining_percent+'%'],
+   ['filter.volume',f.air_volume_m3_estimate.toLocaleString(I18N.lang,{maximumFractionDigits:3})+' m³']]));
+  if(!filterModelDirty)$('filterModel').value=f.model;
+ }
+ const locked=filterBusy||UI.controlBusy||s.ota_active||s.reboot_pending||s.wifi_trial_active;
+ const canModel=UI.caps?.actions?.includes('filter.model.set');
+ $('filterModelForm').hidden=!canModel;
+ for(const id of ['filterModel','filterModelSave'])$(id).disabled=!!locked;
  for(const id of ['filterSave','filterReset','filterLifetime'])$(id).disabled=!!locked;
 }
 $('filterLifetime').oninput=()=>{filterDirty=true;};
+$('filterModel').onchange=()=>{filterModelDirty=true;};
 async function changeFilter(action,params){
  if(filterBusy)return;filterBusy=true;if(UI.state)renderFilter(UI.state);
- try{const saved=await command(action,params);filterDirty=false;UI.state.filter=saved;renderFilter(UI.state);await refresh();}
+ try{const saved=await command(action,params);if(action==='filter.set')filterDirty=false;if(action==='filter.model.set')filterModelDirty=false;UI.state.filter=saved;renderFilter(UI.state);await refresh();}
  finally{filterBusy=false;if(UI.state)renderFilter(UI.state);}
 }
+onSubmit($('filterModelForm'),()=>changeFilter('filter.model.set',{weighted:$('filterModel').value==='weighted_estimate'}));
 onSubmit($('filterForm'),()=>changeFilter('filter.set',{lifetime_hours:Number($('filterLifetime').value)}));
 $('filterReset').onclick=()=>run(null,async()=>{
  if(!await confirm({title:t('filter.reset'),body:t('filter.confirm'),ok:t('filter.reset'),danger:true}))return;
@@ -292,10 +307,11 @@ async function showBinding(){
 }
 
 /* ---------- Settings: automatic control rules ---------- */
+let linkageDraws=[];
 async function showLinkage(){
  const page=document.querySelector('[data-settings-page="linkage"]');
  try{bindingStatus=await api('/binding/status');}catch{}
- page.replaceChildren();
+ linkageDraws=[];page.replaceChildren();
  for(const fresh of UI.caps?.fresh_air?[false,true]:[false]){
   const section=h('section',{class:'stack','data-auto-fan':fresh?'fresh':'primary'});page.append(section);
   await showFanRules(fresh,section);
@@ -304,10 +320,10 @@ async function showLinkage(){
 async function showFanRules(fresh,page){
  const m=await (fresh?command('fresh_air.linkage.get',{}):api('/linkage/config'));
  const modern=UI.caps?.actions?.includes('fan.mode.set');
- const available=bindingStatus.average?.fields;
- const supportsMetric=bit=>available?!!available[({1:'pm25',2:'formaldehyde',4:'co2'})[bit]]:bit===4?!!bindingStatus.average?.co2_valid:!!bindingStatus.average?.valid;
- const supportsCO2=Object.hasOwn(m,'target_co2')&&supportsMetric(4);
+ const supportsMetric=bit=>{const available=bindingStatus.average?.fields;return available?!!available[({1:'pm25',2:'formaldehyde',4:'co2'})[bit]]:bit===4?!!bindingStatus.average?.co2_valid:!!bindingStatus.average?.valid;};
  const draw=()=>{
+  const supportsCO2=Object.hasOwn(m,'target_co2')&&supportsMetric(4);
+  const availableMask=[1,2,...(supportsCO2?[4]:[])].reduce((mask,bit)=>supportsMetric(bit)?mask|bit:mask,0);
   const choose=h('div',{class:'fields'},[[1,'PM2.5'],[2,t('m.formaldehyde')],...(supportsCO2?[[4,'CO₂']]:[])].filter(([bit])=>supportsMetric(bit)).map(([bit,label])=>h('label',{class:'row'},h('input',{type:'checkbox',checked:!!(m.metrics&bit),onchange:e=>{const next=e.target.checked?m.metrics|bit:m.metrics&~bit;if(!next){e.target.checked=true;return;}m.metrics=next;draw();}}),label)));
   const modes=seg([[0,'link.mode.0'],[1,'link.mode.1'],[2,'link.mode.2']],v=>{m.mode=v;draw();});modes.set(m.mode);
   const detail=[],gate=[];
@@ -342,18 +358,20 @@ async function showFanRules(fresh,page){
   page.replaceChildren(pageHead(fresh?'fresh.auto':'nav.linkage',fresh?'fresh.auto_help':modern?'auto.help':'link.lead'),
    h('section',{class:'card stack'},fresh?h('a',{class:'btn',href:'#'},t('auto.mode')+' · '+t(UI.state?.fresh_air_mode==='auto'?'auto.auto':'auto.manual')):flag(m,'enabled','link.enable','auto.mode_help'),
     h('div',{class:'fields'},range),modern?info(fresh?'fresh.range_help':'auto.range_help'):null),
-   h('section',{class:'card stack'},h('h2',{i18n:'link.speed'}),choose,modes,h('div',{class:'fields'},detail)),
+   h('section',{class:'card stack'},h('h2',{i18n:'link.speed'}),choose.childElementCount?choose:h('p',{class:'help'},t('auto.no_data_options')),
+    availableMask&&(m.metrics&availableMask)!==m.metrics?h('button',{type:'button',class:'btn ghost',onclick:()=>{m.metrics=(m.metrics&availableMask)||availableMask;draw();}},t('auto.available_only')):null,modes,h('div',{class:'fields'},detail)),
    supportsGate?h('section',{class:'card stack'},h('h2',{i18n:'auto.hysteresis_title'}),h('div',{class:'fields'},gate)):null,
    h('section',{class:'card stack'},h('h2',{i18n:'common.advanced'}),
     h('label',{class:'field'},h('span',{i18n:'link.statistic'}),h('select',{onchange:e=>m.statistic=+e.target.value},[0,1,2,3,4,5].map(v=>h('option',{value:v,selected:m.statistic===v},t('link.stat.'+v))))),
     h('div',{class:'fields'},field('debounce_seconds','link.debounce',{min:0,max:3600,unit:t('unit.s')}),field('min_switch_seconds','link.min_switch',{min:0,max:3600,unit:t('unit.s')}))),
    saveBar(()=>{
+    if(m.enabled&&[1,2,4].some(bit=>(m.metrics&bit)&&!supportsMetric(bit)))throw Error(t('auto.unavailable_metric'));
     if(m.min_speed>m.max_speed||((m.metrics&1)&&m.low_pm>=m.high_pm)||((m.metrics&2)&&m.low_hcho>=m.high_hcho)||((m.metrics&4)&&m.low_co2>=m.high_co2))throw Error(t('auto.range_invalid'));
     if(m.hysteresis_enabled&&(((m.metrics&1)&&m.on_pm<=m.target_pm)||((m.metrics&2)&&m.on_hcho<=m.target_hcho)||((m.metrics&4)&&m.on_co2<=m.target_co2)))throw new Error(t('auto.hysteresis_invalid'));
     return (fresh?command('fresh_air.linkage.set',m):api('/linkage/config',m)).then(saved=>{m.revision=saved.revision;return refresh();});
    }));
  };
- draw();
+ linkageDraws.push(draw);draw();
 }
 
 /* Accessory controls are admitted by the device capability, including cloud embeds. */
@@ -425,6 +443,6 @@ UI.start({
 });
 I18N.onChange(()=>{if(UI.state){renderAuto();for(const key of ['device','light','binding','linkage'])if(!document.querySelector('[data-settings-page="'+key+'"]').hidden&&UI.pages[key].show)UI.pages[key].show();}});
 // Keep the automatic-control summary fresh even while the home page is idle.
-(async function poll(){try{if(document.hidden||($('homePage').hidden&&UI.activePage()!=='binding'&&UI.activePage()!=='linkage'))return;bindingStatus=await api('/binding/status');if(UI.state)renderFan(UI.state);renderAuto();}catch{}finally{setTimeout(poll,3000);}})();
+(async function poll(){try{if(document.hidden||($('homePage').hidden&&UI.activePage()!=='binding'&&UI.activePage()!=='linkage'))return;const previous=JSON.stringify([bindingStatus.average?.fields,bindingStatus.average?.valid,bindingStatus.average?.co2_valid]);bindingStatus=await api('/binding/status');if(previous!==JSON.stringify([bindingStatus.average?.fields,bindingStatus.average?.valid,bindingStatus.average?.co2_valid])&&UI.activePage()==='linkage')linkageDraws.forEach(draw=>draw());if(UI.state)renderFan(UI.state);renderAuto();}catch{}finally{setTimeout(poll,3000);}})();
 api('/light/advanced').then(a=>{advanced=a;updateRingAnimation();if(UI.state)renderLight(UI.state);}).catch(e=>toast(e.message,true));
 })();

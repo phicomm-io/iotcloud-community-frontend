@@ -41,7 +41,15 @@
   <div class="card-head"><h2 data-i18n="filter.title"></h2><span class="badge" id="filterBadge"></span></div>
   <div class="row between"><b class="stat num" id="filterRemaining">—</b><span class="help" id="filterUsage"></span></div>
   <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" data-i18n-aria="filter.title" id="filterProgress"><i id="filterBar"></i></div>
-  <p class="help" data-i18n="filter.hint"></p>
+  <p class="help" id="filterHint" data-i18n="filter.hint"></p>
+  <div id="filterEstimates" class="stack" hidden>
+   <div id="filterEstimateValues"></div>
+   <form id="filterModelForm" class="stack">
+    <label class="field"><span data-i18n="filter.model"></span><select id="filterModel"><option value="runtime" data-i18n="filter.runtime"></option><option value="weighted_estimate" data-i18n="filter.weighted"></option></select></label>
+    <p class="help" data-i18n="filter.estimate_hint"></p>
+    <div class="form-actions"><button type="submit" class="btn" id="filterModelSave" data-i18n="common.save"></button></div>
+   </form>
+  </div>
   <details class="more"><summary data-i18n="filter.settings"></summary>
    <form id="filterForm" class="stack">
     <label class="field"><span data-i18n="filter.lifetime"></span><input id="filterLifetime" type="number" min="1" max="20000" step="1" required></label>

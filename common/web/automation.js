@@ -10,7 +10,7 @@ const {h,icon,toast,run,switchRow,seg,daysPicker,presetDays,daysText,hhmm,toMinu
 const ACTIONS={
  'fan.panel':'op.fan_panel','fan.mode.set':'auto.mode','fan.mode.toggle':'auto.toggle','outlet.set':'op.outlet','fan.set':'op.fan','light.set':'op.light',
  'child_lock.set':'op.child_lock','indicator.set':'op.indicator',
- 'display.set':'op.display','system.reboot':'op.reboot',
+ 'display.set':'op.display','system.reboot':'op.reboot','wake_alarm.start':'wake.title',
  'light_effect.next':'op.effect_next','light_effect.select':'op.effect_select',
  'filter.reset':'op.filter_reset','light_always.set':'op.light_always'};
 const actKey=a=>ACTIONS[a]||'op.none';
@@ -18,7 +18,7 @@ const sel=(parent,labelKey,options)=>{const s=h('select',{},options.map(([v,k])=
 
 /* Shared action editor: one control group per supported action. */
 function actionEditor(host,{keys=false}={}){
- const caps=UI.caps||{},available=Object.keys(ACTIONS).filter(a=>(caps.actions||[]).includes(a)&&(keys||!['light_effect.next','light_effect.select','filter.reset','fan.mode.toggle','fan.panel'].includes(a)));
+ const caps=UI.caps||{},available=Object.keys(ACTIONS).filter(a=>(caps.actions||[]).includes(a)&&(!keys||a!=='wake_alarm.start')&&(keys||!['light_effect.next','light_effect.select','filter.reset','fan.mode.toggle','fan.panel'].includes(a)));
  const box=h('div',{class:'stack'}),fields=h('div',{class:'stack'});
  const options=[...(keys?[['none','op.none']]:[]),...available.map(a=>[a,actKey(a)])];
  const pick=keys?sel(host,'btn.action',options):seg(options,v=>draw(v),{full:true});
@@ -49,6 +49,11 @@ function actionEditor(host,{keys=false}={}){
    effect.value=String(params.effect||0);parts.push(()=>({effect:Number(effect.value)}));
   }
   if(a==='filter.reset')fields.append(info('filter.reset_hint'));
+  if(a==='wake_alarm.start'){
+   const duration=h('input',{type:'number',min:1,max:180,step:1,value:params.duration_seconds??60,required:true,'data-wake-duration':''});
+   fields.append(h('label',{class:'field'},h('span',{i18n:'wake.duration'}),duration),info('wake.hint'));
+   parts.push(()=>{const n=Number(duration.value);if(!Number.isInteger(n)||n<1||n>180)throw Error(t('wake.invalid'));return {duration_seconds:n};});
+  }
   if(a==='fan.set'){
    const m={speed:params.speed||60},[out,range]=slider(m,'speed',{min:1});
    fields.append(h('div',{class:null},h('div',{class:'row between'},h('span',{class:'label',i18n:'op.speed'}),out)),range);
@@ -77,8 +82,9 @@ function actionEditor(host,{keys=false}={}){
 function schedulePage(dev){
  const box=h('div',{class:'stack'}),listBox=h('div',{class:'stack'});
  let offset=0,editing=0,tasks=[];
- const tz=()=>((UI.state&&UI.state.timezone_minutes)||480)*60;
- const atText=sec=>new Date((sec+tz())*1000).toISOString().slice(0,16).replace('T',' ');
+ const tz=()=>((UI.state&&UI.state.timezone_minutes)??480)*60;
+ const atValue=sec=>new Date((sec+tz())*1000).toISOString().slice(0,16);
+ const atText=sec=>atValue(sec).replace('T',' ');
  const duration=sec=>{sec=Math.max(0,Math.ceil(sec));return String(Math.floor(sec/3600)).padStart(2,'0')+':'+String(Math.floor(sec/60)%60).padStart(2,'0')+':'+String(sec%60).padStart(2,'0');};
  const when=x=>x.trigger==='countdown'?duration(x.enabled?Math.max(0,x.remaining_seconds-(performance.now()-x.received)/1000):x.seconds):x.trigger==='once'?atText(x.at):hhmm(x.minute);
  const timeValue=()=>{const d=new Date(Date.now()+tz()*1000+86400000);return d.toISOString().slice(0,16);};
@@ -118,10 +124,10 @@ function schedulePage(dev){
      h('button',{type:'button',class:'btn ghost',onclick:()=>run(null,()=>{offset=d.next;return load();},null),disabled:offset+8>=d.count},h('span',{i18n:'common.next'})))));
   banner.hidden=!(UI.state&&UI.state.time_synced===false);
  }
- function reset(){editing=0;enabled.querySelector('input').checked=true;trigger.set('weekly');syncTrigger();days.setMask(127);time.value='08:00';editor.set('none');hours.value=0;minutes.value=30;labelSave();}
+ function reset(){editing=0;enabled.querySelector('input').checked=true;trigger.set('weekly');syncTrigger();days.setMask(127);time.value='08:00';at.value=timeValue();editor.set('none');hours.value=0;minutes.value=30;labelSave();}
  function edit(x){
   editing=x.id;enabled.querySelector('input').checked=!!x.enabled;trigger.set(x.trigger);syncTrigger();
-  days.setMask(x.days);time.value=hhmm(x.minute);at.value=x.trigger==='countdown'?timeValue():atText(x.at);hours.value=Math.floor((x.seconds||0)/3600);minutes.value=Math.floor((x.seconds||0)%3600/60);editor.set(x.action,x.params);labelSave();
+  days.setMask(x.days);time.value=hhmm(x.minute);at.value=x.trigger==='once'?atValue(x.at):timeValue();hours.value=Math.floor((x.seconds||0)/3600);minutes.value=Math.floor((x.seconds||0)%3600/60);editor.set(x.action,x.params);labelSave();
   box.scrollIntoView({block:'start'});
  }
  const banner=h('div',{class:'banner warn',hidden:true},icon('clock'),h('span',{i18n:'sch.no_clock'}));
@@ -135,13 +141,19 @@ function schedulePage(dev){
   if(editing)task.id=editing;
   if(trigger.value==='countdown'){const h=Number(hours.value),m=Number(minutes.value);task.seconds=h*3600+m*60;if(!Number.isInteger(h)||!Number.isInteger(m)||h<0||m<0||m>59||task.seconds<60||task.seconds>86400)throw Error(t('sch.duration_invalid'));}
   else if(trigger.value==='weekly'){const d=days.mask();if(!d)throw Error(t('sch.pick_day'));task.days=d;task.minute=toMinutes(time.value);}
-  else{const parsed=Date.parse(at.value);if(!Number.isFinite(parsed))throw Error(t('sch.pick_when'));
-   task.at=Math.floor(parsed/1000)-tz();if(task.at<=Math.floor(Date.now()/1000))throw Error(t('sch.future'));}
+  else{
+   // datetime-local contains device wall time, not browser-local time. Parse as
+   // UTC first, then apply the device offset exactly once (also across DST).
+   const parsed=Date.parse(at.value+'Z');if(!Number.isFinite(parsed))throw Error(t('sch.pick_when'));
+   task.at=Math.floor(parsed/1000)-tz();
+   if(task.at<1577836800||task.at>2147483647)throw Error(t('sch.date_range'));
+   if(task.at<=Math.floor(Date.now()/1000))throw Error(t('sch.future'));
+  }
   await command('schedules.put',task);reset();await load();toast(t('sch.added'));
  },null);});
  enabled.querySelector('input').checked=true;trigger.set('weekly');syncTrigger();
  box.append(form,info('sch.hint'));
- return {el:h('div',{class:'stack'},pageHead('nav.schedule',dev.scheduleLead),banner,card('sch.list',null,listBox,box)),
+ return {el:h('div',{class:'stack'},pageHead(dev.nav?.schedule||'nav.schedule',dev.scheduleLead),banner,card('sch.list',null,listBox,box)),
   async show(){if(!UI.state)await UI.reload();await load();},
   status(){if(!box.isConnected||box.closest('[data-settings-page]')?.hidden)return;
    for(const x of tasks.filter(x=>x.trigger==='countdown')){const label=listBox.querySelector('[data-countdown-id="'+x.id+'"]');if(label)label.textContent=when(x);}

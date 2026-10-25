@@ -44,6 +44,28 @@ $('metrics').append(co2Card);
 const screen=seg([[0,'state.off'],[1,'1'],[2,'2'],[3,'3'],[4,'4']],v=>run(null,()=>UI.control('display.set',{brightness:v*25},{brightness_requested:v}),'toast.accepted'),{full:true,aria:t('m1.screen')});
 screen.dataset.control='brightness';
 $('screenSeg').replaceWith(screen);
+// Only show screen configuration after both controller and module detection.
+const co2Display=h('section',{class:'card stack',id:'co2DisplayConfig'});
+co2Display.hidden=true;
+const displayMode=h('select',{id:'co2DisplayMode'},...[['0','co2screen.none'],['1','co2screen.replace'],['2','co2screen.alternate']].map(([value,key])=>h('option',{value,i18n:key})));
+const displaySlot=h('select',{id:'co2DisplaySlot'},h('option',{value:'0',i18n:'m.formaldehyde'}),h('option',{value:'1',i18n:'m.pm25'}));
+const displayInterval=h('input',{id:'co2DisplayInterval',type:'number',min:1,max:3600,step:1,value:5});
+const displayLow=h('input',{id:'co2DisplayLow',type:'number',min:0,max:65535,step:1,value:1000});
+const displayHigh=h('input',{id:'co2DisplayHigh',type:'number',min:0,max:65535,step:1,value:1500});
+let screenConfig=null,screenEditing=false;
+const screenForm=h('form',{class:'stack'},
+ ...[[displayMode,'co2screen.mode'],[displaySlot,'co2screen.slot'],[displayInterval,'co2screen.interval'],[displayLow,'co2screen.low'],[displayHigh,'co2screen.high']].map(([input,key])=>h('label',{class:'field'},h('span',{i18n:key}),input)),
+ h('button',{class:'btn primary',type:'submit',i18n:'common.save'}));
+screenForm.addEventListener('input',()=>{screenEditing=true;});
+UI.onSubmit(screenForm,async()=>{
+ if(!screenConfig)throw Error(t('co2screen.unavailable'));
+ const values=[displayMode,displaySlot,displayInterval,displayLow,displayHigh].map(el=>Number(el.value));
+ if(!values.every(Number.isInteger)||values[2]<1||values[2]>3600||values[3]<0||values[4]>65535||values[3]>values[4])throw Error(t('co2screen.invalid'));
+ await UI.control('co2_display.set',{mode:values[0],slot:values[1],interval_seconds:values[2],low:values[3],high:values[4],revision:screenConfig.revision});
+ screenEditing=false;
+},'toast.accepted');
+co2Display.append(h('h2',{i18n:'co2screen.title'}),h('p',{class:'help',i18n:'co2screen.help'}),screenForm);
+document.querySelector('[data-settings-page="device"]').append(co2Display);
 const RANK={ok:0,warn:1,bad:2};
 function renderHome(s){
  // Optimistic controls and their final render reuse the same measurement.
@@ -53,6 +75,12 @@ function renderHome(s){
   pressureReceivedAt=performance.now();
  }
  renderPressure();
+ const config=s.co2_display;
+ co2Display.hidden=!(config?.available===true&&config.mcu_supported===true&&config.module_present===true&&s.scd40?.serial);
+ if(!co2Display.hidden){
+  screenConfig=config;
+  if(!screenEditing){displayMode.value=String(config.mode);displaySlot.value=String(config.slot);displayInterval.value=config.interval_seconds;displayLow.value=config.low;displayHigh.value=config.high;}
+ }
  const co2=s.scd40;
  if(co2?.serial&&co2.serial!==lastCo2Serial){lastCo2=null;lastCo2Serial=co2.serial;}
  const co2Fresh=co2?.ready&&co2.valid&&Number.isFinite(co2.age_ms)&&co2.age_ms<20000&&
@@ -75,7 +103,7 @@ function renderHome(s){
  const fmt={pm25:v=>String(Math.round(v)),formaldehyde:v=>v.toFixed(3),temperature:v=>v.toFixed(1),humidity:v=>v.toFixed(0)};
  const grades={};
  for(const k of METRICS){const g=UI.grade(k,s[k]);grades[k]=g;const el=tiles[k];
-  el.value.textContent=s.sensor_received?fmt[k](s[k]):'—';
+  el.value.textContent=s.sensor_received&&typeof s[k]==='number'&&Number.isFinite(s[k])?fmt[k](s[k]):'—';
   el.badge.className='badge '+(stale?'':g.cls);el.badge.textContent=t(g.key);
   el.scale.replaceChildren(UI.airScale(k,s[k]));}
  // Overall verdict comes from the pollutants; comfort only adds a remark.
@@ -107,6 +135,38 @@ async function showBinding(){
    rows.length?h('div',{class:'list'},rows):h('div',{class:'empty'},t('m1.linked_empty')),info('m1.perm_hint')));
 }
 
+/* The device schedules and repeats beeps independently of this page. */
+let wakeStatus=null,wakeReadAt=0,wakePending=false,wakeReadPending=false,wakeLastPoll=0,wakeGeneration=0;
+function renderWakeAlarm(){
+ const box=$('wakeAlarmCard');if(!box)return;
+ const remaining=wakeStatus?.active?Math.max(0,Math.ceil(wakeStatus.remaining_seconds-(Date.now()-wakeReadAt)/1000)):0;
+ $('wakeAlarmState').textContent=wakeStatus===null?t('wake.unknown'):remaining?t('wake.ringing',{n:remaining}):t('wake.idle');
+ box.classList.toggle('warn',remaining>0);
+ $('wakeAlarmStop').disabled=wakePending;
+ const s=UI.state||{};$('wakeAlarmPreview').disabled=wakePending||remaining>0||!!(s.ota_active||s.reboot_pending||s.wifi_trial_active);
+}
+async function pollWakeAlarm(force=false){
+ if(!$('wakeAlarmCard')||wakeReadPending||wakePending||(!force&&(document.hidden||Date.now()-wakeLastPoll<4000)))return;
+ wakeReadPending=true;wakeLastPoll=Date.now();const generation=wakeGeneration;
+ try{const state=await command('wake_alarm.get');if(generation===wakeGeneration){wakeStatus=state;wakeReadAt=Date.now();}}
+ catch{if(generation===wakeGeneration)wakeStatus=null;}
+ finally{wakeReadPending=false;renderWakeAlarm();}
+}
+function installWakeAlarm(){
+ if($('wakeAlarmCard'))return;
+ async function control(action,params={}){
+  if(wakePending)return;wakePending=true;wakeGeneration++;renderWakeAlarm();
+  try{wakeStatus=await command(action,params);wakeReadAt=Date.now();}
+  finally{wakePending=false;renderWakeAlarm();}
+ }
+ const box=h('section',{class:'card stack',id:'wakeAlarmCard'},h('h2',{i18n:'wake.title'}),
+  h('p',{id:'wakeAlarmState',role:'status'}),info('wake.home_hint'),
+  h('div',{class:'form-actions'},h('button',{id:'wakeAlarmStop',type:'button',class:'btn',i18n:'wake.stop',onclick:()=>run(null,()=>control('wake_alarm.stop'),null)}),
+   h('button',{id:'wakeAlarmPreview',type:'button',class:'btn ghost',i18n:'wake.preview',onclick:()=>run(null,()=>control('wake_alarm.start',{duration_seconds:3}),null)})));
+ $('metrics').after(box);renderWakeAlarm();pollWakeAlarm(true);
+}
+setInterval(()=>{renderWakeAlarm();pollWakeAlarm();},1000);
+
 /* ---------- Boot ---------- */
 const clock=UI.clockCard({
  load:async()=>UI.state||await api('/status'),
@@ -121,6 +181,7 @@ const clock=UI.clockCard({
 $('clockCard').replaceWith(clock.el);
 
 UI.start({
+ capabilities(caps){if(caps.actions?.includes("wake_alarm.start")&&caps.actions.includes("wake_alarm.get")&&caps.actions.includes("wake_alarm.stop")){this.nav.schedule="wake.schedules";this.scheduleLead="wake.lead";installWakeAlarm();}},
  model:'M1',kindKey:'kind.m1',icon:'air',mqttHostMax:127,factoryReset:true,
  otaName:'phicomm_m1.ota.bin.signed',haHintKey:'mqtt.ha_m1',otaHintKey:'fw.hint_m1',buttonHintKey:'sys.hint_m1',
  scheduleLead:'sch.lead_a1',interval:1000,
@@ -133,7 +194,7 @@ UI.start({
   ['diag.g_ota_img',['ota_signature_verified','ota_image_verified','ota_key_id','ota_image_length','ota_release_counter','ota_version']]],
  healthChecks:s=>[['diag.c_sensor',s.uart_ready&&s.sensor_valid?'ok':'bad',s.uart_errors?t('diag.errors',{n:s.uart_errors}):t(s.sensor_valid?'state.ok':'m1.no_data')],
   ['diag.c_clock',s.ntp_synced?'ok':'warn',t('s.'+(s.ntp_status||'syncing'))]],
- onStatus:renderHome
+ onStatus:s=>{renderHome(s);renderWakeAlarm();pollWakeAlarm();}
 });
 I18N.onChange(()=>{renderPeers();const p=document.querySelector('[data-settings-page="binding"]');if(p&&!p.hidden)showBinding();});
 // The linked list is small and changes rarely; refresh it with the status.
