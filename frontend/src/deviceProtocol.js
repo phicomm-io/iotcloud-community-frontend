@@ -63,6 +63,8 @@ const merge = (state, data) => {
         "username",
         "namespace",
         "mqtt_username",
+        "sensorAt",
+        "sensorFresh",
       ].includes(key)
     )
       if (/^plug_[0-5]$/.test(key) && value && typeof value === "object") {
@@ -86,15 +88,23 @@ const json = (value) => {
     return null;
   }
 };
+function mergeStatus(state,data,now){
+ merge(state,data);
+ const measurements=['temperature','humidity','pm25','formaldehyde','co2','pm10','tvoc','pressure','power_watts','energy_kwh'].some(key=>Number.isFinite(data[key]))||
+  ['sensors','scd40','barometer'].some(key=>data[key]&&typeof data[key]==='object'&&!Array.isArray(data[key])&&Object.keys(data[key]).length>0);
+ // A successful empty/metadata response is not a new physical sample.
+ if(measurements){state.sensorAt=now;state.sensorFresh=data.sensor_valid===true;}
+ else if(data.sensor_valid===false)state.sensorFresh=false;
+}
 export function applyMessage(d, state, topic, message, now = Date.now()) {
  if(d.version === "v2") {
   const base=baseTopic(d); if(!topic.startsWith(base+"/")) return false;
   const leaf=topic.slice(base.length+1), data=json(String(message));
   if(leaf === "availability") {state.available=String(message)==="online"; if(!state.available)state.sensorFresh=false;}
-  else if(leaf === "state" && data) {merge(state,data);state.sensorAt=now;state.sensorFresh=data.sensor_valid===true;}
+  else if(leaf === "state" && data) mergeStatus(state,data,now);
   else if(leaf === "sensor" && data) {merge(state,data);if(d.model==="tc1"){state.power_watts=Number(data.power);state.energy_kwh=Number(data.powerConsumption);}}
   else if(leaf === "capabilities" && data) state.capabilities=data;
-  else if(leaf === "result" && data) {state.result=data; const payload=data.data; if(data.code==="ok" && state.pending?.[data.request_id]==="status.get" && payload && typeof payload==="object" && !Array.isArray(payload)) {merge(state,payload);state.sensorAt=now;state.sensorFresh=payload.sensor_valid===true;}}
+  else if(leaf === "result" && data) {state.result=data; const payload=data.data; if(data.code==="ok" && state.pending?.[data.request_id]==="status.get" && payload && typeof payload==="object" && !Array.isArray(payload)) mergeStatus(state,payload,now);}
   return true;
  }
 

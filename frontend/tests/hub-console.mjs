@@ -65,10 +65,10 @@ try{
  await connection.subscribeAsync('phicomm/v2/u_6c6f63616c/+/+/command',{qos:1});
  let sensorSequence=1;
  const publishSources=()=>Promise.all([
-  ['aabbccddeeff',{power:{value:42,unit:'W',valid:true,age_ms:100}}],
-  ['aabbccddee01',{fan_speed_percent:{value:65,unit:'%',valid:true,age_ms:100}}],
-  ['aabbccddee03',{pm10:{value:28,unit:'µg/m³',valid:true,age_ms:100}}]
- ].map(([device_id,sensors])=>connection.publishAsync('phicomm/v2/u_6c6f63616c/sensor/'+device_id+'/state',JSON.stringify({schema:1,device_id,boot:1234,sequence:sensorSequence++,sensors}),{qos:0,retain:false})));
+  ['aabbccddeeff','tc1',{power:{value:42,unit:'W',valid:true,age_ms:100}}],
+  ['aabbccddee01','a1',{fan_speed_percent:{value:65,unit:'%',valid:true,age_ms:100}}],
+  ['aabbccddee03','daikin',{pm10:{value:28,unit:'µg/m³',valid:true,age_ms:100}}]
+ ].map(([device_id,model,sensors])=>connection.publishAsync('phicomm/v2/u_6c6f63616c/sensor/'+device_id+'/state',JSON.stringify({schema:1,device_id,model,boot:1234,sequence:sensorSequence++,sensors}),{qos:0,retain:false})));
  typedTimer=setInterval(()=>publishSources().catch(error=>console.error('Typed fixture publication failed',error)),1000);
  for(const language of ['en','zh-CN']){
   fixtures=Object.fromEntries(deviceRecords.map(([,model])=>{const fixture=sandbox.window.PhicommDemo.create(model);fixture.state.name='Fixture '+model.toUpperCase();fixture.state.ip='';return [model,fixture];}));

@@ -3,7 +3,7 @@ const {JSDOM}=require('jsdom');
 const copy=value=>JSON.parse(JSON.stringify(value));
 const settle=async()=>{for(let i=0;i<12;i++)await new Promise(resolve=>setImmediate(resolve));};
 const defaults=slot=>({slot,source:'none',device_id:'',metric:'custom',unit:'',decimals:0,scale:1,ttl_seconds:20,color:{mode:'fixed',value:'off'}});
-async function fixture(language='en',{supported=true,candidates=[],floatStorage=false,initialRead=null}={}){
+async function fixture(language='en',{supported=true,candidates=[],floatStorage=false,initialRead=null,clock=null}={}){
  const html=require('./render_page.cjs')('M1/web/index.html'),dom=new JSDOM(html,{runScripts:'outside-only',url:'http://device.local#settings/device'}),w=dom.window,calls=[],sourceRequests=[];
  let config={revision:7,selected_source:'original',double_click:'none',lanes:[defaults(0),defaults(1)]},leases={},failure='',badRead=false,hold=null,override=null;
  const runtime=()=>({profile:'dual',selected_source:config.selected_source,mcu_supported:true,confirmed:false,confirmation:'pending_mcu_readback',lanes:config.lanes.map(lane=>{
@@ -11,6 +11,7 @@ async function fixture(language='en',{supported=true,candidates=[],floatStorage=
    effective:false,reason:value?'ok':lane.source==='none'?'disabled':'missing',number:value?123:null,format:value?1:null,color:value?'red':null,confirmed:false};
  })});
  w.TextEncoder=TextEncoder;w.scrollTo=()=>{};w.setTimeout=()=>0;
+ if(clock)Object.defineProperty(w.performance,'now',{value:clock});
  w.getDeviceSensorSources=async kind=>{sourceRequests.push(kind);return candidates;};
  w.fetch=async(url,options)=>{
   const request=JSON.parse(options.body);calls.push(request);let data={},code='ok';
@@ -133,6 +134,34 @@ test('background reads preserve edit revision and pending saves disable controls
 test('generic controls are capability gated and unsupported controllers get an explicit upgrade status',async()=>{
  const old=await fixture('en',{supported:false});try{assert.equal(old.card.hidden,true);assert.equal(old.calls.some(call=>call.action.startsWith('display_source.')),false);}finally{old.dom.window.close();}
  const f=await fixture();try{const runtime=f.runtime();runtime.mcu_supported=false;runtime.confirmation='requires_mcu_upgrade';f.setRuntime(runtime);await f.w.UI.userDisplay.load();assert.match(f.element('displaySourceStatus').textContent,/Update the M1 display controller/);}finally{f.dom.window.close();}
+});
+for(const language of ['en','zh-CN'])test('an offline source remains readable and saveable '+language,async()=>{
+ const f=await fixture(language);try{
+  f.edit('display0Source','mqtt');f.edit('display0Device','123456abcdef');f.edit('display0Metric','power');await f.submit();
+  const runtime=f.runtime();runtime.lanes[0].reason='offline';f.setRuntime(runtime);await f.w.UI.userDisplay.load();
+  assert.match(f.element('display0Status').textContent,language==='en'?/Source device is offline/:/来源设备已离线/);
+  f.edit('displayDoubleClick','switch_display');await f.submit();assert.equal(f.toasts().at(-1).classList.contains('bad'),false);
+ }finally{f.dom.window.close();}
+});
+test('an unsupported controller cannot claim an effective user lane',async()=>{
+ const f=await fixture();try{
+  f.edit('display0Source','api');f.edit('display0Metric','power');await f.submit();f.edit('display0Value',42);await f.click('display0Write');
+  const runtime=f.runtime();runtime.mcu_supported=false;runtime.confirmation='requires_mcu_upgrade';
+  Object.assign(runtime.lanes[0],{confirmed:true,effective:true});f.setRuntime(runtime);
+  await assert.rejects(f.w.UI.userDisplay.load());assert.doesNotMatch(f.element('display0Status').textContent,/Using user reading/);
+ }finally{f.dom.window.close();}
+});
+test('same-value renewals require a new compatible age and TTL, allowing real transport delay',async()=>{
+ let now=1000;const f=await fixture('en',{clock:()=>now});try{
+  f.edit('display0Source','api');f.edit('display0Metric','power');await f.submit();f.edit('display0Value',42);f.edit('display0WriteTTL',20);await f.click('display0Write');
+  const runtime=f.runtime();Object.assign(runtime.lanes[0],{age_ms:19000,remaining_ttl_seconds:1});f.setRuntime(runtime);
+  await f.click('display0Write');assert.equal(f.toasts().at(-1).classList.contains('bad'),true,'old same-value receipt cannot confirm renewal');
+  Object.assign(runtime.lanes[0],{age_ms:0,remaining_ttl_seconds:1});await f.click('display0Write');
+  assert.equal(f.toasts().at(-1).classList.contains('bad'),true,'a shorter old lease is not the requested lifetime');
+  Object.assign(runtime.lanes[0],{age_ms:1250,remaining_ttl_seconds:19});
+  const fetch=f.w.fetch;f.w.fetch=async(...args)=>{const result=await fetch(...args);if(JSON.parse(args[1].body).action==='display_data.set')now+=1250;return result;};
+  await f.click('display0Write');assert.equal(f.toasts().at(-1).classList.contains('bad'),false,'network delay is compatible with this new lease');
+ }finally{f.dom.window.close();}
 });
 test('production-C GET example, wire formats and independent MCU confirmation stay consistent',async()=>{
  const production=require('./fixtures/m1-display-production-get.json'),f=await fixture();

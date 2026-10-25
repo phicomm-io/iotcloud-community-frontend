@@ -78,6 +78,7 @@ const D={
 "display.reason.disabled":["This user reading is off", "此位置未启用用户读数"],
 "display.reason.missing":["Waiting for a reading", "等待读数"],
 "display.reason.stale":["Reading expired", "读数已过期"],
+"display.reason.offline":["Source device is offline", "来源设备已离线"],
 "display.reason.invalid":["Reading is invalid", "读数无效"],
 "display.reason.out_of_range":["Reading is outside the screen range", "读数超出屏幕显示范围"],
 "display.reason.unsupported":["Controller update required", "需要升级控制器"],

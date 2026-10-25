@@ -53,11 +53,11 @@ function validRead(value){
     typeof value.runtime.mcu_supported!=='boolean'||typeof value.runtime.confirmed!=='boolean'||!['mcu_readback','pending_mcu_readback','requires_mcu_upgrade'].includes(value.runtime.confirmation)||!Array.isArray(value.runtime.lanes)||value.runtime.lanes.length!==2||
     !value.runtime.lanes.every((lane,slot)=>record(lane)&&lane.slot===slot&&typeof lane.valid==='boolean'&&typeof lane.effective==='boolean'&&typeof lane.confirmed==='boolean'&&
      (lane.value===null||Number.isFinite(lane.value))&&customUnits.includes(lane.unit)&&
-     (lane.age_ms===null||Number.isInteger(lane.age_ms)&&lane.age_ms>=0)&&Number.isInteger(lane.remaining_ttl_seconds)&&lane.remaining_ttl_seconds>=0&&lane.remaining_ttl_seconds<=60&&
+     (lane.age_ms===null||Number.isInteger(lane.age_ms)&&lane.age_ms>=0&&lane.age_ms<=4294967295)&&Number.isInteger(lane.remaining_ttl_seconds)&&lane.remaining_ttl_seconds>=0&&lane.remaining_ttl_seconds<=60&&
      (lane.number===null||Number.isInteger(lane.number)&&lane.number>=0&&lane.number<=999)&&(lane.format===null||[0,1,2,4,5,6].includes(lane.format))&&
-     (lane.color===null||colors.includes(lane.color))&&['ok','disabled','missing','stale','invalid','out_of_range','unsupported'].includes(lane.reason)&&
-     (!lane.effective||lane.valid&&lane.confirmed)&&
-     (lane.valid?lane.value!==null&&lane.age_ms!==null&&lane.remaining_ttl_seconds>0&&lane.number!==null&&lane.format!==null&&lane.color!==null&&lane.reason==='ok':
+     (lane.color===null||colors.includes(lane.color))&&['ok','disabled','missing','stale','offline','invalid','out_of_range','unsupported'].includes(lane.reason)&&
+     (!lane.effective||value.runtime.mcu_supported&&lane.valid&&lane.confirmed)&&
+     (lane.valid?lane.value!==null&&lane.value>=0&&lane.age_ms!==null&&lane.remaining_ttl_seconds>0&&lane.number!==null&&lane.format!==null&&lane.color!==null&&lane.reason==='ok':
       lane.value===null&&lane.number===null&&lane.format===null&&lane.color===null&&lane.remaining_ttl_seconds===0&&lane.reason!=='ok')))throw Error(t('control.unconfirmed'));
  const runtime=value.runtime,confirmed=runtime.profile==='dual'&&runtime.mcu_supported&&runtime.lanes.every(lane=>lane.confirmed);
  if(runtime.confirmed!==confirmed||runtime.confirmation!==(confirmed?'mcu_readback':runtime.mcu_supported?'pending_mcu_readback':'requires_mcu_upgrade'))throw Error(t('control.unconfirmed'));
@@ -140,8 +140,14 @@ async function writeData(row,clear=false){
  if(!clear&&(row.value.value===''||!Number.isFinite(value)||!Number.isInteger(ttl)||ttl<1||ttl>lane.ttl_seconds||Math.round(value/lane.scale*10**lane.decimals)<0||Math.round(value/lane.scale*10**lane.decimals)>999))throw Error(t('display.invalid_reading'));
  const params={revision:config.revision,slot:row.slot,...(clear?{}:{value,unit:lane.unit}),ttl_seconds:ttl};
  pending=true;generation++;render();
+ const started=performance.now();
  try{await command('display_data.set',params);const result=validRead(await command('display_source.get')),receipt=result.runtime.lanes[row.slot];
-  if(result.revision!==params.revision||!sameConfig(result,config)||(clear?receipt.valid||receipt.value!==null:!receipt.valid||receipt.unit!==lane.unit||!samePhysical(receipt.value,value)))throw Error(t('control.unconfirmed'));
+  // The independent read must describe this lease, including same-value renewals.
+  // Allow clock quantization, while accepting genuine time spent in transit.
+  const elapsed=Math.ceil(performance.now()-started)+100;
+  if(result.revision!==params.revision||!sameConfig(result,config)||(clear?receipt.valid||receipt.value!==null:
+   !receipt.valid||receipt.unit!==lane.unit||!samePhysical(receipt.value,value)||receipt.age_ms>elapsed||
+   receipt.remaining_ttl_seconds!==Math.ceil((ttl*1000-receipt.age_ms)/1000)))throw Error(t('control.unconfirmed'));
   setConfig(result,false);
  }finally{pending=false;render();}
 }
