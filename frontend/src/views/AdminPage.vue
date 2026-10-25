@@ -1,4 +1,6 @@
 <script setup>
+import {t} from '../i18n.js';
+
 import AdminBanner from "../components/AdminBanner.vue";
 import AdminVerificationEmails from "../components/AdminVerificationEmails.vue";
 import AdminAnalytics from "../components/AdminAnalytics.vue";
@@ -52,7 +54,7 @@ onBeforeUnmount(() => clearInterval(roleTimer));
 watch(() => account.isAdmin, allowed => { if (!allowed) router.replace("/"); });
 function setRole(u) {
  const role = u.role === "admin" ? "user" : "admin";
- if (confirm(`${role === "admin" ? "授予" : "撤销"} ${u.username} 的管理权限？`))
+ if (confirm(t(role === "admin" ? 'admin.grantConfirm' : 'admin.revokeConfirm', {username:u.username})))
   run(() => request("/user/" + encodeURIComponent(u.username) + "/role", "PUT", { role }));
 }
 function addUser() {
@@ -66,18 +68,18 @@ function addUser() {
   });
 }
 function reset(u) {
-  const p = prompt("输入新密码（至少 6 字节）");
+  const p = prompt(t('p.3c290672e11f'));
   if (p)
     run(() =>
       request("/user/" + encodeURIComponent(u), "PUT", { password: p }),
     );
 }
 function removeUser(u) {
-  if (confirm("删除账号及其所有设备权限：" + u + "？"))
+  if (confirm(t('admin.removeUserConfirm', {username:u})))
     run(() => request("/user/" + encodeURIComponent(u), "DELETE"));
 }
 function removeDevice(d) {
-  if (confirm("解绑并撤销权限：" + d.mac + "？"))
+  if (confirm(t('admin.removeDeviceConfirm', {mac:d.mac})))
     run(() => request("/device/" + (d.namespace ? "scoped/" : "") + d.mac + (d.namespace ? "?username=" + encodeURIComponent(d.username) + "&mqtt_username=" + encodeURIComponent(d.mqtt_username || d.username) : ""), "DELETE"));
 }
 function bind() {
@@ -94,39 +96,39 @@ function bind() {
 </script>
 <template>
   <main class="console-page">
-    <header class="topbar console-topbar"><div class="brand"><span class="kind">MQTT 管理平台</span><h1>账号与设备管理</h1></div><nav class="console-nav"><ThemeToggle/><RouterLink class="btn" to="/">返回控制台</RouterLink></nav></header>
+    <header class="topbar console-topbar"><div class="brand"><span class="kind">{{t('p.c3fdeb90d7eb')}}</span><h1>{{t('p.89c84e4a0f2b')}}</h1></div><nav class="console-nav"><ThemeToggle/><RouterLink class="btn" to="/">{{t('p.e0e6dc51f626')}}</RouterLink></nav></header>
     <p class="error" role="alert">{{ message }}</p>
     <template v-if="account.isAdmin">
-      <p class="helper-text">当前账号：{{ account.username }} · 管理员。与设备控制台、MQTT 使用同一登录账号。</p>
+      <p class="helper-text">{{t('p.0f2ffdeb0496')}}{{ account.username }} {{t('p.16e86040b992')}}</p>
       <AdminAnalytics/>
       <AdminBanner/>
-      <button @click="run(async () => {})">刷新账号与设备</button>
+      <button @click="run(async () => {})">{{t('p.193b4ce1d76c')}}</button>
       <section class="card">
-        <h2>账号</h2>
+        <h2>{{t('p.311bb313fdec')}}</h2>
         <form @submit.prevent="addUser">
-          <label>用户名<input v-model="newUser" minlength="3" maxlength="32" pattern="[A-Za-z0-9_.\-]{3,32}" required /></label
+          <label>{{t('p.1a3f0617d6de')}}<input v-model="newUser" minlength="3" maxlength="32" pattern="[A-Za-z0-9_.\-]{3,32}" :placeholder="t('p.c8ea90209208')" required /></label
           ><label
-            >初始密码<input
+            >{{t('p.df387080f986')}}<input
               v-model="newPass"
               type="password"
               minlength="6"
               required /></label
-          ><button>创建账号</button>
+          ><button>{{t('p.f48d12cf530a')}}</button>
         </form>
         <ul class="admin-list">
           <li v-for="u in users" :key="u.username">
-            <div class="admin-item-copy"><b>{{ u.username }}</b><p class="help">{{ u.status === 'active' ? '已启用' : u.status }} · {{ u.role === "admin" ? "管理员" : "普通用户" }}</p></div><div class="admin-actions">
-            <button @click="setRole(u)">{{ u.role === "admin" ? "撤销管理权限" : "设为管理员" }}</button>
-            <button @click="reset(u.username)">重置密码</button>
-            <button class="btn danger" @click="removeUser(u.username)">删除</button></div>
+            <div class="admin-item-copy"><b>{{ u.username }}</b><p class="help">{{ u.status === 'active' ? t('p.dfb802238b38') : u.status }} · {{ u.role === "admin" ? t('p.e19796712f1c') : t('p.f6a2faaac200') }}</p></div><div class="admin-actions">
+            <button @click="setRole(u)">{{ u.role === "admin" ? t('p.dca50b99ea7d') : t('p.ab8dd9cf52bd') }}</button>
+            <button @click="reset(u.username)">{{t('p.d70928debc2e')}}</button>
+            <button class="btn danger" @click="removeUser(u.username)">{{t('p.2f9daa828907')}}</button></div>
           </li>
         </ul>
       </section>
       <section class="card">
-        <h2>设备归属</h2>
+        <h2>{{t('p.956897464b95')}}</h2>
         <form @submit.prevent="bind">
           <label
-            >账号<select v-model="owner" required>
+            >{{t('p.311bb313fdec')}}<select v-model="owner" required>
               <option
                 v-for="u in users.filter((u) => u.status === 'active')"
                 :key="u.username"
@@ -136,25 +138,25 @@ function bind() {
             </select></label
           ><label>MAC<input v-model="mac" required /></label
           ><label
-            >型号<select v-model="model" aria-label="型号">
+            >{{t('p.322408c53bed')}}<select v-model="model" :aria-label="t('p.322408c53bed')">
               <option value="tc1">TC1</option>
               <option value="m1">M1</option>
               <option value="a1">A1</option><option value="daikin">DAIKIN BRY88AX151K</option>
             </select></label
-          ><label v-if="model === 'tc1'">协议<select v-model="version">
+          ><label v-if="model === 'tc1'">{{t('p.ab2f31f30acf')}}<select v-model="version">
             <option value="v1">Legacy</option>
             <option value="v2">TMCP</option></select></label
-          ><button>绑定</button>
+          ><button>{{t('p.3dd97f4d2766')}}</button>
         </form>
         <ul class="admin-list">
           <li v-for="d in devices" :key="deviceKey(d)">
-            <div class="admin-item-copy"><b>{{ modelName(d.model) }} · {{ d.mac }}</b><p class="help">{{ d.username }} · {{ d.version === 'v1' ? 'Legacy' : 'TMCP' }} · {{ d.status === 'active' ? '已启用' : d.status }} · {{ d.namespace ? "账号主题" : "旧主题" }}</p></div>
-            <button class="btn danger" @click="removeDevice(d)">解绑</button>
+            <div class="admin-item-copy"><b>{{ modelName(d.model) }} · {{ d.mac }}</b><p class="help">{{ d.username }} · {{ d.version === 'v1' ? 'Legacy' : 'TMCP' }} · {{ d.status === 'active' ? t('p.dfb802238b38') : d.status }} · {{ d.namespace ? t('p.7acaf1da03d4') : t('p.970b826edb13') }}</p></div>
+            <button class="btn danger" @click="removeDevice(d)">{{t('p.3ba0a291df80')}}</button>
           </li>
         </ul>
       </section>
       <section class="card">
-        <h2>注册配置</h2>
+        <h2>{{t('p.b416252d2209')}}</h2>
         <form
           @submit.prevent="
             run(() =>
@@ -165,12 +167,12 @@ function bind() {
             )
           "
         >
-          <label>注册方式<select v-model="level">
-            <option :value="0">关闭注册</option>
-            <option :value="1">开放注册</option>
-            <option :value="2">邮箱验证</option></select></label
-          ><label>联系信息<input v-model="contact" /></label
-          ><button>保存</button>
+          <label>{{t('p.ac5ec1acb8e3')}}<select v-model="level">
+            <option :value="0">{{t('p.198a9a535718')}}</option>
+            <option :value="1">{{t('p.04f83ab519b2')}}</option>
+            <option :value="2">{{t('p.72e5f9137420')}}</option></select></label
+          ><label>{{t('p.2c1223c6e95a')}}<input v-model="contact" /></label
+          ><button>{{t('p.a3030bf8f16d')}}</button>
         </form>
       </section>
       <AdminVerificationEmails :enabled="savedRegisterLevel === 2"/></template

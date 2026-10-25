@@ -1,11 +1,13 @@
 <script setup>
+import {t,errorMessage} from '../i18n.js';
+
 import {computed, onBeforeUnmount, onMounted, ref} from 'vue';
 import {api} from '../account';
 const props=defineProps({enabled:Boolean});
 const data=ref(null),error=ref(''),busy=ref(false),days=ref(30),email=ref(''),status=ref(''),page=ref(1),revealed=ref(new Set()),clock=ref(Date.now());
 let timer,tick,sequence=0,stopped=false,serverOffset=0;
-const labels={unknown:'发送结果未知',sending:'发送中／结果待确认',sent:'已发送，待注册',registered:'已注册',expired:'已过期',failed:'发送失败',superseded:'重发后失效',verified:'验证通过，注册未完成',registration_failed:'验证通过，注册失败'};
-const metrics=[['sent_emails','已发送邮箱'],['registered_emails','已注册邮箱'],['unregistered_emails','已发送但未注册'],['expired_unregistered_emails','已过期未注册'],['failed_attempts','发送失败次数']];
+const labels=computed(()=>({unknown:t('p.f86c7c62d672'),sending:t('p.3b37f021cdd5'),sent:t('p.f265c8172a9a'),registered:t('p.1f4273cab151'),expired:t('p.2fe0e3339ac4'),failed:t('p.ac77953a1e06'),superseded:t('p.a33b54d252cb'),verified:t('p.0a633af7fba1'),registration_failed:t('p.c6bd7752642b')}));
+const metrics=computed(()=>[['sent_emails',t('p.e304b9a44157')],['registered_emails',t('p.1aa7e450bd2c')],['unregistered_emails',t('p.05529fafb9d4')],['expired_unregistered_emails',t('p.19d879534849')],['failed_attempts',t('p.a31493d82034')]]);
 const pages=computed(()=>Math.max(1,Math.ceil((data.value?.total||0)/50)));
 function effectiveStatus(row){return row.status==='sent'&&row.expires_at*1000<=clock.value+serverOffset?'expired':row.status;}
 function time(value){return value?new Date(value*1000).toLocaleString():'—';}
@@ -24,22 +26,22 @@ onBeforeUnmount(()=>{stopped=true;clearInterval(timer);clearInterval(tick);});
 </script>
 <template>
 <section class="card verification-records" aria-labelledby="verification-records-title">
- <header class="verification-heading"><div><h2 id="verification-records-title">注册验证码记录</h2><p class="help">{{props.enabled?'邮箱验证已开启':'邮箱验证未开启，仍可查看历史记录'}} · 每 30 秒刷新</p></div><button type="button" :disabled="busy" @click="refresh()">{{busy?'刷新中…':'刷新记录'}}</button></header>
- <p class="help verification-note">“已发送”表示邮件服务器已接受，不代表已送达收件箱。可结合未注册数量排查邮件或垃圾箱问题。记录保留 90 天，从功能启用后开始。</p>
- <form class="verification-filters" @submit.prevent="refresh(true)"><label>记录范围<select aria-label="记录范围" v-model="days" @change="refresh(true)"><option :value="1">近 1 天</option><option :value="7">近 7 天</option><option :value="30">近 30 天</option><option :value="90">近 90 天</option></select></label><label>状态<select aria-label="状态" v-model="status" @change="refresh(true)"><option value="">全部状态</option><option v-for="(name,key) in labels" :key="key" :value="key">{{name}}</option></select></label><label>搜索邮箱<input v-model="email" maxlength="254" placeholder="输入全部或部分邮箱" type="text" /></label><button :disabled="busy">查询</button></form>
+ <header class="verification-heading"><div><h2 id="verification-records-title">{{t('p.97134c70031b')}}</h2><p class="help">{{props.enabled?t('p.d5caebd2ccc0'):t('p.62ea9dd51e1a')}} {{t('p.0283206648a9')}}</p></div><button type="button" :disabled="busy" @click="refresh()">{{busy?t('p.7f3c8312816f'):t('p.621e17c543bc')}}</button></header>
+ <p class="help verification-note">{{t('p.7f17e34788a0')}}</p>
+ <form class="verification-filters" @submit.prevent="refresh(true)"><label>{{t('p.3063640a272c')}}<select :aria-label="t('p.3063640a272c')" v-model="days" @change="refresh(true)"><option :value="1">{{t('p.79e81865effa')}}</option><option :value="7">{{t('p.2261b06712a3')}}</option><option :value="30">{{t('p.f729bb3d3f7e')}}</option><option :value="90">{{t('p.0909522d9092')}}</option></select></label><label>{{t('p.6320b4a8722a')}}<select :aria-label="t('p.6320b4a8722a')" v-model="status" @change="refresh(true)"><option value="">{{t('p.0a379c1e7398')}}</option><option v-for="(name,key) in labels" :key="key" :value="key">{{name}}</option></select></label><label>{{t('p.aa69adaa0edf')}}<input v-model="email" maxlength="254" :placeholder="t('p.34e19e49a5f2')" type="text" /></label><button :disabled="busy">{{t('p.bcd6771e08ec')}}</button></form>
  <p v-if="error" role="alert" class="error">{{error}}</p>
  <template v-if="data">
   <div class="verification-metrics"><div v-for="[key,title] in metrics" :key="key"><span>{{title}}</span><b>{{data.summary[key]}}</b></div></div>
-  <p class="help">概况按所选时间范围统计，不受邮箱和状态筛选影响；邮箱去重，重发不会重复计入。未注册指尚无成功注册记录的邮箱。</p>
+  <p class="help">{{t('p.af243cce3556')}}</p>
   <ul v-if="data.records.length" class="verification-list"><li v-for="row in data.records" :key="row.id">
    <header><b class="verification-email">{{row.email}}</b><span class="verification-status" :class="{'is-failed':['failed','registration_failed'].includes(effectiveStatus(row)),'is-registered':effectiveStatus(row)==='registered'}">{{labels[effectiveStatus(row)]||row.status}}</span></header>
-   <dl><div><dt>申请时间</dt><dd>{{time(row.created_at)}}</dd></div><div><dt>发送时间</dt><dd>{{time(row.sent_at)}}</dd></div><div><dt>有效期至</dt><dd>{{time(row.expires_at)}}</dd></div><div v-if="row.username"><dt>注册账号</dt><dd>{{row.username}}</dd></div><div v-if="row.registered_at"><dt>注册时间</dt><dd>{{time(row.registered_at)}}</dd></div></dl>
-   <p v-if="row.detail" class="help">{{row.detail}}</p>
-   <div v-if="row.code&&effectiveStatus(row)==='sent'" class="verification-code"><button type="button" :aria-expanded="revealed.has(row.id)" @click="reveal(row.id)">{{revealed.has(row.id)?'隐藏验证码':'查看验证码'}}</button><code v-if="revealed.has(row.id)" aria-label="有效验证码">{{row.code}}</code><span class="help">仅管理员可见，可手动提供给申请人；仍须在有效期内使用。</span></div>
+   <dl><div><dt>{{t('p.e9b5d944cc4b')}}</dt><dd>{{time(row.created_at)}}</dd></div><div><dt>{{t('p.4b474d377140')}}</dt><dd>{{time(row.sent_at)}}</dd></div><div><dt>{{t('p.4874fa5d4b3a')}}</dt><dd>{{time(row.expires_at)}}</dd></div><div v-if="row.username"><dt>{{t('p.679e917b16ef')}}</dt><dd>{{row.username}}</dd></div><div v-if="row.registered_at"><dt>{{t('p.4adc34616f3c')}}</dt><dd>{{time(row.registered_at)}}</dd></div></dl>
+   <p v-if="row.detail" class="help">{{errorMessage({message:row.detail,message_key:row.detail_key})}}</p>
+   <div v-if="row.code&&effectiveStatus(row)==='sent'" class="verification-code"><button type="button" :aria-expanded="revealed.has(row.id)" @click="reveal(row.id)">{{revealed.has(row.id)?t('p.e1e891038eb3'):t('p.d880027c29d7')}}</button><code v-if="revealed.has(row.id)" :aria-label="t('p.9d8b55031a5a')">{{row.code}}</code><span class="help">{{t('p.6015908ec331')}}</span></div>
   </li></ul>
-  <p v-else class="help" role="status">当前条件下暂无验证码记录。</p>
-  <nav class="verification-pagination" aria-label="验证码记录分页"><span class="help">共 {{data.total}} 条 · 第 {{page}} / {{pages}} 页</span><button type="button" :disabled="busy||page<=1" @click="turn(-1)">上一页</button><button type="button" :disabled="busy||page>=pages" @click="turn(1)">下一页</button></nav>
- </template><p v-else-if="busy" role="status" class="help">正在加载验证码记录…</p>
+  <p v-else class="help" role="status">{{t('p.c20842d98460')}}</p>
+  <nav class="verification-pagination" :aria-label="t('p.fd13f9c90d50')"><span class="help">{{t('p.76e547a8fa54')}} {{data.total}} {{t('p.064f059f1a4f')}} {{page}} / {{pages}} {{t('p.d24d3c99460c')}}</span><button type="button" :disabled="busy||page<=1" @click="turn(-1)">{{t('p.c9b9ae7a6144')}}</button><button type="button" :disabled="busy||page>=pages" @click="turn(1)">{{t('p.8a8542f69648')}}</button></nav>
+ </template><p v-else-if="busy" role="status" class="help">{{t('p.d245a6096374')}}</p>
 </section>
 </template>
 <style scoped>

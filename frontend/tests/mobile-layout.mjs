@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import {chromium,webkit,expect} from '@playwright/test';
 import mqttPacket from 'mqtt-packet';
 
-const dist=resolve('dist'),demo=resolve('../build/bundle/demos/platform'),evidence=resolve('../build/mobile-layout');
+const dist=resolve('dist'),demo=resolve(process.env.PHICOMM_DEMO_DIST||'../build/bundle/demos/platform'),evidence=resolve('../build/mobile-layout');
 const types={'.html':'text/html','.js':'text/javascript','.css':'text/css','.json':'application/json','.svg':'image/svg+xml','.png':'image/png','.webmanifest':'application/manifest+json'};
 const server=createServer(async(req,res)=>{
  try{
@@ -26,7 +26,7 @@ const defaultDevices=['tc1','a1','m1'].map((model,i)=>({model,mac:'aabbccddee0'+
 await mkdir(evidence,{recursive:true});
 
 async function fixture(browser,{admin=false,guest=false,count=3,hint=false,connectDelay=0,loseNameReceipt=false}={}){
- const context=await browser.newContext({viewport:{width:375,height:667},hasTouch:true,serviceWorkers:'block'});
+ const context=await browser.newContext({locale:'zh-CN',viewport:{width:375,height:667},hasTouch:true,serviceWorkers:'block'});
  const page=await context.newPage(),errors=[],commands=[],connections=[],apiRequests=[],channels=new Set();
  page.on('pageerror',error=>errors.push(error.message));
  const state={devices:Array.from({length:count},(_,i)=>({...defaultDevices[i%3],mac:(0xaabbccddee00+i).toString(16)})),online:true};
@@ -96,7 +96,9 @@ async function choose(page,model){
 }
 async function inViewport(locator,height){
  await expect(locator).toBeVisible();
- const box=await locator.boundingBox();assert(box.y>=0&&box.y+box.height<=height,`Control outside first screen: ${JSON.stringify(box)}`);
+ const box=await locator.boundingBox();
+ if(box.y<0||box.y+box.height>height)await locator.page().screenshot({path:resolve(evidence,'first-screen-failure.png')});
+ assert(box.y>=0&&box.y+box.height<=height,`Control outside first screen (${locator}): ${JSON.stringify(box)}`);
 }
 try{
  for(const engine of engines){
@@ -204,7 +206,9 @@ try{
    const long='客厅空气净化设备名称很长'.repeat(5);
    many.devices.get(many.state.devices[0].mac).state.name=long;
    await expect(many.page.locator('.current-device b')).toHaveText(long);
-   assert((await many.page.locator('iframe').boundingBox()).y<=300,'Collapsed host hint leaves room for device');
+   const hintTop=(await many.page.locator('iframe').boundingBox()).y;
+   if(hintTop>300)await many.page.screenshot({path:resolve(evidence,'host-hint-failure.png')});
+   assert(hintTop<=300,`Collapsed host hint leaves room for device: ${hintTop}`);
    await many.page.locator('.device-host-hint summary').click();await expect(many.page.locator('.device-host-hint p')).toBeVisible();
    await many.page.getByRole('button',{name:'我知道了'}).click();await expect(many.page.locator('.device-host-hint')).toHaveCount(0);
    await many.page.locator('.device-picker-trigger').click();
@@ -237,7 +241,7 @@ try{
     await expect(g.page.locator('.node-bar')).toHaveCount(0);await settings(g.page).click();await expect(g.page.getByLabel('选择平台节点')).toBeVisible();
     assert.deepEqual(g.errors,[]);await g.context.close();
    }
-   const demoContext=await browser.newContext({viewport:{width:390,height:844},serviceWorkers:'block'}),demoPage=await demoContext.newPage();
+   const demoContext=await browser.newContext({locale:'zh-CN',viewport:{width:390,height:844},serviceWorkers:'block'}),demoPage=await demoContext.newPage();
    const external=[];demoPage.on('request',request=>{if(!request.url().startsWith(base+'/'))external.push(request.url());});
    await demoPage.route('**/*',route=>route.request().url().startsWith(base+'/demo/')?route.continue():route.abort());
    await demoPage.goto(base+'/demo/');

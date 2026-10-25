@@ -12,7 +12,7 @@ const origin=`http://127.0.0.1:${server.address().port}`,base=origin+'/iotcloud/
 const devices=[{namespace:'account',username:'alice',mqtt_username:'alice',mac:'aabbccddeeff',model:'tc1',version:'v2',status:'active'},{namespace:'account',username:'alice',mqtt_username:'alice',mac:'aabbccddee01',model:'a1',version:'v2',status:'active'},{mac:'aabbccddee02',model:'m1',version:'v2',status:'active'},{mac:'aabbccddee03',model:'tc1',version:'v1',status:'active'}];
 await mkdir(evidence,{recursive:true});const browser=await chromium.launch();
 try{for(const width of [375,1280]){
- const context=await browser.newContext({viewport:{width,height:950},serviceWorkers:'block'}),page=await context.newPage(),errors=[],writes=[];
+ const context=await browser.newContext({locale:'zh-CN',viewport:{width,height:950},serviceWorkers:'block'}),page=await context.newPage(),errors=[],writes=[];
  let config={enabled:false,key_set:false,mappings:[],status:'disabled'},failRead=true,failSave=false,failDelete=false;
  page.on('pageerror',e=>errors.push(e.message));
  await context.route('**/*',async route=>{const request=route.request(),url=new URL(request.url()),path=url.pathname;

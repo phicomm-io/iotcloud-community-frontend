@@ -1,0 +1,4 @@
+# Preserve the exact upstream Paho license text, including its whitespace.
+frontend/licenses/paho-mqtt/about.html -whitespace
+frontend/licenses/paho-mqtt/edl-v10 -whitespace
+frontend/src/hubPaho.js -whitespace

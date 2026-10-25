@@ -38,3 +38,32 @@ test('only two probes run concurrently and stale identity replies cannot enable 
  while(gates.length||active){gates.splice(0).forEach(r=>r());await new Promise(setImmediate);}
  await Promise.all(jobs);assert.equal(max,2);assert.equal(records.d0.ready,false);t.stop();
 });
+test('local uploads preserve ordinary routes; signed hub conversion needs explicit target and web password',async()=>{
+ const requests=[];
+ class XHR{
+  constructor(){this.upload={};this.headers={};}
+  open(method,url){this.method=method;this.url=url;}
+  setRequestHeader(name,value){this.headers[name]=value;}
+  send(file){this.file=file;requests.push(this);this.status=202;this.responseText='accepted';this.onload();}
+  abort(){this.onabort?.();}
+ }
+ const daikin={...device,model:'daikin'},records={},t=createDeviceTransport({records,fetcher:async url=>response(url.endsWith('/info')?{...info,data:{...info.data,model:'daikin',firmware_variant:'full'}}:status)});
+ const configure=password=>t.configure('d',daikin,{mode:'auto',address:'http://192.168.1.115'},password);
+ configure('web-secret');await t.probe('d');
+ const file=new Blob(['intact signed envelope']),target={variant:'hub',confirm:'full-to-hub'};
+ for(const rescue of [false,true]){
+  assert.equal((await t.upload('d',file,rescue,()=>{},XHR).promise).status,202);
+  assert.equal(requests.at(-1).url,'http://192.168.1.115/api/v1/ota/'+(rescue?'upload-unsigned':'upload'));
+  assert.equal(Object.keys(requests.at(-1).headers).some(k=>k.startsWith('X-IoTCloud-')),false);
+ }
+ assert.equal((await t.upload('d',file,false,()=>{},XHR,target).promise).status,202);
+ const conversion=requests.at(-1);assert.equal(conversion.url,'http://192.168.1.115/api/v1/ota/convert');assert.equal(conversion.file,file);assert.equal(conversion.withCredentials,false);
+ assert.deepEqual(conversion.headers,{'Content-Type':'application/octet-stream',Authorization:'Basic '+Buffer.from('admin:web-secret').toString('base64'),'X-IoTCloud-Target-Variant':'hub','X-IoTCloud-Confirm':'full-to-hub'});
+ const count=requests.length;
+ for(const invalid of [null,{}, {variant:'full',confirm:'hub-to-full'}, {variant:'hub',confirm:'wrong'}])assert.equal((await t.upload('d',file,false,()=>{},XHR,invalid).promise).status,0);
+ assert.equal((await t.upload('d',file,true,()=>{},XHR,target).promise).status,0);
+ configure('');await t.probe('d');assert.equal((await t.upload('d',file,false,()=>{},XHR,target).promise).status,0);
+ t.configure('d',daikin,{mode:'mqtt',address:'http://192.168.1.115'},'web-secret');assert.equal((await t.upload('d',file,false,()=>{},XHR,target).promise).status,0);
+ assert.equal(requests.length,count,'failed conversion guards cannot send an upload');t.stop();
+ const a1=fixture(async url=>response(url.endsWith('/info')?info:status));await a1.t.probe('d');assert.equal((await a1.t.upload('d',file,false,()=>{},XHR,target).promise).status,0);a1.t.stop();assert.equal(requests.length,count);
+});

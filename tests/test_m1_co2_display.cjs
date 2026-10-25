@@ -19,7 +19,7 @@ test('M1 screen CO2 controls require MCU and sensor, preserve editing and submit
   render();assert.equal(card.hidden,true);
   render({...cfg,mcu_supported:false},sensor);assert.equal(card.hidden,true);
   render({...cfg,module_present:false},sensor);assert.equal(card.hidden,true);
-  render(cfg,{...sensor,serial:''});assert.equal(card.hidden,true);
+  render(cfg,{...sensor,serial:''});assert.equal(card.hidden,false,'an external source does not require a local SCD40');
   render(cfg,sensor);assert.equal(card.hidden,false,'identified stale module can configure display');
   const interval=w.document.getElementById('co2DisplayInterval');
   assert.equal(interval.value,'5');interval.value='9';interval.dispatchEvent(new w.Event('input',{bubbles:true}));

@@ -1,4 +1,6 @@
 <script setup>
+import {t} from '../i18n.js';
+
 import {ref,nextTick,onMounted,onBeforeUnmount} from 'vue';
 import {deviceKey} from '../deviceProtocol';
 import DeviceSummary from './DeviceSummary.vue';
@@ -41,13 +43,13 @@ defineExpose({open});
 </script>
 <template>
  <dialog ref="dialog" class="device-picker" aria-labelledby="device-picker-title" @cancel="unlock" @close="closed" @click="backdrop" @keydown="keydown">
-  <header><h2 id="device-picker-title">切换设备 <small>{{devices.length}} 台</small></h2><button type="button" aria-label="关闭设备列表" autofocus @click="close"><AppIcon name="close"/></button></header>
-  <button class="add-device-entry" type="button" @click="add"><AppIcon name="plus" :size="17"/>添加设备</button>
+  <header><h2 id="device-picker-title">{{t('p.28465d512f3a')}} <small>{{devices.length}} {{t('p.991363a244f0')}}</small></h2><button type="button" :aria-label="t('p.29813d4b9d79')" autofocus @click="close"><AppIcon name="close"/></button></header>
+  <button class="add-device-entry" type="button" @click="add"><AppIcon name="plus" :size="17"/>{{t('p.3aea0927d015')}}</button>
   <ul ref="list" class="picker-list">
    <li v-for="device in devices" :key="deviceKey(device)"><button type="button" :aria-pressed="selected===deviceKey(device)" @click="select(device)"><DeviceSummary :device="device" :state="states[deviceKey(device)]||{}" :name="deviceName(device)" :connected="connected" :now="now"/><AppIcon v-if="selected===deviceKey(device)" name="check"/></button></li>
-   <li v-if="!devices.length" class="help">暂无设备，可在设置中添加。</li>
+   <li v-if="!devices.length" class="help">{{t('p.a19be92ce7b8')}}</li>
   </ul>
-  <footer><button type="button" @click="emit('refresh')">刷新设备列表</button><button type="button" @click="close">完成</button></footer>
+  <footer><button type="button" @click="emit('refresh')">{{t('p.9758635d2f5e')}}</button><button type="button" @click="close">{{t('p.c0b3fbff51cc')}}</button></footer>
  </dialog>
 </template>
 <style scoped>

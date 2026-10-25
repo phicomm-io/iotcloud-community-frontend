@@ -2,7 +2,7 @@
  * settings pages every product has. Loaded after service.js (protocol) and
  * i18n.js (strings); each product page calls UI.start() with its own layout.
  * All requests go through command() in service.js; nothing here talks to a URL
- * directly except the OTA upload. */
+ * directly except downloads, authenticated backups and OTA upload. */
 (()=>{
 'use strict';
 const {t}=I18N;
@@ -207,12 +207,13 @@ function renderChips(s){
  const c=$('chips');if(!c)return;
  const wifi=s.wifi_connected?chip('ok','chip.wifi',s.ssid+' · '+s.ip):s.ap_active?chip('warn','chip.hotspot',s.ap_name):chip('bad','chip.wifi',t('state.connecting'));
  const mq=!s.mqtt_host?chip('','chip.mqtt',t('state.off')):s.mqtt_connected?chip('ok','chip.mqtt',t('state.ready')):chip('warn','chip.mqtt',t('s.'+(s.mqtt_status||'connecting')));
- c.replaceChildren(wifi,mq,h('span',{class:'chip'},h('span',{i18n:'chip.firmware'}),h('b',{class:'num'},s.version||'—')),...(UI.device.chips?UI.device.chips(s):[]));
+ c.replaceChildren(wifi,mq,h('span',{class:'chip'},h('span',{i18n:'chip.firmware'}),h('b',{class:'num'},s.version||'—')),...(UI.device.model==='M1'?[h('span',{class:'chip'},h('span',{i18n:'mcu.version'}),h('b',{class:'num'},mcuVersion?.version_received?mcuVersion.version:t('mcu.unknown')))]:[]),...(UI.device.chips?UI.device.chips(s):[]));
 }
 function renderBanners(s,lost){
  const b=$('banners');if(!b)return;b.replaceChildren();
  const add=(cls,ic,text)=>b.append(h('div',{class:'banner '+cls,role:cls==='bad'?'alert':null},icon(ic),h('span',{},text)));
  if(lost){add('bad','alert',t('banner.lost'));return;}
+ if(UI.caps?.config_recovery)add('warn','alert',t('recovery.hint'));
  if(s.ota_active)add('info','auto',t('banner.ota',{p:s.ota_progress}));
  if(s.reboot_pending)add('info','auto',t('banner.rebooting'));
  if(s.mqtt_cleanup_warning)add('warn','alert',t('banner.cleanup'));
@@ -250,7 +251,7 @@ async function afterShow(page){
  const p=UI.pages[page];if(!p?.show||showingPages.has(page))return;
  const box=document.querySelector('[data-settings-page="'+page+'"]');
  box?.querySelector('.page-load-error')?.remove();showingPages.add(page);
- try{await p.show();}catch(e){const retry=h('button',{class:'btn',type:'button',onclick:()=>afterShow(page)},'重试');box?.prepend(h('div',{class:'banner warn page-load-error',role:'alert'},h('span',{},e.message),retry));}finally{showingPages.delete(page);}
+ try{await p.show();}catch(e){const retry=h('button',{class:'btn',type:'button',onclick:()=>afterShow(page)},t('common.retry'));box?.prepend(h('div',{class:'banner warn page-load-error',role:'alert'},h('span',{},e.message),retry));}finally{showingPages.delete(page);}
 }
 /* Wi-Fi scan is shared: start, poll, and hand the sorted list to a callback. */
 async function scanNetworks(onList){
@@ -357,7 +358,61 @@ function mqttPage(dev){
    ['mqtt.host',s.mqtt_host?s.mqtt_host+':'+s.mqtt_port:'—'],['mqtt.mode',t(s.mqtt_topic_mode==='legacy'?'mqtt.mode_legacy':'mqtt.mode_tmcp')],['mqtt.user',s.mqtt_user||'—']]));},
   init(s){if(protocol)protocol.value=s.mqtt_protocol||s.mqtt_topic_mode||'tmcp';host.value=s.mqtt_host||'';port.value=s.mqtt_port||1883;user.value=s.mqtt_user||'';imported.activate?.();}};
 }
+let mcuVersion=null,mcuReadAt=0,mcuReading=null;
+function mcuFamily(data){
+ if(!data?.version_received||!data.version)return 'unknown';
+ if(/^17\./.test(data.version))return 'stock17';
+ if(/^11\./.test(data.version))return 'stock11';
+ if(/^v?\d+\.\d+\.\d+(?:[-+].*)?$/.test(data.version)&&data.extension_protocol)return 'open';
+ return 'unverified';
+}
+async function readMcuVersion(force=false){
+ if(UI.device?.model!=='M1'||!UI.caps?.actions?.includes('mcu.version.get'))return null;
+ if(mcuReading)return mcuReading;
+ if(!force&&Date.now()-mcuReadAt<15000)return mcuVersion;
+ mcuReadAt=Date.now();
+ mcuReading=command('mcu.version.get').then(data=>{mcuVersion=data;renderChips(UI.state||{});return data;}).finally(()=>{mcuReading=null;});
+ return mcuReading;
+}
+function mcuVersionPanel(){
+ const value=h('b',{class:'num'}),hint=h('p',{class:'help'});
+ const button=h('button',{class:'btn',type:'button'},h('span',{i18n:'mcu.query'}));
+ const panel=card('mcu.version',null,value,hint,button);
+ function render(){value.textContent=mcuVersion?.version_received?mcuVersion.version:t('mcu.unknown');const family=mcuFamily(mcuVersion);hint.textContent=t('mcu.'+family);hint.className='help'+(family==='stock17'?' warn':'');}
+ button.onclick=()=>run(button,async()=>{await command('mcu.version.query');await new Promise(resolve=>setTimeout(resolve,800));await readMcuVersion(true);render();});
+ I18N.onChange(render);render();
+ return {el:panel,async refresh(){try{await readMcuVersion();}finally{render();}}};
+}
+let releaseNotesLoading=null;
+function loadReleaseNotes(){
+ if(globalThis.ReleaseNotes&&globalThis.ReleaseNotesClient)return Promise.resolve();
+ if(releaseNotesLoading)return releaseNotesLoading;
+ const load=name=>new Promise((resolve,reject)=>{const script=document.createElement('script'),finish=error=>{clearTimeout(timer);script.onload=script.onerror=null;if(error){script.remove();reject(error);}else resolve();},timer=setTimeout(()=>finish(Error('Timeout')),7000);script.src='https://phicomm-io.github.io/release-notes/'+name+'.js';script.onload=()=>finish();script.onerror=()=>finish(Error('Network'));document.head.append(script);});
+ releaseNotesLoading=load('core').then(()=>load('client')).catch(error=>{releaseNotesLoading=null;throw error;});return releaseNotesLoading;
+}
+function downloadFile(data,name,type='application/octet-stream'){
+ const url=URL.createObjectURL(new Blob([data],{type})),a=h('a',{href:url,download:name});document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+function backupCard(){
+ const full=!!UI.caps?.config_backup;
+ const download=h('button',{class:'btn',type:'button'},h('span',{i18n:full?'backup.download':'backup.public'}));
+ download.onclick=()=>run(download,async()=>{
+  if(!full){downloadFile(JSON.stringify({schema:1,partial:true,model:UI.caps.model,config:await command('config.get')},null,2),'phicomm-public-settings.json','application/json');return;}
+  const response=await fetch('/api/v1/config/backup',{cache:'no-store',credentials:'same-origin'});if(!response.ok)throw Error(t('backup.failed'));
+  downloadFile(await response.arrayBuffer(),'phicomm-'+String(UI.caps.model||'device').toLowerCase()+'-config.phcb');
+ });
+ const file=h('input',{type:'file',accept:'.phcb,.json',required:true});
+ const form=h('form',{class:'stack',hidden:!full},file,h('button',{type:'submit',class:'btn'},h('span',{i18n:'backup.restore'})));
+ onSubmit(form,async()=>{
+  if(!file.files?.[0]||file.files[0].size>16384)throw Error(t('backup.failed'));
+  if(!await confirmDialog({title:t('backup.restore'),body:t('backup.confirm'),ok:t('backup.restore'),danger:true}))return;
+  const response=await fetch('/api/v1/config/restore',{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:await file.files[0].arrayBuffer(),credentials:'same-origin'});
+  if(response.status!==202)throw Error(t('backup.failed'));toast(t('backup.restoring'));
+ });
+ return card('backup.title',null,h('p',{class:'help',i18n:full?'backup.hint':'backup.partial'}),download,form);
+}
 function firmwarePage(dev){
+ const mcu=dev.model==='M1'?mcuVersionPanel():null;
  const comparison=h('a',{id:'otaCompare',class:'btn',target:'_blank',rel:'noopener noreferrer'},h('span',{i18n:'fw.compare'}),icon('external'));
  let identity=null,targetVersion=null;
  function comparisonLink(){
@@ -385,7 +440,7 @@ function firmwarePage(dev){
    const data=await command('ota.check.get');last=data;
    targetVersion=['available','up_to_date'].includes(data.state)?data.version:null;comparisonLink();
    latest.textContent=t('fw.check_'+data.state)+(data.version?' · '+data.version:'')+(data.error?' · '+data.error:'');
-   install.hidden=!data.version||data.state==='failed';notes.hidden=!data.release_log;
+   install.hidden=!data.version||data.state==='failed';notes.hidden=!targetVersion;
    if(data.busy||data.state==='checking')timer=setTimeout(()=>poll().catch(e=>{latest.textContent=e.message;busy(false);}),1000);
    else busy(false);
   }
@@ -394,19 +449,25 @@ function firmwarePage(dev){
    try{await command('ota.check',{source});latest.textContent=t('fw.check_checking');timer=setTimeout(()=>poll().catch(e=>{latest.textContent=e.message;busy(false);}),500);}
    catch(e){busy(false);throw e;}
   }
-  notes.onclick=()=>run(notes,async()=>{
-   let offset=0,text='';notesText.hidden=false;
-   do{
-    await command('ota.notes',{offset});
-    let data;
-    do{await new Promise(resolve=>setTimeout(resolve,500));data=await command('ota.notes.get');}while(data.busy);
-    if(data.state!=='ready')throw Error(data.error||t('fw.check_failed'));
-    text+=data.text;notesText.textContent=text;
-    if(data.next<=offset&&data.next<data.total)throw Error(t('fw.check_failed'));
-    offset=data.next;if(offset>=data.total)break;
-   }while(offset<16384);
+  let comparisonReady='';
+  async function readComparison(){
+   const key=[identity?.version,targetVersion,I18N.lang].join('/');
+   if(comparisonReady===key)return true;
+   notesText.hidden=false;
+   try{
+    if(!identity?.version||!targetVersion)throw Error();
+    await loadReleaseNotes();
+    const snapshot=await ReleaseNotesClient.snapshot('https://phicomm-io.github.io');
+    const result=ReleaseNotes.compare(snapshot.manifest,{from:identity.version,to:targetVersion,model:String(identity.model||UI.caps.model).toLowerCase(),variant:identity.firmware_variant||UI.caps.firmware_variant||'full',locale:I18N.lang},snapshot.catalog);
+    if(!result.ok||key!==[identity?.version,targetVersion,I18N.lang].join('/'))throw Error();
+    notesText.textContent=[...result.upgrade_notices,...result.changes].map(row=>row.title+'\n'+row.description).join('\n\n')||t('fw.check_up_to_date');comparisonReady=key;return true;
+   }catch{comparisonReady='';notesText.textContent=t('fw.notes_unavailable');return false;}
+  }
+  notes.onclick=()=>run(notes,readComparison);
+  install.onclick=()=>run(install,async()=>{
+   if(!await readComparison()&&!window.confirm(t('fw.notes_confirm')))return;
+   if(!window.confirm(t('fw.confirm_online')))return;await command('ota.install');toast(t('fw.url_started'));
   });
-  install.onclick=()=>run(install,async()=>{if(!window.confirm(t('fw.confirm_online')))return;await command('ota.install');toast(t('fw.url_started'));});
   command('ota.sources.get').then(data=>{for(const id of data.sources){const button=h('button',{class:'btn',type:'button','data-source':id},t('fw.source_'+id));button.onclick=()=>run(button,()=>check(id));buttons.push(button);sources.append(button);}}).catch(()=>{online.hidden=true;});
   online.append(h('h2',{i18n:'fw.online'}),h('p',{class:'help',i18n:'fw.sources_help'}),sources,latest,h('div',{class:'row'},install,notes),notesText);
  }
@@ -415,9 +476,22 @@ function firmwarePage(dev){
  const sum=h('div'),prog=h('progress',{max:100,value:0}),state=h('p',{class:'help'});
  const file=h('input',{id:'firmware',type:'file',accept:'.bin,.raw,.signed',required:true});
  const unsigned=switchRow('unsignedRescue','fw.unsigned','fw.unsigned_desc');
+ const conversionSupported=UI.caps?.ota_variant_conversion==='full-to-hub';
+ const conversion=conversionSupported?switchRow('hubConversion','fw.convert_hub','fw.convert_hub_help'):null;
+ const conversionInput=conversion?.querySelector('input'),unsignedInput=unsigned.querySelector('input');
+ const passwordGuide=h('div',{id:'hubConversionPassword',class:'stack',hidden:true},h('p',{class:'help',i18n:'fw.convert_hub_password'}),
+  h('button',{class:'btn',type:'button',i18n:'fw.set_web_password',onclick:()=>{if(UI.embedded)UI.embeddedRoute='settings/device';else location.hash='settings/device';showRoute();$('webPassword')?.focus();}}));
+ function conversionMode(){
+  const selected=!!conversionInput?.checked;
+  if(selected)unsignedInput.checked=false;
+  unsignedInput.disabled=selected;
+  file.accept=selected?'.signed':'.bin,.raw,.signed';
+  passwordGuide.hidden=!selected||identity?.web_password_set===true;
+ }
+ conversionInput?.addEventListener('change',conversionMode);
  const url=h('input',{id:'otaUrl',type:'url',maxLength:499,required:true,placeholder:'https://…/'+dev.otaName});
  const fileForm=h('form',{id:'fileForm',class:'stack'},h('label',{class:'field'},h('span',{},t('fw.file',{m:dev.model})),file),
-  h('details',{class:'more'},h('summary',{i18n:'common.advanced'}),unsigned),
+  h('details',{class:'more'},h('summary',{i18n:'common.advanced'}),unsigned,...(conversion?[conversion,passwordGuide]:[])),
   h('div',{class:'form-actions'},h('button',{class:'btn primary',type:'submit'},h('span',{i18n:'fw.upload'}))));
  const urlForm=h('form',{id:'urlForm',class:'stack',hidden:true},h('label',{class:'field'},h('span',{i18n:'fw.url'}),url),
   h('div',{class:'form-actions'},h('button',{class:'btn primary',type:'submit'},h('span',{i18n:'fw.download'}))));
@@ -426,11 +500,17 @@ function firmwarePage(dev){
  let uploading=false;
  fileForm.addEventListener('submit',e=>{
   e.preventDefault();const f=file.files&&file.files[0];if(!f||uploading)return;
-  const rescue=unsigned.querySelector('input').checked;
+  const rescue=unsignedInput.checked,convert=!!conversionInput?.checked;
+  if(convert){
+   if(rescue||!f.name?.endsWith('.signed')){toast(t('fw.convert_hub_signed'),true);return;}
+   if(identity?.web_password_set!==true){passwordGuide.hidden=false;toast(t('fw.convert_hub_password'),true);return;}
+   if(!window.confirm(t('fw.convert_hub_confirm')))return;
+  }
   if(rescue&&!window.confirm(t('fw.unsigned_confirm')))return;
   uploading=true;prog.value=0;
-  const xhr=window.createDeviceUpload?window.createDeviceUpload():new XMLHttpRequest();xhr.open('POST',rescue?'/api/v1/ota/upload-unsigned':'/api/v1/ota/upload');
+  const xhr=window.createDeviceUpload?window.createDeviceUpload():new XMLHttpRequest();xhr.open('POST',convert?'/api/v1/ota/convert':rescue?'/api/v1/ota/upload-unsigned':'/api/v1/ota/upload');
   xhr.setRequestHeader('Content-Type','application/octet-stream');xhr.timeout=310000;
+  if(convert){xhr.setRequestHeader('X-IoTCloud-Target-Variant','hub');xhr.setRequestHeader('X-IoTCloud-Confirm','full-to-hub');}
   xhr.upload.onprogress=ev=>{if(ev.lengthComputable){prog.value=ev.loaded/ev.total*100;state.textContent=t('fw.uploading',{p:Math.round(ev.loaded/ev.total*100)});}};
   xhr.onload=()=>{const ok=xhr.status===202;state.textContent=ok?t('fw.verify_ok'):t('fw.failed',{e:xhr.responseText});toast(state.textContent,!ok);};
   xhr.onerror=()=>toast(t('fw.upload_lost'),true);
@@ -440,9 +520,9 @@ function firmwarePage(dev){
  });
  onSubmit(urlForm,()=>api('/ota',{url:url.value}),'fw.url_started');
  const fileLabel=fileForm.querySelector('.field>span');I18N.onChange(()=>{fileLabel.textContent=t('fw.file',{m:dev.model});});
- return {el:h('div',{class:'stack'},pageHead('nav.firmware','fw.lead'),sum,card('fw.compare_title',null,h('p',{class:'help',i18n:'fw.compare_help'}),comparison),online,
+ return {el:h('div',{class:'stack'},pageHead('nav.firmware','fw.lead'),sum,...(mcu?[mcu.el]:[]),card('fw.compare_title',null,h('p',{class:'help',i18n:'fw.compare_help'}),comparison),online,
   card('fw.install',null,picker,h('div',{style:'margin-top:16px'},fileForm,urlForm),h('div',{class:'stack',style:'margin-top:20px'},prog,state,cancel),info(dev.otaHintKey))),
-  status(s){identity=s;comparisonLink();sum.replaceChildren(summary([['fw.version',h('span',{class:'num'},s.version||'—')],['fw.state',t('s.'+(s.ota_state||'idle'))],s.ota_error?['fw.error',h('span',{class:'badge bad'},s.ota_error)]:null]));
+  status(s){identity=s;comparisonLink();passwordGuide.hidden=!conversionInput?.checked||s.web_password_set===true;if(mcu)mcu.refresh().catch(()=>{});sum.replaceChildren(summary([['fw.version',h('span',{class:'num'},s.version||'—')],['fw.state',t('s.'+(s.ota_state||'idle'))],s.ota_error?['fw.error',h('span',{class:'badge bad'},s.ota_error)]:null]));
    cancel.hidden=!s.ota_active||s.ota_mode==='committing';
    if(s.ota_active){prog.value=s.ota_progress;state.textContent=t('fw.progress',{p:s.ota_progress});}}};
 }
@@ -512,12 +592,12 @@ function maintenancePage(dev){
  const reboot=h('button',{type:'button',class:'btn'},h('span',{i18n:'sys.reboot'}));
  reboot.onclick=async()=>{if(await confirmDialog({title:t('sys.reboot_q',{m:dev.model}),body:t('sys.reboot_body'),ok:t('sys.reboot')}))run(reboot,()=>api('/reboot',{}),'toast.rebooting');};
  const items=[h('div',{class:'item'},h('div',{class:'grow'},h('b',{i18n:'sys.reboot'}),h('span',{i18n:'sys.reboot_desc'})),reboot)];
- if(dev.factoryReset){
+ if(dev.factoryReset||UI.caps?.config_recovery){
   const reset=h('button',{type:'button',class:'btn danger'},h('span',{i18n:'sys.reset'}));
-  reset.onclick=async()=>{if(await confirmDialog({title:t('sys.reset_q'),body:t('sys.reset_body'),ok:t('sys.reset'),danger:true}))run(reset,()=>api('/device/reset',{full:true}),'toast.resetting');};
+  reset.onclick=async()=>{if(await confirmDialog({title:t('sys.reset_q'),body:t(UI.caps?.config_recovery?'recovery.confirm':'sys.reset_body'),ok:t('sys.reset'),danger:true}))run(reset,()=>api('/device/reset',{full:true}),'toast.resetting');};
   items.push(h('div',{class:'item'},h('div',{class:'grow'},h('b',{i18n:'sys.reset'}),h('span',{i18n:'sys.reset_desc'})),reset));
  }
- return h('div',{class:'stack'},pageHead('nav.maintenance','sys.lead'),
+ return h('div',{class:'stack'},pageHead('nav.maintenance','sys.lead'),backupCard(),
   h('section',{class:'card danger-zone'},h('div',{class:'list'},items),
    h('p',{class:'help',style:'margin-top:12px',i18n:dev.buttonHintKey},t(dev.buttonHintKey))));
 }
@@ -528,7 +608,10 @@ function nameCard(){
   h('div',{class:'row'},h('div',{class:'grow'},input),h('button',{class:'btn primary',type:'submit'},h('span',{i18n:'common.save'}))),
   h('button',{class:'btn ghost',type:'button',onclick:e=>run(e.currentTarget,async()=>{await api('/deviceName',{name:''});await UI.reload();input.value=UI.state?.name||'';},'common.saved')},h('span',{i18n:'gen.default_name'}))),meta);
  onSubmit(form,()=>{if(new TextEncoder().encode(input.value).length>63)throw Error(t('gen.name_long'));return api('/deviceName',{name:input.value});});
- return {el:card('gen.identity',null,form),init(s){input.value=s.name||'';},status(s){meta.replaceChildren(summary([['gen.device_id',h('span',{class:'num'},prettyMac(s.device_id))],['gen.uptime',duration(s.uptime_seconds||0)]]));}};
+ const language=h('select',{id:'deviceLanguage'},h('option',{value:'zh-CN'},'简体中文'),h('option',{value:'en'},'English'));
+ const languageForm=h('form',{class:'stack',hidden:!UI.caps?.device_language},h('label',{class:'field'},h('span',{i18n:'gen.language'}),language),info('gen.language_help'),h('button',{class:'btn',type:'submit'},h('span',{i18n:'common.save'})));
+ onSubmit(languageForm,()=>command('config.set',{section:'device',values:{language:language.value}}));
+ return {el:card('gen.identity',null,form,languageForm),init(s){input.value=s.name||'';language.value=s.language||'zh-CN';},status(s){meta.replaceChildren(summary([['gen.device_id',h('span',{class:'num'},prettyMac(s.device_id))],['gen.uptime',duration(s.uptime_seconds||0)]]));}};
 }
 function authCard(){
  const input=h('input',{id:'webPassword',type:'password',maxLength:32,autocomplete:'new-password',placeholder:t('auth.ph')});
@@ -567,6 +650,7 @@ async function load(){
   if(!params.view&&!raw.ota_mode){lastFullAt=Date.now();loadedGeneration=generation;}
   if(raw.ota_active&&raw.ota_mode){UI.pages.firmware?.status(raw);return raw;}
   const s=UI.acceptStatus(raw,params.view==='live');
+  readMcuVersion().catch(()=>{});
   $('title').textContent=UI.device.model+' '+(s.name||'');
   renderChips(s);renderBanners(s,false);
   if(!initialized){for(const p of Object.values(UI.pages))if(p.init)p.init(s);initialized=true;}

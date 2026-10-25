@@ -36,6 +36,8 @@ def main():
     shutil.copytree(ROOT / 'frontend/dist', out / 'platform')
     run('npm', '--prefix', 'frontend', 'run', 'build', env=dict(os.environ, VITE_LOCAL_ONLY='1'))
     shutil.copytree(ROOT / 'frontend/dist', out / 'local')
+    run('npm', '--prefix', 'frontend', 'run', 'build', env=dict(os.environ, VITE_HUB='1'))
+    shutil.copytree(ROOT / 'frontend/dist', out / 'hub')
     env = dict(os.environ, VITE_DEMO='1')
     run('npm', '--prefix', 'frontend', 'run', 'build', env=env)
     shutil.copytree(ROOT / 'frontend/dist', out / 'demos/platform')
@@ -68,7 +70,7 @@ def main():
         shutil.copyfile(ROOT / name, dest)
     hashes = {str(p.relative_to(out)): hashlib.sha256(p.read_bytes()).hexdigest()
               for p in sorted(out.rglob('*')) if p.is_file()}
-    manifest = dict(schema=1, repository='phicomm-io/phicomm-community-frontend', commit=commit, features=['bootstrap-ui', 'local-console', 'sensor-providers', 'daikin'], files=hashes)
+    manifest = dict(schema=1, repository='phicomm-io/iotcloud-community-frontend', commit=commit, features=['bootstrap-ui', 'local-console', 'sensor-providers', 'daikin', 'daikin-hub'], files=hashes)
     (out / 'manifest.json').write_text(json.dumps(manifest, indent=2, sort_keys=True) + '\n')
     archive = ROOT / 'build/frontend.tar.gz'
     # No wall-clock timestamps or machine identities in the archive.

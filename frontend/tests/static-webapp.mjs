@@ -19,7 +19,7 @@ const server=createServer(async(req,res)=>{
 await new Promise(done=>server.listen(0,'127.0.0.1',done));
 const browser=await chromium.launch();
 try{
- const context=await browser.newContext();const page=await context.newPage();
+ const context=await browser.newContext({locale:'zh-CN'});const page=await context.newPage();
  const failures=[];page.on('pageerror',e=>failures.push(e.message));
  const url=`http://127.0.0.1:${server.address().port}/iotcloud/`;
  await page.goto(url+'#/login');await page.getByRole('heading',{name:'登录',exact:true}).waitFor();

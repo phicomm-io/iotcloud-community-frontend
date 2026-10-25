@@ -1,0 +1,254 @@
+{
+  "setup.85fb2e4e23": [
+    "Review connection settings, then save.",
+    "请确认连接配置后保存。"
+  ],
+  "setup.f803459a02": [
+    " · Open",
+    " · 开放"
+  ],
+  "setup.9b8e58bc4b": [
+    "Scan complete. Select a network or enter its name.",
+    "扫描完成，可从网络名称列表选择或手动输入。"
+  ],
+  "setup.21e341916d": [
+    "Scan timed out. Retry or enter the network name.",
+    "扫描超时，请重试或手动输入。"
+  ],
+  "setup.10bfe8eea2": [
+    "Connect to the device and read its status first.",
+    "请先连接设备并读取状态。"
+  ],
+  "setup.5a5f5ab562": [
+    "Use 8–32 printable ASCII characters for the web password.",
+    "网页密码需要 8 至 32 位可打印 ASCII 字符。"
+  ],
+  "setup.3a2a307ad0": [
+    "Settings are too long. Check network names and passwords.",
+    "配置内容过长，请检查网络名称和密码。"
+  ],
+  "setup.064a97c4bf": [
+    "Wi-Fi passwords must be at least 8 bytes.",
+    "Wi-Fi 密码至少需要 8 字节。"
+  ],
+  "setup.ae49332c8b": [
+    "Saving MQTT settings…",
+    "正在保存 MQTT 配置…"
+  ],
+  "setup.5ea9986202": [
+    "Saving web password…",
+    "正在保存网页管理密码…"
+  ],
+  "setup.340b70ed88": [
+    "MQTT settings saved. Testing Wi-Fi…",
+    "MQTT 配置已保存，正在试连 Wi-Fi…"
+  ],
+  "setup.673c7d6bfe": [
+    "Settings saved. Wi-Fi is being tested. If the hotspot disconnects, reconnect to your LAN and check Wi-Fi and MQTT at the device address.",
+    "配置已保存，Wi-Fi 正在试连。热点断开后请切回内网，再用设备地址确认 Wi-Fi 和 MQTT 实际连接状态。"
+  ],
+  "setup.6bf4396e1e": [
+    "MQTT settings saved; Wi-Fi is not yet confirmed. Reconnect and check status. A failed trial restores the previous network.",
+    "MQTT 配置已保存，Wi-Fi 试连结果尚未确认。请重新连接设备查看状态；试连失败会恢复原 Wi-Fi。"
+  ],
+  "setup.fbc2acb09e": [
+    "Reopen setup from the management platform.",
+    "请从管理平台重新打开配置"
+  ],
+  "setup.b8f77a99a1": [
+    "The provisioning link is invalid. Enter settings manually or reopen it from the platform.",
+    "平台配置链接已失效，请手动填写或从平台重新打开。"
+  ],
+  "setup.4d3a340da9": [
+    "The provisioning link has expired.",
+    "配置链接已过期。"
+  ],
+  "setup.d53e51f858": [
+    "Platform settings filled in. Save and connect to apply them.",
+    "平台配置已填入，点击保存并连接后生效。"
+  ],
+  "setup.344bb96da6": [
+    "Platform settings are invalid. Enter them manually.",
+    "平台配置无效，请手动填写。"
+  ],
+  "setup.31afde9ba7": [
+    "Device status is unavailable. Check the connection and refresh.",
+    "暂时无法读取设备状态，请确认连接后刷新。"
+  ],
+  "setup.title": [
+    "{m} device setup",
+    "{m} 设备设置"
+  ],
+  "setup.compact": [
+    "Phicomm Community · Setup",
+    "Phicomm Community · 精简版"
+  ],
+  "setup.appearance": [
+    "Appearance",
+    "外观"
+  ],
+  "setup.system": [
+    "System",
+    "跟随系统"
+  ],
+  "setup.light": [
+    "Light",
+    "浅色"
+  ],
+  "setup.dark": [
+    "Dark",
+    "深色"
+  ],
+  "setup.loading": [
+    "Reading device status…",
+    "正在读取设备状态…"
+  ],
+  "setup.connection": [
+    "Connection",
+    "连接状态"
+  ],
+  "setup.refresh": [
+    "Refresh",
+    "刷新状态"
+  ],
+  "setup.import": [
+    "MQTT settings from the platform",
+    "来自管理平台的 MQTT 配置"
+  ],
+  "setup.import_hint": [
+    "Confirm to fill the form. Save to apply settings.",
+    "确认后填入下方表单，点击保存才会应用。"
+  ],
+  "setup.accept": [
+    "Fill settings",
+    "确认填入"
+  ],
+  "setup.mqtt": [
+    "MQTT connection",
+    "MQTT 连接"
+  ],
+  "setup.order": [
+    "Settings are saved before switching Wi-Fi. You can edit them here if the connection fails.",
+    "配置将先保存，再切换 Wi-Fi。连接失败时仍可在本页修改。"
+  ],
+  "setup.host": [
+    "Server",
+    "服务器地址"
+  ],
+  "setup.port": [
+    "Port",
+    "端口"
+  ],
+  "setup.user": [
+    "Username",
+    "用户名"
+  ],
+  "setup.password": [
+    "Password (leave blank to keep)",
+    "密码（留空保留原密码）"
+  ],
+  "setup.clear_mqtt": [
+    "Clear MQTT password",
+    "清除 MQTT 密码"
+  ],
+  "setup.protocol": [
+    "Protocol",
+    "协议"
+  ],
+  "setup.wifi": [
+    "Wi-Fi setup",
+    "Wi-Fi 配网"
+  ],
+  "setup.scan": [
+    "Scan Wi-Fi",
+    "扫描 Wi-Fi"
+  ],
+  "setup.ssid": [
+    "Network name",
+    "网络名称（可手动输入）"
+  ],
+  "setup.open": [
+    "Open network, no password",
+    "开放网络，无密码"
+  ],
+  "setup.wifi_hint": [
+    "Wi-Fi is tested for 30 seconds. A failed trial restores the previous network. After success, reconnect your phone to the same LAN.",
+    "设备会试连 30 秒，失败后恢复原 Wi-Fi。成功后热点可能关闭，请将手机切回同一内网。"
+  ],
+  "setup.auth": [
+    "Web password",
+    "网页管理密码"
+  ],
+  "setup.new_password": [
+    "New password (optional)",
+    "新密码（选填，留空不修改）"
+  ],
+  "setup.auth_hint": [
+    "The username is admin. This password is independent of MQTT.",
+    "用户名为 admin。此密码与 MQTT 密码独立。"
+  ],
+  "setup.device_language": [
+    "Device language (MQTT names)",
+    "设备语言（用于 MQTT 名称）"
+  ],
+  "setup.save": [
+    "Save and connect",
+    "保存并连接"
+  ],
+  "setup.platform": [
+    "Use IotCloud for full device controls. Setup works at both the device hotspot and LAN address.",
+    "完整设备控制请使用 IotCloud 管理平台。此页在设备热点及内网地址下均可访问。"
+  ],
+  "setup.status": [
+    "Wi-Fi: {wifi} · {ssid} · {ip}; MQTT: {mqtt}",
+    "Wi-Fi：{wifi} · {ssid} · {ip}；MQTT：{mqtt}"
+  ],
+  "setup.connected": [
+    "Connected",
+    "已连接"
+  ],
+  "setup.disconnected": [
+    "Disconnected",
+    "未连接"
+  ],
+  "setup.hotspot": [
+    "Hotspot active",
+    "设备热点已开启"
+  ],
+  "setup.resetting": [
+    "Configuration cleared. Reconnect to the device hotspot after reboot.",
+    "配置已清空，重启后请连接设备热点。"
+  ],
+  "recovery.hint": [
+    "The saved configuration cannot be migrated. Original data is retained. Confirm clearing it to configure the device again.",
+    "原配置无法迁移，原始数据已保留。请明确确认清空后重新配网。"
+  ],
+  "recovery.clear": [
+    "Clear configuration and set up again",
+    "清空配置并重新设置"
+  ],
+  "recovery.confirm": [
+    "Clear all saved settings, including Wi-Fi and MQTT credentials? This cannot be undone.",
+    "清空包括 Wi-Fi、MQTT 密码在内的所有配置？此操作无法撤销。"
+  ],
+  "error.migration_required": [
+    "Clear the incompatible configuration before setting up again",
+    "请先确认清空不兼容配置，再重新设置"
+  ],
+  "error.invalid_params": [
+    "Invalid settings",
+    "配置参数无效"
+  ],
+  "error.storage_error": [
+    "Could not save settings",
+    "配置保存失败"
+  ],
+  "error.busy": [
+    "Device busy; retry later",
+    "设备忙，请稍后重试"
+  ],
+  "common.unsupported": [
+    "Unsupported operation",
+    "不支持的操作"
+  ]
+}

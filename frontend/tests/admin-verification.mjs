@@ -17,7 +17,7 @@ const engines=process.env.BROWSER?[[process.env.BROWSER,{chromium,webkit}[proces
 try{for(const [engine,type] of engines){
  const browser=await type.launch();
  try{for(const width of [375,1280]){
-  const context=await browser.newContext({viewport:{width,height:900},serviceWorkers:'block'}),page=await context.newPage(),errors=[];let isAdmin=true,expire=false,fail=false,requested=[];
+  const context=await browser.newContext({locale:'zh-CN',viewport:{width,height:900},serviceWorkers:'block'}),page=await context.newPage(),errors=[];let isAdmin=true,expire=false,fail=false,requested=[];
   page.on('pageerror',e=>errors.push(e.message));
   await context.route('**/*',async route=>{
    const url=new URL(route.request().url()),p=url.pathname;
