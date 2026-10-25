@@ -62,6 +62,31 @@ async function fixtureContext(browser,language,{variant='hub',owner=false}={}){
  return {context,requests,errors,setIdentityUnavailable(){identityUnavailable=true;}};
 }
 
+async function passwordBounds(page,language,isHub,requests){
+ const zh=language==='zh-CN';
+ await page.getByRole('button',{name:zh?/账号安全/:/Account security/}).click();
+ const forms=page.locator('.settings-content form').filter({has:page.locator('input[autocomplete="new-password"]')});
+ await expect(forms).toHaveCount(2);
+ for(let index=0;index<2;index++){
+  const form=forms.nth(index),input=form.locator('input[autocomplete="new-password"]');
+  await form.locator('input[autocomplete="current-password"]').fill(secret);
+  assert.equal(await input.getAttribute('minlength'),isHub?'8':'6');
+  assert.equal(await input.getAttribute('maxlength'),isHub?'63':null);
+  if(isHub){
+   await expect(form.getByText(zh?'8–63 个字符':'8–63 characters',{exact:true})).toBeVisible();
+   await input.fill('x'.repeat(7));assert.equal(await input.evaluate(node=>node.checkValidity()),false);
+   const before=requests.filter(request=>request.path==='/api/auth/password'||request.path==='/api/auth/mqtt-password').length;
+   await form.getByRole('button').click();
+   assert.equal(requests.filter(request=>request.path==='/api/auth/password'||request.path==='/api/auth/mqtt-password').length,before,'invalid password must not be submitted');
+   for(const length of [8,63]){await input.fill('x'.repeat(length));assert.equal(await input.evaluate(node=>node.checkValidity()),true);}
+   await input.press('End');await input.press('x');assert.equal((await input.inputValue()).length,63,'maxlength must prevent a 64th character');
+  }else{
+   await input.fill('x'.repeat(6));assert.equal(await input.evaluate(node=>node.checkValidity()),true,'cloud keeps six-character minimum');
+   await input.fill('x'.repeat(64));assert.equal((await input.inputValue()).length,64,'cloud keeps its existing length policy');
+  }
+ }
+}
+
 for(const engine of [chromium,webkit]){
  const browser=await engine.launch(engine===webkit&&process.env.PHICOMM_WEBKIT_EXECUTABLE_PATH?{executablePath:process.env.PHICOMM_WEBKIT_EXECUTABLE_PATH}:{});
  try{for(const language of ['en','zh-CN']){
@@ -82,7 +107,7 @@ for(const engine of [chromium,webkit]){
    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,variant+' root overflow');
    assert.deepEqual(errors,[]);await context.close();
   }
-  const {context,errors}=await fixtureContext(browser,language),page=await context.newPage();
+  const {context,requests,errors}=await fixtureContext(browser,language),page=await context.newPage();
   await page.goto(target+'/iotcloud/');await page.getByRole('button',{name:zh?'创建本地账户':'Create local account',exact:true}).waitFor();
   await page.getByLabel(zh?'用户名':'Username',{exact:true}).fill('local');await page.getByLabel(zh?'本地账户密码':'Local account password',{exact:true}).fill(secret);await page.getByLabel(zh?'设备 WebUI 密码':'Device WebUI password',{exact:true}).fill(webSecret);
   await page.getByRole('button',{name:zh?'创建本地账户':'Create local account',exact:true}).click();await page.getByRole('button',{name:zh?'设置':'Settings',exact:true}).click();
@@ -94,7 +119,11 @@ for(const engine of [chromium,webkit]){
   await page.getByRole('button',{name:zh?/设备管理/:/Device management/}).click();await page.getByRole('button',{name:zh?'添加设备':'Add device',exact:true}).click();
   await page.locator('.add-device-panel input').fill('AABBCCDDEE01');await page.locator('.add-device-panel').getByRole('button').click();await expect(page.locator('.managed-device')).toHaveCount(1);
   await page.getByRole('button',{name:/Bemfa|巴法/}).click();await expect(page.locator('.bemfa-card')).toBeVisible();
+  await passwordBounds(page,language,true,requests);
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'owner settings overflow');assert.deepEqual(errors,[]);await context.close();
+  const cloudOwner=await fixtureContext(browser,language,{owner:true}),cloudPage=await cloudOwner.context.newPage();await cloudPage.goto(platform+'/#/login');
+  await cloudPage.locator('.auth-form input[autocomplete="username"]').fill('local');await cloudPage.locator('.auth-form input[autocomplete="current-password"]').fill(secret);await cloudPage.locator('.auth-submit').click();await cloudPage.getByRole('button',{name:zh?'设置':'Settings',exact:true}).click();
+  await passwordBounds(cloudPage,language,false,cloudOwner.requests);assert.deepEqual(cloudOwner.errors,[]);await cloudOwner.context.close();
   for(const variant of ['hub','full']){
    const {context,requests,errors,setIdentityUnavailable}=await fixtureContext(browser,language,{variant}),page=await context.newPage();await page.goto(platform+'/#/local');
    await page.getByLabel(zh?'设备 IP':'Device IP',{exact:true}).fill('192.168.1.18');await page.getByRole('button',{name:zh?'连接本地设备':'Connect local device',exact:true}).click();
@@ -116,6 +145,6 @@ for(const engine of [chromium,webkit]){
   }
   const localHub=await fixtureContext(browser,language),localPage=await localHub.context.newPage();await localPage.goto(target+'/iotcloud/#/local');await localPage.getByRole('button',{name:zh?'设置':'Settings',exact:true}).click();
   await expect(localPage.getByRole('button',{name:zh?/中枢服务/:/Hub services/})).toHaveCount(0);assert(!localHub.requests.some(r=>r.path.startsWith('/api/hub/')));await localHub.context.close();
-  console.log(`PASS ${engine.name()} ${language} 390: conditional root/iframe entry, owner setup + back link, manual broker details, devices/Bemfa/HomeKit, cloud local hub/full identity`);
+  console.log(`PASS ${engine.name()} ${language} 390: conditional root/iframe entry, owner setup + back link, manual broker details, devices/Bemfa/HomeKit, hub/cloud password bounds, cloud local hub/full identity`);
  }}finally{await browser.close();}
 }

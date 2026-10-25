@@ -3128,6 +3128,7 @@ Object.assign(messages,{
  'backup.device_changed':['Device changed; reconnect and retry.','设备已切换，请重新连接后重试。'],
 "hub.setupHelp":["Create the hub account after setting a device WebUI password.", "先在设备设置中设置 WebUI 密码，再创建中枢账户。"],
 "hub.manage":["Hub management", "中枢管理"],
+"hub.passwordLength":["8–63 characters", "8–63 个字符"],
 "hub.localHelp":["This DAIKIN runs a local hub. Open its management page to create or sign in to the hub account and configure devices, forwarding, Bemfa and HomeKit. The device WebUI password is separate.", "此大金运行本地中枢。打开管理页面，创建或登录中枢账户，配置设备、转发、巴法和 HomeKit。设备 WebUI 密码与中枢账户密码独立。"],
 "hub.provision.host":["Device MQTT Host", "设备 MQTT Host"],
 "hub.provision.help":["Open the target device’s MQTT settings and enter the local broker details below using TMCP (v2). Save there, then add its MAC in Device management.", "打开目标设备的 MQTT 设置，按以下信息填写本地 Broker，协议选择 TMCP（v2）。在设备上保存后，再到设备管理添加其 MAC。"],
