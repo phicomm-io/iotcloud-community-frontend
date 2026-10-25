@@ -114,3 +114,44 @@ test('DAIKIN uses only the selected PM source and shows blink modes, stale black
   assert.equal(w.document.querySelector('#indicatorRulesForm [type=submit]').disabled,true);
  }finally{dom.window.close();}
 });
+
+test('DAIKIN CO2 diagnostics gate calibration, confirm the reference, and distinguish ACK from accuracy',async()=>{
+ const {dom,w,state,flush}=editorFixture();
+ try{
+  const find=id=>w.document.getElementById(id),button=find('co2Calibrate'),stable=find('co2ReferenceStable'),form=find('co2CalibrationForm');
+  assert.equal(button.disabled,true);assert.match(find('co2Diagnostic').textContent,/Upgrade firmware/);
+  const diagnostic={fresh:true,raw_ppm:946,status_raw:64,age_ms:0,drift:true,calibration_available:true,cooldown_seconds:0,calibration:{state:'never'}};
+  const show=d=>w.UI.device.onStatus({...state,co2_diagnostics:d});show(diagnostic);
+  assert.match(find('co2Diagnostic').textContent,/946.*64.*Drift/);
+  show({...diagnostic,status_flags_supported:false,status_raw:1,drift:null});
+  assert.match(find('co2Diagnostic').textContent,/Legacy protocol/);
+  assert.doesNotMatch(find('co2Diagnostic').textContent,/No status flags|Preheating/);
+  show(diagnostic);
+  assert.equal(button.disabled,true,'explicit stable reference confirmation required');
+  stable.checked=true;stable.dispatchEvent(new w.Event('change'));assert.equal(button.disabled,false);
+  show({...diagnostic,fresh:false});assert.equal(button.disabled,true);show(diagnostic);
+  let writes=[],confirmed=false;w.UI.confirm=async()=>confirmed;
+  w.command=async(action,params)=>{writes.push({action,params:JSON.parse(JSON.stringify(params))});};
+  w.UI.reload=async()=>{show({...diagnostic,calibration_available:false,cooldown_seconds:60,calibration:{state:'waiting_ack'}});};
+  const submit=async()=>{form.dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));await flush();};
+  await submit();assert.equal(writes.length,0,'cancel sends no command');
+  confirmed=true;find('co2Reference').value='1501';await submit();assert.equal(writes.length,0,'range checked');
+  find('co2Reference').value='430';
+  let finish;w.UI.confirm=()=>new Promise(resolve=>{finish=resolve;});
+  await submit();await submit();assert.equal(writes.length,0);assert.equal(button.disabled,true);
+  finish(true);await flush();assert.deepEqual(writes,[{action:'co2.calibrate',params:{reference_ppm:430,reference_stable:true}}]);
+  assert.equal(stable.checked,false);assert.equal(button.disabled,true);
+  assert.match(find('co2CalibrationResult').textContent,/waiting for module acknowledgement/);
+  show({...diagnostic,calibration:{state:'acknowledged'}});
+  assert.match(find('co2CalibrationResult').textContent,/Compare fresh readings with the reference/);
+  show({...diagnostic,calibration:{state:'timeout_unknown'}});
+  assert.match(find('co2CalibrationResult').textContent,/Outcome unknown.*not retried/);
+  assert.equal(writes.length,1,'polling never repeats calibration');
+  w.I18N.set('zh-CN');assert.match(find('co2Diagnostic').textContent,/漂移/);
+  assert.match(find('co2CalibrationResult').textContent,/结果未知/);
+  w.I18N.set('en');show(diagnostic);stable.checked=true;stable.dispatchEvent(new w.Event('change'));
+  w.UI.confirm=async()=>true;w.command=async()=>{writes.push({});throw Error('transport timeout');};
+  await submit();assert.equal(writes.length,2);assert.equal(stable.checked,false);
+  assert.match(find('co2CalibrationResult').textContent,/outcome is unknown/);
+ }finally{dom.window.close();}
+});

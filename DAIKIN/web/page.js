@@ -56,6 +56,7 @@ function render(s){
  $('freshDot').className='dot '+(count?'ok live':'bad');$('freshText').textContent=t(count?'m1.updated':'m1.stale',{n:Math.floor(elapsed/1000)});
  $('indicator').checked=!!s.indicator_enabled;
  ruleEditor.status(s);
+ co2Editor.status(s,elapsed);
  renderIndicators(s,elapsed);
 }
 function renderPeers(){
@@ -125,13 +126,56 @@ function indicatorSettings(){
  return {status:sync};
 }
 const ruleEditor=indicatorSettings();
+function co2Settings(){
+ const box=$('co2Settings'),diagnostic=h('p',{class:'help',id:'co2Diagnostic','aria-live':'polite'});
+ const result=h('p',{class:'help',id:'co2CalibrationResult','aria-live':'polite'});
+ const reference=h('input',{id:'co2Reference',type:'number',min:400,max:1500,step:1,required:true,value:400});
+ const stable=h('input',{id:'co2ReferenceStable',type:'checkbox',required:true});
+ const button=h('button',{id:'co2Calibrate',type:'submit',class:'btn',i18n:'daikin.co2_calibrate',disabled:true});
+ const form=h('form',{class:'stack',id:'co2CalibrationForm'},
+  h('label',{class:'field'},h('span',{i18n:'daikin.co2_reference'}),reference),
+  h('label',{class:'switch'},h('span',{i18n:'daikin.co2_stable'}),stable),h('div',{class:'form-actions'},button));
+ box.append(h('h2',{i18n:'daikin.co2_title'}),diagnostic,h('p',{class:'help',i18n:'daikin.co2_hint'}),form,result);
+ let available=false,busy=false;
+ function update(){button.disabled=!available||busy||!stable.checked;reference.disabled=busy;stable.disabled=busy;}
+ stable.onchange=update;
+ form.addEventListener('submit',async e=>{
+  e.preventDefault();if(!available||busy||!stable.checked||!form.reportValidity())return;
+  const ppm=Number(reference.value);if(!Number.isInteger(ppm)||ppm<400||ppm>1500)return;
+  busy=true;update();
+  try{
+   if(!await UI.confirm({title:t('daikin.co2_calibrate'),body:t('daikin.co2_confirm',{n:ppm}),ok:t('daikin.co2_calibrate')}))return;
+   // A transport timeout can follow a real sensor write: do not retry here.
+   await command('co2.calibrate',{reference_ppm:ppm,reference_stable:true});
+   stable.checked=false;available=false;result.textContent=t('daikin.co2_state.queued');
+   await UI.reload({full:true});
+  }catch(err){stable.checked=false;available=false;result.textContent=t('daikin.co2_request_unknown');UI.toast(err.message||String(err),true);}
+  finally{busy=false;update();}
+ });
+ function sync(s,elapsed){
+  const d=s.co2_diagnostics,c=d?.calibration;
+  const fresh=d?.fresh===true&&typeof d.age_ms==='number'&&d.age_ms+elapsed<20000;
+  available=d?.calibration_available===true&&fresh;
+  if(!d)diagnostic.textContent=t('daikin.co2_upgrade');
+  else if(!fresh)diagnostic.textContent=t('daikin.co2_stale');
+  else {
+   const flags=['preheating','sensor_error','over_range','under_range','uncalibrated','light_aging','drift'].filter(k=>d[k]===true).map(k=>t('daikin.co2_flag.'+k));
+   diagnostic.textContent=t('daikin.co2_raw',{n:d.raw_ppm,s:d.status_raw})+' · '+(d.status_flags_supported===false?t('daikin.co2_legacy_status'):flags.length?flags.join(' / '):t('daikin.co2_normal'));
+  }
+  if(c)result.textContent=t('daikin.co2_state.'+(['never','queued','waiting_ack','acknowledged','timeout_unknown'].includes(c.state)?c.state:'never'))+
+   (d.cooldown_seconds>0?' · '+t('daikin.co2_cooldown',{n:d.cooldown_seconds}):'');
+  update();
+ }
+ return {status:sync};
+}
+const co2Editor=co2Settings();
 $('indicator').onchange=()=>run($('indicator'),()=>UI.control('indicator.set',{enabled:$('indicator').checked},{indicator_enabled:$('indicator').checked}));
 UI.start({model:'DAIKIN BRY88AX151K',kindKey:'daikin.kind',icon:'air',factoryReset:true,mqttHostMax:127,interval:2000,
  otaName:'daikin_BRY88AX151K.ota.bin.signed',haHintKey:'daikin.ha',otaHintKey:'daikin.ota',buttonHintKey:'daikin.button',
  groups:[['grp.network',['network','mqtt']],['grp.device',['device','binding']],['grp.system',['firmware','diagnostics','maintenance']]],
  nav:{network:'nav.wifi',mqtt:'nav.mqtt',device:'nav.general',binding:'nav.permission',firmware:'nav.firmware',diagnostics:'nav.diagnostics',maintenance:'nav.maintenance'},
  pages:{device:{},binding:{show:async()=>{status=await api('/binding/status');renderPeers();}}},
- diagGroups:[['diag.g_sensor',['sensors','formaldehyde_present','pm_sensor','hardware_model']]],onStatus:render});
+ diagGroups:[['diag.g_sensor',['sensors','co2_diagnostics','formaldehyde_present','pm_sensor','hardware_model']]],onStatus:render});
 I18N.onChange(()=>{if(snapshot)render(snapshot);renderPeers();});
 setInterval(()=>{if(snapshot)render(snapshot);},1000);
 (async function poll(){try{if(!document.hidden){status=await api('/binding/status');renderPeers();}}catch{}finally{setTimeout(poll,4000);}})();
