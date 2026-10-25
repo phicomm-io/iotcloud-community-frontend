@@ -8,7 +8,7 @@ import {account,api,restoreAccount} from './account';
 import {server,scopeKey} from './serverConfig';
 import {track} from './analytics';
 import {autoConnect,setAutoConnect,rememberLogin,savedPassword,forgetLogin} from './connectionPreferences';
-import {userKey,requestId,deviceKey,deviceEntry,localDevices,topics,applyMessage,command} from './deviceProtocol';
+import {userKey,requestId,deviceKey,deviceEntry,localDevices,topics,applyMessage,statusSnapshot,command} from './deviceProtocol';
 import {createDeviceTransport,loadPreference,savePreference,localAddress} from './deviceConnection';
 import {deviceType} from './devicePresentation';
 import {saveDeviceName} from './deviceName';
@@ -55,7 +55,7 @@ const addForm=reactive({mac:'',model:'tc1',version:'v2'});
 const lanConnections=reactive({}),lanStates=reactive({}),devicePreferences=reactive({});
 const sensorFeeds=reactive({});
 const webPasswords=new Map();let preferenceScope='';
-const transport=createDeviceTransport({records:lanConnections,onStatus:(key,state)=>{lanStates[key]={...state,available:true,lan_connected:true,sensorAt:Date.now(),sensorFresh:state.sensor_valid===true};}});
+const transport=createDeviceTransport({records:lanConnections,onStatus:(key,state)=>{const snapshot=statusSnapshot(state);if(snapshot)lanStates[key]={...snapshot,available:true,lan_connected:true};}});
 const viewStates=computed(()=>Object.fromEntries(list.value.map(d=>{const k=deviceKey(d);return [k,lanConnections[k]?.ready?{...states[k],...lanStates[k]}:states[k]||{}];})));
 const activeConnected=computed(()=>!!active.value&&(connected.value||lanConnections[deviceKey(active.value)]?.ready));
 function updateConnections(force=false){

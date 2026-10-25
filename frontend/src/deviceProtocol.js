@@ -103,6 +103,14 @@ function mergeStatus(state,data,now){
  if(measurements){state.sensorAt=now;state.sensorFresh=data.sensor_valid===true;}
  else if(data.sensor_valid===false)state.sensorFresh=false;
 }
+// LAN status is a full snapshot. Explicitly clear absent CO2 receipts so a
+// previous MQTT representation cannot supply its timestamp after the merge.
+export function statusSnapshot(data,now=Date.now()){
+ if(!data||typeof data!=='object'||Array.isArray(data))return null;
+ return {...data,sensorAt:now,sensorFresh:data.sensor_valid===true,
+  co2SensorAt:data.sensors?.co2&&typeof data.sensors.co2==='object'&&Object.hasOwn(data.sensors.co2,'value')?now:null,
+  co2Scd40At:data.scd40&&typeof data.scd40==='object'&&Object.hasOwn(data.scd40,'co2_ppm')?now:null};
+}
 export function applyMessage(d, state, topic, message, now = Date.now()) {
  if(d.version === "v2") {
   const base=baseTopic(d); if(!topic.startsWith(base+"/")) return false;
