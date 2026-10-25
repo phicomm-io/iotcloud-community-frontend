@@ -3,7 +3,7 @@ const {JSDOM}=require('jsdom');
 const copy=value=>JSON.parse(JSON.stringify(value));
 const settle=async()=>{for(let i=0;i<12;i++)await new Promise(resolve=>setImmediate(resolve));};
 const defaults=slot=>({slot,source:'none',device_id:'',metric:'custom',unit:'',decimals:0,scale:1,ttl_seconds:20,color:{mode:'fixed',value:'off'}});
-async function fixture(language='en',{supported=true,candidates=[],floatStorage=false}={}){
+async function fixture(language='en',{supported=true,candidates=[],floatStorage=false,initialRead=null}={}){
  const html=require('./render_page.cjs')('M1/web/index.html'),dom=new JSDOM(html,{runScripts:'outside-only',url:'http://device.local#settings/device'}),w=dom.window,calls=[],sourceRequests=[];
  let config={revision:7,selected_source:'original',double_click:'none',lanes:[defaults(0),defaults(1)]},leases={},failure='',badRead=false,hold=null,override=null;
  const runtime=()=>({profile:'dual',selected_source:config.selected_source,mcu_supported:true,confirmed:false,confirmation:'pending_mcu_readback',lanes:config.lanes.map(lane=>{
@@ -14,7 +14,7 @@ async function fixture(language='en',{supported=true,candidates=[],floatStorage=
  w.getDeviceSensorSources=async kind=>{sourceRequests.push(kind);return candidates;};
  w.fetch=async(url,options)=>{
   const request=JSON.parse(options.body);calls.push(request);let data={},code='ok';
-  if(request.action==='display_source.get')data=badRead?null:{...copy(config),runtime:override||runtime()};
+  if(request.action==='display_source.get'){if(initialRead)await initialRead;data=badRead?null:{...copy(config),runtime:override||runtime()};}
   if(request.action==='display_source.set'){
    if(hold)await hold;
    code=failure|| (request.params.revision===config.revision?'accepted':'busy');
@@ -94,6 +94,14 @@ test('float32 persistence confirms decimal physical values and disabling an unfi
   f.edit('display0Value',25.3);await f.click('display0Write');
   assert.equal(f.toasts().at(-1).classList.contains('bad'),false);assert.match(f.element('display0Status').textContent,/25\.3 °C/);
  }finally{f.dom.window.close();}
+});
+test('slow initial configuration keeps inputs disabled until a valid CAS revision is read',async()=>{
+ let release;const f=await fixture('en',{initialRead:new Promise(done=>release=done)});try{
+  for(const id of ['displaySelectedSource','displayDoubleClick','display0Source','display1Source','displaySourceSave'])assert.equal(f.element(id).disabled,true);
+  assert.equal(f.writes().length,0);release();await settle();assert.equal(f.element('display0Source').disabled,false);
+  f.edit('display0Source','local');f.edit('display0Metric','humidity');await f.submit();
+  assert.equal(f.writes()[0].params.revision,7);assert.equal(f.toasts().at(-1).classList.contains('bad'),false);
+ }finally{release();f.dom.window.close();}
 });
 for(const failure of ['storage_error','null read'])test('generic display '+failure+' never reports save success or unlocks API writes',async()=>{
  const f=await fixture();try{

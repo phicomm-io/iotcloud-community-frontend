@@ -96,11 +96,11 @@ function render(){
  status.textContent=!config?t('display.loading'):t('display.current',{value:t('display.selected.'+runtime.selected_source)})+' · '+
   t(!runtime.mcu_supported?'display.upgrade':runtime.confirmed?'display.confirmed':'display.pending');
  legacy.hidden=runtime?.profile!=='legacy';
- for(const input of form.querySelectorAll('input,select,button'))input.disabled=pending;
+ for(const input of form.querySelectorAll('input,select,button'))input.disabled=pending||!config;
  for(const row of rows){
   const lane=runtime?.lanes[row.slot],source=row.source.value,metric=row.metric.value;
   row.settings.hidden=source==='none';row.mqtt.hidden=source!=='mqtt';row.api.hidden=source!=='api';
-  row.unit.disabled=pending||metric!=='custom';row.fixed.hidden=row.colorMode.value!=='fixed';row.thresholds.hidden=row.colorMode.value!=='thresholds';
+  row.unit.disabled=pending||!config||metric!=='custom';row.fixed.hidden=row.colorMode.value!=='fixed';row.thresholds.hidden=row.colorMode.value!=='thresholds';
   row.low.required=row.high.required=row.colorMode.value==='thresholds'&&source!=='none';
   row.device.required=source==='mqtt';row.co2Help.hidden=metric!=='co2';row.fanHelp.hidden=metric!=='fan_speed_percent';
   row.write.disabled=row.clear.disabled=pending||editing||!config||config.lanes[row.slot].source!=='api';
