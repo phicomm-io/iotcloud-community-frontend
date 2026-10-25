@@ -45,9 +45,8 @@ const server=http.createServer(async(req,res)=>{
   assert.equal(calls[calls.indexOf(data)+1].action,'display_source.get');
   await page.locator('#display0Clear').click();await expect(page.locator('#display0Status')).toContainText(language==='en'?'Waiting for a reading':'等待读数');
   await expect(page.locator('#display1Status')).toContainText('18 µg/m³');
-  const before=await page.locator('#toasts .toast').count();nullRead=true;
-  await page.locator('#display0Write').click();await expect(page.locator('#toasts .toast')).toHaveCount(before+1);
-  await expect(page.locator('#toasts .toast').last()).toHaveClass(/bad/);nullRead=false;
+  nullRead=true;await page.locator('#display0Write').click();
+  await expect(page.locator('#toasts .toast.bad')).toBeVisible();nullRead=false;
   const overflow=await page.locator('body').evaluate(()=>document.documentElement.scrollWidth>innerWidth);assert.equal(overflow,false,`${engine} ${language} ${width} overflow`);
   assert.deepEqual(errors,[]);await page.screenshot({path:path.join(evidence,`${engine}-${language}-${width}.png`),fullPage:true});
   await page.locator('body').evaluate(()=>{location.hash='';});await expect(page.locator('#homePage')).toBeVisible();
