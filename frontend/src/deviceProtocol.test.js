@@ -13,6 +13,19 @@ test('known firmware variants survive device list normalization without altering
  assert.equal(deviceEntry({mac:'aabbccddeeff',firmware_variant:'unknown'}).firmware_variant,undefined);
 });
 test('result query merges only matching status receipts',()=>{const d=deviceEntry({mac:'aabbccddeeff',model:'m1'}),state={pending:{q:'status.get'}};applyMessage(d,state,baseTopic(d)+'/result',JSON.stringify({request_id:'q',code:'ok',data:{sensor_valid:false,temperature:1}}),10);assert.equal(state.temperature,1);assert.equal(state.sensorFresh,false);applyMessage(d,state,baseTopic(d)+'/state','{"__proto__":{"polluted":true},"model":"tc1"}');assert.equal({}.polluted,undefined);assert.equal(state.model,undefined);});
+test('malformed status results cannot throw, overwrite measurements or renew freshness',()=>{
+ const d=deviceEntry({mac:'aabbccddeeff',model:'m1'}),topic=baseTopic(d)+'/result';
+ for(const payload of [undefined,null,[],42,'bad',false]){
+  const state={pending:{q:'status.get'},temperature:22,sensorAt:5,sensorFresh:false};
+  const result={request_id:'q',code:'ok',data:payload};
+  assert.doesNotThrow(()=>applyMessage(d,state,topic,JSON.stringify(result),100));
+  assert.equal(state.temperature,22);assert.equal(state.sensorAt,5);assert.equal(state.sensorFresh,false);
+  assert.equal(state.result.request_id,'q','result remains available for request correlation');
+ }
+ const state={pending:{q:'status.get'}};
+ applyMessage(d,state,topic,JSON.stringify({request_id:'q',code:'ok',data:{sensor_valid:true,temperature:23}}),200);
+ assert.equal(state.temperature,23);assert.equal(state.sensorAt,200);assert.equal(state.sensorFresh,true);
+});
 test('Legacy HA text mode keeps original uppercase topics and controls',()=>{const d=deviceEntry({mac:'aabbccddeeff',version:'v1'}),state={};assert(applyMessage(d,state,'homeassistant/switch/AABBCCDDEEFF/socket_2/state','set socket AABBCCDDEEFF 2 1'));assert.equal(state.plug_2.on,1);assert.deepEqual(command({...d,...state},{plug_2:{on:0}}),{topic:'device/ztc1/AABBCCDDEEFF/set',payload:'set socket AABBCCDDEEFF 2 0'});assert(!applyMessage(d,state,'homeassistant/switch/001122334455/socket_2/state','set socket AABBCCDDEEFF 2 0'));});
 test('migrated HA outlet names survive retained state replay and later status updates',()=>{
  const d=deviceEntry({mac:'d0bae4632b42',version:'v1'}),state={};

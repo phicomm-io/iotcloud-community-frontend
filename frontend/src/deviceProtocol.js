@@ -94,7 +94,7 @@ export function applyMessage(d, state, topic, message, now = Date.now()) {
   else if(leaf === "state" && data) {merge(state,data);state.sensorAt=now;state.sensorFresh=data.sensor_valid===true;}
   else if(leaf === "sensor" && data) {merge(state,data);if(d.model==="tc1"){state.power_watts=Number(data.power);state.energy_kwh=Number(data.powerConsumption);}}
   else if(leaf === "capabilities" && data) state.capabilities=data;
-  else if(leaf === "result" && data) {state.result=data; if(data.code==="ok" && state.pending?.[data.request_id]==="status.get") {merge(state,data.data);state.sensorAt=now;state.sensorFresh=data.data.sensor_valid===true;}}
+  else if(leaf === "result" && data) {state.result=data; const payload=data.data; if(data.code==="ok" && state.pending?.[data.request_id]==="status.get" && payload && typeof payload==="object" && !Array.isArray(payload)) {merge(state,payload);state.sensorAt=now;state.sensorFresh=payload.sensor_valid===true;}}
   return true;
  }
 

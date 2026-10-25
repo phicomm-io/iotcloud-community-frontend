@@ -103,8 +103,13 @@ UI.onSubmit(screenForm,async()=>{
  if(!screenConfig)throw Error(t('co2screen.unavailable'));
  const values=[displayMode,displaySlot,displayInterval,displayLow,displayHigh].map(el=>Number(el.value));
  if(!values.every(Number.isInteger)||values[2]<1||values[2]>3600||values[3]<0||values[4]>65535||values[3]>values[4])throw Error(t('co2screen.invalid'));
- await UI.control('co2_display.set',{mode:values[0],slot:values[1],interval_seconds:values[2],low:values[3],high:values[4],revision:screenConfig.revision});
- screenEditing=false;
+ const params={mode:values[0],slot:values[1],interval_seconds:values[2],low:values[3],high:values[4],revision:screenConfig.revision};
+ await command('co2_display.set',params);
+ const confirmed=await command('co2_display.get');
+ if(!confirmed||typeof confirmed!=='object'||Array.isArray(confirmed)||!Number.isInteger(confirmed.revision)||confirmed.revision<=params.revision||
+    !['mode','slot','interval_seconds','low','high'].every(key=>confirmed[key]===params[key]))throw Error(t('control.unconfirmed'));
+ screenConfig=confirmed;screenEditing=false;
+ UI.device.onStatus?.(UI.acceptStatus({co2_display:confirmed},true));
 },'toast.accepted');
 co2Display.append(h('h2',{i18n:'co2screen.title'}),h('p',{class:'help',i18n:'co2screen.help'}),screenForm);
 document.querySelector('[data-settings-page="device"]').append(co2Display);
