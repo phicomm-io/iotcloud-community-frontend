@@ -57,6 +57,7 @@ function render(s){
  $('indicator').checked=!!s.indicator_enabled;
  ruleEditor.status(s);
  co2Editor.status(s,elapsed);
+ climateEditor.status(s);
  renderIndicators(s,elapsed);
 }
 function renderPeers(){
@@ -169,6 +170,37 @@ function co2Settings(){
  return {status:sync};
 }
 const co2Editor=co2Settings();
+function climateSettings(){
+ const box=$('climateSettings');box.hidden=true;let dirty=false,busy=false,supported=false;
+ const temp=h('input',{id:'climateTemperature',type:'number',min:-20,max:20,step:.1,required:true,value:4.9});
+ const humidity=h('input',{id:'climateHumidity',type:'number',min:-30,max:30,step:.1,required:true,value:0});
+ const save=h('button',{id:'climateSave',type:'submit',class:'btn',i18n:'common.save'});
+ const restore=h('button',{id:'climateDefaults',type:'button',class:'btn',i18n:'daikin.climate_defaults'});
+ const message=h('p',{class:'help',id:'climateResult','aria-live':'polite'});
+ const form=h('form',{id:'climateForm',class:'stack'},
+  h('label',{class:'field'},h('span',{i18n:'daikin.climate_temperature'}),temp),
+  h('label',{class:'field'},h('span',{i18n:'daikin.climate_humidity'}),humidity),
+  h('div',{class:'form-actions'},save,restore));
+ box.append(h('h2',{i18n:'daikin.climate_title'}),h('p',{class:'help',i18n:'daikin.climate_hint'}),form,message);
+ temp.oninput=humidity.oninput=()=>{dirty=true;};
+ function lock(){for(const input of [temp,humidity,save,restore])input.disabled=busy||!supported;}
+ async function persist(defaults){
+  if(busy||!supported||(!defaults&&!form.reportValidity()))return;
+  const values=defaults?{temperature_offset:4.9,humidity_offset:0}:{temperature_offset:Number(temp.value),humidity_offset:Number(humidity.value)};
+  busy=true;lock();message.textContent='';
+  try{
+   if(defaults&&!await UI.confirm({title:t('daikin.climate_defaults'),body:t('daikin.climate_restore'),ok:t('daikin.climate_defaults')}))return;
+   await command('config.set',{section:'climate',values});
+   const current=await command('config.get',{}),actual=current.climate_compensation;
+   if(!actual||Math.abs(actual.temperature_offset-values.temperature_offset)>.001||Math.abs(actual.humidity_offset-values.humidity_offset)>.001)throw Error(t('daikin.climate_unconfirmed'));
+   temp.value=actual.temperature_offset;humidity.value=actual.humidity_offset;dirty=false;message.textContent=t('daikin.climate_saved');
+  }catch(e){message.textContent=e.message;}finally{busy=false;lock();}
+ }
+ form.onsubmit=e=>{e.preventDefault();persist(false);};restore.onclick=()=>persist(true);
+ return {status(s){supported=!!s.climate_compensation;box.hidden=!supported;
+  if(supported&&!dirty&&!busy){temp.value=s.climate_compensation.temperature_offset;humidity.value=s.climate_compensation.humidity_offset;}lock();}};
+}
+const climateEditor=climateSettings();
 $('indicator').onchange=()=>run($('indicator'),()=>UI.control('indicator.set',{enabled:$('indicator').checked},{indicator_enabled:$('indicator').checked}));
 UI.start({model:'DAIKIN BRY88AX151K',kindKey:'daikin.kind',icon:'air',factoryReset:true,mqttHostMax:127,interval:2000,
  otaName:'daikin_BRY88AX151K.ota.bin.signed',haHintKey:'daikin.ha',otaHintKey:'daikin.ota',buttonHintKey:'daikin.button',

@@ -4,6 +4,14 @@
 (()=>{
 'use strict';
 const D={
+"daikin.climate_title":["Temperature and humidity compensation", "温湿度补偿与校准"],
+"daikin.climate_temperature":["Temperature subtraction (°C, −20 to 20)", "温度减去值（°C，−20～20）"],
+"daikin.climate_humidity":["Humidity adjustment (%RH, −30 to 30)", "湿度微调（%RH，−30～30）"],
+"daikin.climate_hint":["Default: subtract 4.9 °C. Humidity follows the stock formula using the corrected temperature, then adds the humidity adjustment (default 0). Positive temperature values reduce the reading; negative values increase it. Saved settings survive restart.", "默认温度减 4.9°C；湿度按补偿后的温度联动计算，再加湿度微调值（默认 0）。温度填正数降低读数，负数提高读数。保存后立即生效并在重启后保留。"],
+"daikin.climate_defaults":["Restore compensation defaults", "恢复默认补偿"],
+"daikin.climate_restore":["Restore temperature subtraction to 4.9 °C and humidity adjustment to 0 %RH?", "将温度减去值恢复为 4.9°C、湿度微调恢复为 0 %RH？"],
+"daikin.climate_saved":["Saved and read back. New readings will use these settings.", "已保存并读回确认，后续读数使用新设置。"],
+"daikin.climate_unconfirmed":["Settings could not be confirmed. Your input is retained.", "未能确认设置已生效，已保留输入。"],
 "daikin.co2_title":["CO₂ module diagnostics and calibration", "CO₂ 模块诊断与校准"],
 "daikin.co2_calibrate":["Calibrate CO₂ module", "校准 CO₂ 模块"],
 "daikin.co2_reference":["Known reference concentration (400–1500 ppm)", "已知参考浓度（400～1500 ppm）"],

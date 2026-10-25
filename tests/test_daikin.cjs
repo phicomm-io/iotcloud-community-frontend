@@ -155,3 +155,26 @@ test('DAIKIN CO2 diagnostics gate calibration, confirm the reference, and distin
   assert.match(find('co2CalibrationResult').textContent,/outcome is unknown/);
  }finally{dom.window.close();}
 });
+
+test('DAIKIN climate settings save, preserve drafts, restore defaults and reject unconfirmed writes',async()=>{
+ const {dom,w,state,flush}=editorFixture();
+ try{
+  const d=w.document,temp=d.querySelector('#climateTemperature'),hum=d.querySelector('#climateHumidity'),form=d.querySelector('#climateForm');
+  const initial={...state,climate_compensation:{temperature_offset:4.9,humidity_offset:0}};
+  w.UI.device.onStatus(initial);assert.equal(temp.value,'4.9');
+  temp.value='3.2';temp.dispatchEvent(new w.Event('input'));hum.value='2';hum.dispatchEvent(new w.Event('input'));
+  w.UI.device.onStatus(initial);assert.equal(temp.value,'3.2');
+  let stored,writes=0;w.command=async(a,p)=>{if(a==='config.set'){writes++;stored=JSON.parse(JSON.stringify(p));return {};}return {climate_compensation:stored.values};};
+  form.dispatchEvent(new w.Event('submit',{cancelable:true}));await flush();
+  assert.equal(stored.section,'climate');assert.deepEqual(stored.values,{temperature_offset:3.2,humidity_offset:2});
+  assert.match(d.querySelector('#climateResult').textContent,/Saved and read back/);
+  w.UI.confirm=async()=>false;d.querySelector('#climateDefaults').click();await flush();assert.equal(writes,1);
+  w.UI.confirm=async()=>true;d.querySelector('#climateDefaults').click();await flush();
+  assert.deepEqual(stored.values,{temperature_offset:4.9,humidity_offset:0});assert.equal(temp.value,'4.9');
+  temp.value='5.5';temp.dispatchEvent(new w.Event('input'));
+  w.command=async(a)=>a==='config.get'?initial:{};
+  form.dispatchEvent(new w.Event('submit',{cancelable:true}));await flush();
+  assert.match(d.querySelector('#climateResult').textContent,/could not be confirmed/);assert.equal(temp.value,'5.5');
+  w.UI.device.onStatus(state);assert.equal(d.querySelector('#climateSettings').hidden,true);
+ }finally{dom.window.close();}
+});
