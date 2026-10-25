@@ -94,6 +94,7 @@ for(const engine of [chromium,webkit]){
   for(const variant of ['hub','full','lite']){
    const {context,errors}=await fixtureContext(browser,language,{variant}),page=await context.newPage();
    await page.goto(target+'/');await page.waitForFunction(()=>window.UI?.state?.model==='daikin');
+   await expect(page.locator('.copyright [data-i18n="footer.firmware"]')).toHaveText(zh?'固件仓库':'Firmware repository');await expect(page.locator('.copyright [data-i18n="footer.website"]')).toHaveText(zh?'项目网站':'Project website');
    const entry=page.locator('.hub-management-entry');
    if(variant==='hub'){
     await expect(entry).toBeVisible();assert.equal(await entry.innerText(),manage);assert.equal(await entry.getAttribute('href'),'/iotcloud/#/');
@@ -135,6 +136,7 @@ for(const engine of [chromium,webkit]){
     await screenshot(page,`${engine.name()}-${language}-local`);
    }else await expect(entry).toHaveCount(0);
    await expect(page.frameLocator('.device-home').locator('.hub-management-entry')).toHaveCount(0);
+   await expect(page.frameLocator('.device-home').locator('.copyright [data-i18n="footer.firmware"]')).toHaveText(zh?'固件仓库':'Firmware repository');await expect(page.frameLocator('.device-home').locator('.copyright [data-i18n="footer.website"]')).toHaveText(zh?'项目网站':'Project website');
    await page.getByRole('button',{name:zh?'设置':'Settings',exact:true}).click();await expect(page.getByRole('button',{name:zh?/中枢服务/:/Hub services/})).toHaveCount(0);
    assert(!requests.some(r=>r.path.startsWith('/api/hub/')),'local control must not call owner APIs');
    if(variant==='hub'){

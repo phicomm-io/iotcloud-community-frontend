@@ -5,6 +5,8 @@
 'use strict';
 const D={
 "nav.hub":["Hub management", "中枢管理"],
+"footer.firmware":["Firmware repository", "固件仓库"],
+"footer.website":["Project website", "项目网站"],
 "a1.ring_aria":["A1 ring preview: 31 evenly spaced lights; light 10 at 6 o’clock, lights 25 and 26 either side of 12 o’clock","A1 圆环导光预览：31 颗光源均匀分布，10 号在 6 点，25 和 26 号分列 12 点两侧"],
 "backup.title":["Configuration backup", "配置备份"],
 "backup.hint":["Full backups contain Wi-Fi, MQTT and web passwords. Keep the file private. M1 MCU music is stored separately. A web password and direct LAN connection are required.", "完整备份包含 Wi-Fi、MQTT 和网页密码，请妥善保管文件。M1 MCU 音乐需单独保存。完整备份需要网页密码和内网直连。"],
