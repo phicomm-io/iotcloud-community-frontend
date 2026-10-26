@@ -41,12 +41,13 @@ const server=http.createServer(async(req,res)=>{
   assert.equal(await card.count(),1);await expect(page.locator('#co2SourceConfig')).toBeHidden();
   await expect(card.getByRole('heading',{name:language==='en'?'User readings on the device screen':'设备屏幕用户读数',exact:true})).toBeVisible();
   await page.locator('#displaySelectedSource').selectOption('user');await page.locator('#displayDoubleClick').selectOption('switch_display');
-  await page.locator('#display0Source').selectOption('mqtt');await page.locator('#display0Device').fill('AA:BB:CC:DD:EE:FF');await page.locator('#display0Metric').selectOption('co2');await page.locator('#display0Mode').selectOption('auto_kilo');
+  await page.locator('#display0Source').selectOption('mqtt');await page.locator('#display0Device').fill('AA:BB:CC:DD:EE:FF');await page.locator('#display0FieldId').fill('custom_co2');await page.locator('#display0SourceUnit').fill('ppm');await page.locator('#display0Mode').selectOption('auto_kilo');
   await expect(page.locator('#display0Mode option')).toHaveCount(5);await page.locator('#display0Label').check();await page.locator('#display0Glyph').uncheck();
   const segments=['0red','0green','1yellow','2green','2yellow'];for(const segment of segments)await page.locator('#display0Lamp'+segment).check();
   await page.locator('#display1Source').selectOption('api');await expect(page.locator('#display1Mode')).toBeHidden();await expect(page.locator('#display1Decimal')).toBeHidden();
   await page.locator('#displaySourceSave').click();await expect(page.locator('#display1Write')).toBeEnabled();
   let saved=calls.findLast(request=>request.action==='display_profile.set');assert(saved);assert.equal(saved.params.lanes[0].device_id,'aabbccddeeff');
+  assert.equal(saved.params.lanes[0].field_id,'custom_co2');assert.equal(saved.params.lanes[0].type,'number');assert.equal(saved.params.lanes[0].unit,'ppm');assert.equal(Object.hasOwn(saved.params.lanes[0],'metric'),false);
   assert.deepEqual(saved.params.lanes[0].color.lamps,[{red:true,green:true,yellow:false},{red:false,green:false,yellow:true},{red:false,green:true,yellow:true}]);
   assert.equal(saved.params.lanes[1].metric,'custom');assert.equal(saved.params.lanes[1].unit,'');
   assert.equal(calls[calls.indexOf(saved)+1].action,'display_profile.get');assert.equal(calls.some(request=>request.action==='display_source.get'),false);

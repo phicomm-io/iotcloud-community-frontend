@@ -1,5 +1,5 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs');
-const context={window:{}};vm.runInNewContext(fs.readFileSync('M1/web/display-format.js','utf8'),context);
+const context={window:{},TextEncoder};vm.runInNewContext(fs.readFileSync('M1/web/display-format.js','utf8'),context);
 const f=context.window.M1DisplayFormat;
 const display=(mode,show_label=false,show_unit=false)=>({mode,show_label,show_unit});
 
@@ -34,6 +34,13 @@ test('MAC normalization accepts precisely compact or six full octets and emits c
  for(const value of ['AABBCCDDEEFF','aa:bb:cc:dd:ee:ff','AA:BB:CC:DD:EE:FF',' aAbBcCdDeEfF '])assert.equal(f.deviceID(value),'aabbccddeeff');
  for(const value of ['',null,undefined,'xxxxxxxxxxxx','xx:xx:xx:xx:xx:xx','aabbccddeeff00','aa-bb-cc-dd-ee-ff','aabb.ccdd.eeff',
   'aabb:cc:dd:ee:ff','a:ab:bc:cd:de:ef','aabbccddeefg','aa:bb:cc:dd:ee:ff:','aa:bb:cc:dd:ee:ffgg'])assert.equal(f.deviceID(value),null,String(value));
+});
+test('generic source IDs and descriptor text use the protocol byte limits without coercion',()=>{
+ for(const value of ['a','constructor','new_field_2','a'.repeat(32)])assert.equal(f.fieldID(value),true);
+ for(const value of ['',null,0,'Uppercase','_field','with.dot','with-dash','a'.repeat(33)])assert.equal(f.fieldID(value),false);
+ for(const value of ['', '界'.repeat(8),'µg/m³'])assert.equal(f.descriptorText(value,0,24),true);
+ for(const value of [null,0,false,'界'.repeat(9),'x\n','x\u007f','\ud800','\udfff'])assert.equal(f.descriptorText(value,0,24),false);
+ assert.equal(f.descriptorText('',1,64),false);assert.equal(f.descriptorText('界'.repeat(21)+'a',1,64),true);assert.equal(f.descriptorText('界'.repeat(22),1,64),false);
 });
 test('all 512 independent lamp patterns retain exact booleans and reject malformed shapes',()=>{
  for(let mask=0;mask<512;mask++){

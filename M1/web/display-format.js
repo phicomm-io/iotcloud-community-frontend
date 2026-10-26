@@ -9,6 +9,10 @@ const record=value=>!!value&&typeof value==='object'&&!Array.isArray(value);
 const exact=(value,keys)=>record(value)&&Object.keys(value).length===keys.length&&keys.every(key=>Object.hasOwn(value,key));
 const physical=value=>Number.isFinite(value)&&Number.isFinite(Math.fround(value));
 const samePhysical=(actual,expected)=>physical(actual)&&physical(expected)&&Math.fround(actual)===Math.fround(expected);
+const fieldID=value=>typeof value==='string'&&/^[a-z][a-z0-9_]{0,31}$/.test(value);
+const descriptorText=(value,minimum,maximum)=>typeof value==='string'&&!/[\u0000-\u001f\u007f]/.test(value)&&
+ ![...value].some(character=>{const code=character.codePointAt(0);return code>=0xd800&&code<=0xdfff;})&&
+ new TextEncoder().encode(value).length>=minimum&&new TextEncoder().encode(value).length<=maximum;
 function deviceID(value){
  if(typeof value!=='string')return null;
  const text=value.trim();
@@ -41,5 +45,5 @@ function encode(display,slot,value){
  const format=Number(decimal)|(display.show_label?2:0)|(display.show_unit?4:0);
  return {number,format,text:decimal?(number/100).toFixed(2):String(number)};
 }
-return {colors,units,customUnits,modes,record,exact,physical,samePhysical,deviceID,validLamps,uniformLamps,validDisplay,metricValid,encode};
+return {colors,units,customUnits,modes,record,exact,physical,samePhysical,fieldID,descriptorText,deviceID,validLamps,uniformLamps,validDisplay,metricValid,encode};
 })();

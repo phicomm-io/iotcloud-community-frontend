@@ -75,10 +75,10 @@ try{
  };
  let sensorSequence=1;
  const publishSources=()=>Promise.all([
-  ['aabbccddeeff','tc1',{power:{value:42,unit:'W',valid:true,age_ms:100}}],
-  ['aabbccddee01','a1',{fan_speed_percent:{value:65,unit:'%',valid:true,age_ms:100}}],
-  ['aabbccddee03','daikin',{pm10:{value:28,unit:'µg/m³',valid:true,age_ms:100}}]
- ].map(([device_id,model,sensors])=>connection.publishAsync('phicomm/v2/u_6c6f63616c/sensor/'+device_id+'/state',JSON.stringify({schema:1,device_id,model,boot:1234,sequence:sensorSequence++,sensors}),{qos:0,retain:false})));
+  ['aabbccddeeff',{power:{name:'Power',type:'number',value:42,unit:'W',valid:true,age_ms:100}}],
+  ['aabbccddee01',{fan_speed_percent:{name:'Effective fan output',type:'number',value:65,unit:'%',valid:true,age_ms:100}}],
+  ['aabbccddee03',{custom_ratio:{name:'Custom ratio',type:'number',value:28,unit:'ratio',valid:true,age_ms:100},future_mode:{name:'Future mode',type:'text',value:'0',unit:'',valid:true,age_ms:0}}]
+ ].map(([device_id,sensors])=>connection.publishAsync('phicomm/v2/u_6c6f63616c/sensor/'+device_id+'/state',JSON.stringify({schema:2,device_id,boot:1234,sequence:sensorSequence++,sensors}),{qos:0,retain:false})));
  typedTimer=setInterval(()=>publishSources().catch(error=>console.error('Typed fixture publication failed',error)),1000);
  for(const language of ['en','zh-CN']){
   const languageStart=deviceCommands.length;
@@ -105,16 +105,18 @@ try{
     await frame.locator('#display0Source').selectOption('mqtt');await frame.locator('#display1Source').selectOption('mqtt');
     await expect(frame.locator('#display0Candidate option').filter({hasText:'Fixture TC1'})).toHaveCount(1);
     await expect(frame.locator('#display1Candidate option').filter({hasText:'Fixture A1'})).toHaveCount(1);
+    const custom=frame.locator('#display0Candidate option').filter({hasText:'Custom ratio'});await expect(custom).toHaveCount(1);await expect(frame.locator('#display0Candidate option').filter({hasText:'Future mode'})).toHaveCount(0);
+    await frame.locator('#display0Candidate').selectOption({label:await custom.textContent()});await expect(frame.locator('#display0FieldId')).toHaveValue('custom_ratio');await expect(frame.locator('#display0SourceUnit')).toHaveValue('ratio');
     await frame.locator('#display0Candidate').selectOption({label:await frame.locator('#display0Candidate option').filter({hasText:'Fixture TC1'}).textContent()});
     await frame.locator('#display1Candidate').selectOption({label:await frame.locator('#display1Candidate option').filter({hasText:'Fixture A1'}).textContent()});
-    await expect(frame.locator('#display0Metric')).toHaveValue('power');await expect(frame.locator('#display1Metric')).toHaveValue('fan_speed_percent');
+    await expect(frame.locator('#display0FieldId')).toHaveValue('power');await expect(frame.locator('#display1FieldId')).toHaveValue('fan_speed_percent');
     await expect(frame.locator('#display0Mode option')).toHaveCount(5);await expect(frame.locator('#display1Mode option')).toHaveCount(1);
     await frame.locator('#displaySourceSave').click();await expect(frame.locator('#displaySourceSave')).toBeEnabled();
     const sourceWrite=lastWrite('display_profile.set');
     assert.equal(sourceWrite.params.revision,1);assert.equal(sourceWrite.params.double_click,'switch_display');
-    assert.equal(sourceWrite.params.lanes[0].device_id,'aabbccddeeff');assert.equal(sourceWrite.params.lanes[0].metric,'power');assert.equal(sourceWrite.params.lanes[0].unit,'W');
-    assert.equal(sourceWrite.params.lanes[1].device_id,'aabbccddee01');assert.equal(sourceWrite.params.lanes[1].metric,'fan_speed_percent');assert.equal(sourceWrite.params.lanes[1].unit,'%');
-    const sourceReceipt=readback(sourceWrite,'display_profile.get');assert.equal(sourceReceipt.schema,3);assert.equal(sourceReceipt.revision,2);assert.equal(sourceReceipt.runtime.profile,'formatted');
+    assert.equal(sourceWrite.params.lanes[0].device_id,'aabbccddeeff');assert.equal(sourceWrite.params.lanes[0].field_id,'power');assert.equal(sourceWrite.params.lanes[0].type,'number');assert.equal(sourceWrite.params.lanes[0].unit,'W');assert.equal(Object.hasOwn(sourceWrite.params.lanes[0],'metric'),false);
+    assert.equal(sourceWrite.params.lanes[1].device_id,'aabbccddee01');assert.equal(sourceWrite.params.lanes[1].field_id,'fan_speed_percent');assert.equal(sourceWrite.params.lanes[1].type,'number');assert.equal(sourceWrite.params.lanes[1].unit,'%');
+    const sourceReceipt=readback(sourceWrite,'display_profile.get');assert.equal(sourceReceipt.schema,4);assert.equal(sourceReceipt.revision,2);assert.equal(sourceReceipt.runtime.profile,'formatted');
     assert.deepEqual(sourceReceipt.lanes,sourceWrite.params.lanes);
     for(const slot of [0,1]){await frame.locator('#display'+slot+'Source').selectOption('api');await frame.locator('#display'+slot+'TTL').fill('60');}
     await frame.locator('#displaySourceSave').click();await expect(frame.locator('#display0Write')).toBeEnabled();await expect(frame.locator('#display1Write')).toBeEnabled();
@@ -146,48 +148,28 @@ try{
      else assert(receipt.runtime.lanes.every(lane=>!lane.valid));
      await expect(frame.locator('#display'+slot+'Status')).toContainText(language==='en'?'Waiting for a reading':'等待读数');
     }
-    assert.equal(deviceCommands.slice(languageStart).some(command=>command.model==='m1'&&['display_source.get','display_source.set','display_data.set'].includes(command.action)),false,'current firmware must use v3 rather than the legacy display API');
-    console.log(`PASS hub ${engine} ${language}: v3 typed TC1/A1 candidates through native TCP/WS MQTT + Vue iframe; both raw numbers/flags/18 lamps, independent GET receipts and two TTL0 clears`);
+    assert.equal(deviceCommands.slice(languageStart).some(command=>command.model==='m1'&&['display_source.get','display_source.set','display_data.set'].includes(command.action)),false,'current firmware must use schema4 rather than removed display APIs');
+    console.log(`PASS hub ${engine} ${language}: schema4 generic TC1/A1 candidates through native TCP/WS MQTT + Vue iframe; both raw numbers/flags/18 lamps, independent GET receipts and two TTL0 clears`);
    }
    assert(await frame.locator('body').evaluate(()=>document.documentElement.scrollWidth<=innerWidth),model+' embedded overflow');assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'hub overflow');
    await page.screenshot({path:resolve(evidence,`device-${engine}-${language}-${model}-390.png`),fullPage:true});
    console.log(`PASS hub ${language} 390 ${model}: Vue iframe + native TCP/WS MQTT command/result and full settings`);
   }
-  // An old controller advertises only v2 and rejects every v3 command. Reloading
-  // the real host/iframe prevents a cached current-device form from hiding this.
-  const legacy=sandbox.window.PhicommDemo.create('m1'),legacyCommand=legacy.command,v3=['display_profile.get','display_profile.set','display_value.set'],legacyStart=deviceCommands.length;
-  legacy.state.name='Fixture M1';legacy.state.ip='';legacy.command=(action,params)=>{
-   assert(!v3.includes(action),'the old-controller fixture rejects v3');const data=legacyCommand(action,params);
-   if(action==='capabilities.get')data.actions=data.actions.filter(action=>!v3.includes(action));return data;
-  };fixtures.m1=legacy;
-  await connection.publishAsync('phicomm/v2/u_6c6f63616c/m1/aabbccddee02/state',JSON.stringify(legacy.state),{qos:1,retain:true});
+  // Unsupported Wi-Fi firmware must explain the upgrade, not call removed APIs.
+  const unsupported=sandbox.window.PhicommDemo.create('m1'),unsupportedCommand=unsupported.command,profileActions=['display_profile.get','display_profile.set','display_value.set'],unsupportedStart=deviceCommands.length;
+  unsupported.state.name='Fixture M1';unsupported.state.ip='';unsupported.command=(action,params)=>{
+   assert(!profileActions.includes(action),'the unsupported fixture rejects profile commands');const data=unsupportedCommand(action,params);
+   if(action==='capabilities.get')data.actions=data.actions.filter(action=>!profileActions.includes(action));return data;
+  };fixtures.m1=unsupported;
+  await connection.publishAsync('phicomm/v2/u_6c6f63616c/m1/aabbccddee02/state',JSON.stringify(unsupported.state),{qos:1,retain:true});
   await page.reload();await page.locator('.device-picker-trigger').click();await page.locator('.picker-list>li>button').filter({hasText:'Fixture M1'}).click();
   const old=page.frameLocator('iframe.device-home');await expect.poll(()=>old.locator('body').evaluate(()=>window.UI?.state?.model)).toBe('m1');
-  // Reload clears the parent's live feed registry. Observe new TCP publications
-  // through the actual iframe bridge before opening the legacy settings form.
-  await expect.poll(()=>old.locator('body').evaluate(async()=>{
-   const sources=await getDeviceSensorSources('display');return [['aabbccddeeff','power'],['aabbccddee01','fan_speed_percent']].every(([id,metric])=>sources.some(source=>source.device_id===id&&source.metric===metric));
-  })).toBe(true);
-  await old.locator('.tabs a[data-tab=settings]').click();await old.locator('.side a[href="#settings/device"]').click();await expect(old.locator('#displaySourceSave')).toBeEnabled();
-  await expect(old.locator('#display0Mode')).toHaveCount(0);
-  const legacyCaps=deviceCommands.slice(legacyStart).findLast(command=>command.model==='m1'&&command.action==='capabilities.get');assert(legacyCaps);assert(v3.every(action=>!legacyCaps.data.actions.includes(action)));
-  await old.locator('#displaySelectedSource').selectOption('user');await old.locator('#displayDoubleClick').selectOption('switch_display');
-  for(const [slot,name] of [[0,'Fixture TC1'],[1,'Fixture A1']]){
-   await old.locator('#display'+slot+'Source').selectOption('mqtt');const option=old.locator('#display'+slot+'Candidate option').filter({hasText:name});await expect(option).toHaveCount(1);await old.locator('#display'+slot+'Candidate').selectOption({label:await option.textContent()});
-  }
-  await old.locator('#displaySourceSave').click();await expect(old.locator('#displaySourceSave')).toBeEnabled();
-  const legacySource=lastWrite('display_source.set'),legacyReceipt=readback(legacySource,'display_source.get');
-  assert.equal(legacySource.params.revision,1);assert.equal(legacyReceipt.revision,2);assert.equal(legacySource.params.lanes[0].device_id,'aabbccddeeff');assert.equal(legacySource.params.lanes[1].device_id,'aabbccddee01');
-  await old.locator('#display0Source').selectOption('api');await old.locator('#display0Metric').selectOption('power');await old.locator('#displaySourceSave').click();await expect(old.locator('#display0Write')).toBeEnabled();
-  const legacyAPI=lastWrite('display_source.set');assert.equal(readback(legacyAPI,'display_source.get').revision,3);
-  await old.locator('#display0Value').fill('42');await old.locator('#display0Write').click();await expect(old.locator('#display0Write')).toBeEnabled();await expect(old.locator('#display0Status')).toContainText('42 W');
-  const lease=lastWrite('display_data.set');assert.deepEqual(lease.params,{revision:3,slot:0,value:42,unit:'W',ttl_seconds:20});assert.equal(readback(lease,'display_source.get').runtime.lanes[0].value,42);
-  await old.locator('#display0Clear').click();await expect(old.locator('#display0Write')).toBeEnabled();const clear=lastWrite('display_data.set');assert.deepEqual(clear.params,{revision:3,slot:0,ttl_seconds:0});
-  const cleared=readback(clear,'display_source.get');assert.equal(cleared.runtime.lanes[0].valid,false);assert.equal(cleared.lanes[1].device_id,'aabbccddee01');
-  assert.equal(deviceCommands.slice(legacyStart).some(command=>command.model==='m1'&&v3.includes(command.action)),false);
-  await expect(old.locator('#display0Status')).toContainText(language==='en'?'Waiting for a reading':'等待读数');
+  await old.locator('.tabs a[data-tab=settings]').click();await old.locator('.side a[href="#settings/device"]').click();await expect(old.locator('#displaySourceConfig')).toBeVisible();
+  await expect(old.locator('#displaySourceSave')).toBeHidden();await expect(old.locator('#displaySourceConfig')).toContainText(language==='en'?'Update this M1’s Wi-Fi firmware':'请先升级本机 M1 Wi-Fi 固件');
+  const caps=deviceCommands.slice(unsupportedStart).findLast(command=>command.model==='m1'&&command.action==='capabilities.get');assert(caps);assert(profileActions.every(action=>!caps.data.actions.includes(action)));
+  assert.equal(deviceCommands.slice(unsupportedStart).some(command=>command.model==='m1'&&/^display_(profile|value|source|data)\./.test(command.action)),false);
   await writeFile(resolve(evidence,`m1-native-broker-${engine}-${language}.json`),JSON.stringify(deviceCommands.slice(languageStart).filter(command=>command.model==='m1'&&/^display_(profile|value|source|data)\./.test(command.action)),null,2)+'\n');
-  console.log(`PASS hub ${engine} ${language}: old-controller v2 capabilities, typed source/data writes, independent GET and TTL0 fallback through native Broker + Vue iframe`);
+  console.log(`PASS hub ${engine} ${language}: missing profile capabilities show an upgrade hint without display commands`);
   assert.deepEqual(pageErrors,[]);assert.deepEqual(external,[]);await context.close();
  }
  const observer=await mqtt.connectAsync(`ws://127.0.0.1:${ws}/mqtt`,{username:'local',password:'fixture-local-password',clientId:'fixture-ha'});clients.push(observer);
