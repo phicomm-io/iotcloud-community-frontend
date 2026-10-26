@@ -1,7 +1,7 @@
 // VITE_HUB=1 build + the firmware account/broker/relay host adapter. Fixtures only.
 import {createServer} from 'node:http';
 import {createServer as netServer} from 'node:net';
-import {readFile,readdir,mkdir} from 'node:fs/promises';
+import {readFile,readdir,mkdir,writeFile} from 'node:fs/promises';
 import {resolve,extname} from 'node:path';
 import {spawn} from 'node:child_process';
 import {createInterface} from 'node:readline';
@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import mqtt from 'mqtt';
 import {chromium,webkit,expect} from '@playwright/test';
-const root=resolve(process.env.HUB_TEST_DIST||'dist'),evidence=resolve('../../review/hub-browser');
+const root=resolve(process.env.HUB_TEST_DIST||'dist'),evidence=resolve(process.env.HUB_TEST_EVIDENCE||'../../review/hub-browser');
 const freePort=async()=>{const s=netServer();await new Promise(done=>s.listen(0,'127.0.0.1',done));const p=s.address().port;await new Promise(done=>s.close(done));return p;};
 const tcp=await freePort(),ws=await freePort(),child=spawn(process.env.HUB_TEST_CONSOLE||'/tmp/iotcloud-hub-console',[String(tcp),String(ws)],{stdio:['pipe','pipe','pipe']});
 let id=0,errors='',ready;child.stderr.on('data',d=>errors+=d);
@@ -56,15 +56,23 @@ try{
  const sandbox={window:{},structuredClone,performance};
  vm.runInNewContext(await readFile(resolve('../M1/web/display-format.js'),'utf8'),sandbox);
  vm.runInNewContext(await readFile(resolve('../common/web/demo.js'),'utf8'),sandbox);
- let fixtures={};const deviceWrites=[];
+ let fixtures={};const deviceWrites=[],deviceCommands=[];
  connection.on('message',(topic,payload)=>{
   const [,model,mac]=topic.match(/^phicomm\/v2\/u_6c6f63616c\/([^/]+)\/([^/]+)\/command$/)||[];
   if(!fixtures[model]||!deviceRecords.some(([id,kind])=>id===mac&&kind===model))return;
   const command=JSON.parse(payload.toString()),data=fixtures[model].command(command.action,command.params);
-  if(!command.action.endsWith('.get'))deviceWrites.push({model,...command});
+  const observed={model,...command,data:JSON.parse(JSON.stringify(data??null))};deviceCommands.push(observed);
+  if(!command.action.endsWith('.get'))deviceWrites.push(observed);
   connection.publish(topic.replace(/\/command$/,'/result'),JSON.stringify({request_id:command.request_id,code:command.action.endsWith('.get')?'ok':'accepted',data}),{qos:1});
  });
  await connection.subscribeAsync('phicomm/v2/u_6c6f63616c/+/+/command',{qos:1});
+ const readback=(write,action)=>{
+  assert(write,'the expected write must traverse the real Broker');
+  const index=deviceCommands.indexOf(write);assert(index>=0,'the write must belong to the observed Broker transcript');
+  const read=deviceCommands.slice(index+1).find(command=>command.model===write.model&&command.action===action);
+  assert(read,`${write.action} must be followed by an independent ${action} through the Broker`);
+  assert.notEqual(read.request_id,write.request_id,'a SET reply cannot stand in for a GET receipt');return read.data;
+ };
  let sensorSequence=1;
  const publishSources=()=>Promise.all([
   ['aabbccddeeff','tc1',{power:{value:42,unit:'W',valid:true,age_ms:100}}],
@@ -73,6 +81,8 @@ try{
  ].map(([device_id,model,sensors])=>connection.publishAsync('phicomm/v2/u_6c6f63616c/sensor/'+device_id+'/state',JSON.stringify({schema:1,device_id,model,boot:1234,sequence:sensorSequence++,sensors}),{qos:0,retain:false})));
  typedTimer=setInterval(()=>publishSources().catch(error=>console.error('Typed fixture publication failed',error)),1000);
  for(const language of ['en','zh-CN']){
+  const languageStart=deviceCommands.length;
+  const lastWrite=action=>{const write=deviceCommands.slice(languageStart).findLast(command=>command.model==='m1'&&command.action===action);assert(write,`${language}: expected ${action} through the Broker`);return write;};
   fixtures=Object.fromEntries(deviceRecords.map(([,model])=>{const fixture=sandbox.window.PhicommDemo.create(model);fixture.state.name='Fixture '+model.toUpperCase();fixture.state.ip='';return [model,fixture];}));
   for(const [mac,model] of deviceRecords){const base='phicomm/v2/u_6c6f63616c/'+model+'/'+mac;await connection.publishAsync(base+'/availability','online',{qos:1,retain:true});await connection.publishAsync(base+'/state',JSON.stringify(fixtures[model].state),{qos:1,retain:true});}
   const context=await browser.newContext({viewport:{width:390,height:950},serviceWorkers:'block'}),page=await context.newPage(),pageErrors=[],external=[];
@@ -88,7 +98,7 @@ try{
    const expected={tc1:['outlet.set',{index:0,on:false}],a1:['fan.set',{on:false}],m1:['display.set',{brightness:50}],daikin:['indicator.set',{enabled:false}]}[model];
    assert.equal(deviceWrites.at(-1).model,model);assert.equal(deviceWrites.at(-1).action,expected[0]);assert.deepEqual(deviceWrites.at(-1).params,expected[1]);
    await expect.poll(()=>frame.locator('body').evaluate(()=>UI.controlBusy)).toBeFalsy();
-   await frame.locator('body').evaluate(()=>{UI.embeddedRoute='settings/device';UI.showRoute();});await expect(frame.locator('#deviceName')).toBeVisible();await expect(frame.locator('#webPassword')).toBeVisible();
+   await frame.locator('.tabs a[data-tab=settings]').click();await frame.locator('.side a[href="#settings/device"]').click();await expect(frame.locator('#deviceName')).toBeVisible();await expect(frame.locator('#webPassword')).toBeVisible();
    if(model==='m1'){
     await expect(frame.locator('#displaySourceConfig')).toBeVisible();
     await frame.locator('#displaySelectedSource').selectOption('user');await frame.locator('#displayDoubleClick').selectOption('switch_display');
@@ -98,25 +108,86 @@ try{
     await frame.locator('#display0Candidate').selectOption({label:await frame.locator('#display0Candidate option').filter({hasText:'Fixture TC1'}).textContent()});
     await frame.locator('#display1Candidate').selectOption({label:await frame.locator('#display1Candidate option').filter({hasText:'Fixture A1'}).textContent()});
     await expect(frame.locator('#display0Metric')).toHaveValue('power');await expect(frame.locator('#display1Metric')).toHaveValue('fan_speed_percent');
-    await frame.locator('#displaySourceSave').click();
-    await expect.poll(()=>fixtures.m1.command('display_source.get').revision).toBe(2);
-    const sourceWrite=deviceWrites.findLast(command=>command.action==='display_source.set');
-    assert.equal(sourceWrite.params.double_click,'switch_display');assert.equal(sourceWrite.params.lanes[0].device_id,'aabbccddeeff');assert.equal(sourceWrite.params.lanes[1].device_id,'aabbccddee01');
-    await expect(frame.locator('#displaySourceSave')).toBeEnabled();
-    await frame.locator('#display0Source').selectOption('api');await frame.locator('#display0Metric').selectOption('power');
-    await frame.locator('#displaySourceSave').click();await expect(frame.locator('#display0Write')).toBeEnabled();
-    await frame.locator('#display0Value').fill('42');await frame.locator('#display0Write').click();
-    await expect(frame.locator('#display0Status')).toContainText('42 W');
-    const lease=deviceWrites.findLast(command=>command.action==='display_data.set');assert.equal(lease.params.revision,3);assert.equal(lease.params.slot,0);assert.equal(lease.params.value,42);
+    await expect(frame.locator('#display0Mode option')).toHaveCount(5);await expect(frame.locator('#display1Mode option')).toHaveCount(1);
+    await frame.locator('#displaySourceSave').click();await expect(frame.locator('#displaySourceSave')).toBeEnabled();
+    const sourceWrite=lastWrite('display_profile.set');
+    assert.equal(sourceWrite.params.revision,1);assert.equal(sourceWrite.params.double_click,'switch_display');
+    assert.equal(sourceWrite.params.lanes[0].device_id,'aabbccddeeff');assert.equal(sourceWrite.params.lanes[0].metric,'power');assert.equal(sourceWrite.params.lanes[0].unit,'W');
+    assert.equal(sourceWrite.params.lanes[1].device_id,'aabbccddee01');assert.equal(sourceWrite.params.lanes[1].metric,'fan_speed_percent');assert.equal(sourceWrite.params.lanes[1].unit,'%');
+    const sourceReceipt=readback(sourceWrite,'display_profile.get');assert.equal(sourceReceipt.schema,3);assert.equal(sourceReceipt.revision,2);assert.equal(sourceReceipt.runtime.profile,'formatted');
+    assert.deepEqual(sourceReceipt.lanes,sourceWrite.params.lanes);
+    for(const slot of [0,1]){await frame.locator('#display'+slot+'Source').selectOption('api');await frame.locator('#display'+slot+'TTL').fill('60');}
+    await frame.locator('#displaySourceSave').click();await expect(frame.locator('#display0Write')).toBeEnabled();await expect(frame.locator('#display1Write')).toBeEnabled();
+    const apiWrite=lastWrite('display_profile.set'),apiReceipt=readback(apiWrite,'display_profile.get');
+    assert.equal(apiWrite.params.revision,2);assert.equal(apiReceipt.revision,3);assert(apiReceipt.lanes.every(lane=>lane.source==='api'&&lane.ttl_seconds===60));
+    const patterns=[['0red','0green','1yellow','2green','2yellow'],['0yellow','1red','1green','2red']];
+    for(const slot of [0,1]){
+     const prefix='#display'+slot,lamps=Array.from({length:3},(_,position)=>Object.fromEntries(['red','green','yellow'].map(color=>[color,patterns[slot].includes(position+color)])));
+     await frame.locator(prefix+'Value').fill(slot?'864':'321');await frame.locator(prefix+'WriteTTL').fill('60');
+     if(!slot)await frame.locator(prefix+'Decimal').check();
+     await frame.locator(prefix+'WriteLabel').setChecked(!slot);await frame.locator(prefix+'WriteGlyph').check();
+     for(let position=0;position<3;position++)for(const color of ['red','green','yellow'])await frame.locator(prefix+'WriteLamp'+position+color).setChecked(lamps[position][color]);
+     await frame.locator(prefix+'Write').click();await expect(frame.locator(prefix+'Write')).toBeEnabled();
+     const write=lastWrite('display_value.set');
+     assert.deepEqual(write.params,{revision:3,slot,number:slot?864:321,decimal:!slot,show_label:!slot,show_unit:true,lamps,ttl_seconds:60});
+     const receipt=readback(write,'display_profile.get'),lane=receipt.runtime.lanes[slot];
+     assert.equal(receipt.revision,3);assert.equal(lane.valid,true);assert.equal(lane.number,slot?864:321);assert.equal(lane.format,slot?4:7);assert.deepEqual(lane.lamps,lamps);
+     assert.equal(lane.value,slot?864:Math.fround(3.21));assert.equal(lane.unit,slot?'µg/m³':'mg/m³');
+     await expect(frame.locator(prefix+'Status')).toContainText(slot?'864 µg/m³':'3.21 mg/m³');
+    }
+    await page.screenshot({path:resolve(evidence,`m1-v3-raw-${engine}-${language}-390.png`),fullPage:true});
     await expect(frame.locator('#displaySourceStatus')).toContainText(language==='en'?'Waiting for controller confirmation':'等待控制器确认');
-    await frame.locator('#display0Clear').click();await expect(frame.locator('#display0Status')).toContainText(language==='en'?'Waiting for a reading':'等待读数');
-    assert.equal(fixtures.m1.command('display_source.get').lanes[1].device_id,'aabbccddee01','clearing one API reading preserves the other configured position');
-    console.log(`PASS hub ${engine} ${language}: typed TC1/A1 candidates through MQTT + iframe source bridge; two positions, API write/readback and clear`);
+    for(const slot of [0,1]){
+     await frame.locator('#display'+slot+'Clear').click();await expect(frame.locator('#display'+slot+'Write')).toBeEnabled();
+     const clear=lastWrite('display_value.set');assert.deepEqual(clear.params,{revision:3,slot,ttl_seconds:0});
+     const receipt=readback(clear,'display_profile.get'),lane=receipt.runtime.lanes[slot];
+     assert.equal(lane.valid,false);assert.equal(lane.number,null);assert.equal(lane.format,null);assert.equal(lane.lamps,null);assert.equal(lane.remaining_ttl_seconds,0);
+     if(!slot){assert.equal(receipt.runtime.lanes[1].number,864);assert.equal(receipt.runtime.lanes[1].valid,true);assert.equal(receipt.lanes[1].source,'api','clearing one frame preserves the other position');}
+     else assert(receipt.runtime.lanes.every(lane=>!lane.valid));
+     await expect(frame.locator('#display'+slot+'Status')).toContainText(language==='en'?'Waiting for a reading':'等待读数');
+    }
+    assert.equal(deviceCommands.slice(languageStart).some(command=>command.model==='m1'&&['display_source.get','display_source.set','display_data.set'].includes(command.action)),false,'current firmware must use v3 rather than the legacy display API');
+    console.log(`PASS hub ${engine} ${language}: v3 typed TC1/A1 candidates through native TCP/WS MQTT + Vue iframe; both raw numbers/flags/18 lamps, independent GET receipts and two TTL0 clears`);
    }
    assert(await frame.locator('body').evaluate(()=>document.documentElement.scrollWidth<=innerWidth),model+' embedded overflow');assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'hub overflow');
    await page.screenshot({path:resolve(evidence,`device-${engine}-${language}-${model}-390.png`),fullPage:true});
    console.log(`PASS hub ${language} 390 ${model}: Vue iframe + native TCP/WS MQTT command/result and full settings`);
   }
+  // An old controller advertises only v2 and rejects every v3 command. Reloading
+  // the real host/iframe prevents a cached current-device form from hiding this.
+  const legacy=sandbox.window.PhicommDemo.create('m1'),legacyCommand=legacy.command,v3=['display_profile.get','display_profile.set','display_value.set'],legacyStart=deviceCommands.length;
+  legacy.state.name='Fixture M1';legacy.state.ip='';legacy.command=(action,params)=>{
+   assert(!v3.includes(action),'the old-controller fixture rejects v3');const data=legacyCommand(action,params);
+   if(action==='capabilities.get')data.actions=data.actions.filter(action=>!v3.includes(action));return data;
+  };fixtures.m1=legacy;
+  await connection.publishAsync('phicomm/v2/u_6c6f63616c/m1/aabbccddee02/state',JSON.stringify(legacy.state),{qos:1,retain:true});
+  await page.reload();await page.locator('.device-picker-trigger').click();await page.locator('.picker-list>li>button').filter({hasText:'Fixture M1'}).click();
+  const old=page.frameLocator('iframe.device-home');await expect.poll(()=>old.locator('body').evaluate(()=>window.UI?.state?.model)).toBe('m1');
+  // Reload clears the parent's live feed registry. Observe new TCP publications
+  // through the actual iframe bridge before opening the legacy settings form.
+  await expect.poll(()=>old.locator('body').evaluate(async()=>{
+   const sources=await getDeviceSensorSources('display');return [['aabbccddeeff','power'],['aabbccddee01','fan_speed_percent']].every(([id,metric])=>sources.some(source=>source.device_id===id&&source.metric===metric));
+  })).toBe(true);
+  await old.locator('.tabs a[data-tab=settings]').click();await old.locator('.side a[href="#settings/device"]').click();await expect(old.locator('#displaySourceSave')).toBeEnabled();
+  await expect(old.locator('#display0Mode')).toHaveCount(0);
+  const legacyCaps=deviceCommands.slice(legacyStart).findLast(command=>command.model==='m1'&&command.action==='capabilities.get');assert(legacyCaps);assert(v3.every(action=>!legacyCaps.data.actions.includes(action)));
+  await old.locator('#displaySelectedSource').selectOption('user');await old.locator('#displayDoubleClick').selectOption('switch_display');
+  for(const [slot,name] of [[0,'Fixture TC1'],[1,'Fixture A1']]){
+   await old.locator('#display'+slot+'Source').selectOption('mqtt');const option=old.locator('#display'+slot+'Candidate option').filter({hasText:name});await expect(option).toHaveCount(1);await old.locator('#display'+slot+'Candidate').selectOption({label:await option.textContent()});
+  }
+  await old.locator('#displaySourceSave').click();await expect(old.locator('#displaySourceSave')).toBeEnabled();
+  const legacySource=lastWrite('display_source.set'),legacyReceipt=readback(legacySource,'display_source.get');
+  assert.equal(legacySource.params.revision,1);assert.equal(legacyReceipt.revision,2);assert.equal(legacySource.params.lanes[0].device_id,'aabbccddeeff');assert.equal(legacySource.params.lanes[1].device_id,'aabbccddee01');
+  await old.locator('#display0Source').selectOption('api');await old.locator('#display0Metric').selectOption('power');await old.locator('#displaySourceSave').click();await expect(old.locator('#display0Write')).toBeEnabled();
+  const legacyAPI=lastWrite('display_source.set');assert.equal(readback(legacyAPI,'display_source.get').revision,3);
+  await old.locator('#display0Value').fill('42');await old.locator('#display0Write').click();await expect(old.locator('#display0Write')).toBeEnabled();await expect(old.locator('#display0Status')).toContainText('42 W');
+  const lease=lastWrite('display_data.set');assert.deepEqual(lease.params,{revision:3,slot:0,value:42,unit:'W',ttl_seconds:20});assert.equal(readback(lease,'display_source.get').runtime.lanes[0].value,42);
+  await old.locator('#display0Clear').click();await expect(old.locator('#display0Write')).toBeEnabled();const clear=lastWrite('display_data.set');assert.deepEqual(clear.params,{revision:3,slot:0,ttl_seconds:0});
+  const cleared=readback(clear,'display_source.get');assert.equal(cleared.runtime.lanes[0].valid,false);assert.equal(cleared.lanes[1].device_id,'aabbccddee01');
+  assert.equal(deviceCommands.slice(legacyStart).some(command=>command.model==='m1'&&v3.includes(command.action)),false);
+  await expect(old.locator('#display0Status')).toContainText(language==='en'?'Waiting for a reading':'等待读数');
+  await writeFile(resolve(evidence,`m1-native-broker-${engine}-${language}.json`),JSON.stringify(deviceCommands.slice(languageStart).filter(command=>command.model==='m1'&&/^display_(profile|value|source|data)\./.test(command.action)),null,2)+'\n');
+  console.log(`PASS hub ${engine} ${language}: old-controller v2 capabilities, typed source/data writes, independent GET and TTL0 fallback through native Broker + Vue iframe`);
   assert.deepEqual(pageErrors,[]);assert.deepEqual(external,[]);await context.close();
  }
  const observer=await mqtt.connectAsync(`ws://127.0.0.1:${ws}/mqtt`,{username:'local',password:'fixture-local-password',clientId:'fixture-ha'});clients.push(observer);
