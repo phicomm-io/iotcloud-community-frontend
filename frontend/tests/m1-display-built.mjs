@@ -12,6 +12,7 @@ const bundle=resolve(process.env.M1_DISPLAY_BUNDLE_ROOT||resolve(source,'build/b
 const evidence=resolve(process.env.M1_DISPLAY_BUILT_EVIDENCE||resolve(source,'build/evidence/m1-display-built'));
 const production=JSON.parse(await readFile(resolve(source,'tests/fixtures/m1-display-v3-production-get.json'),'utf8'));
 const sandbox={window:{},structuredClone,performance};
+vm.runInNewContext(await readFile(resolve(source,'M1/web/display-format.js'),'utf8'),sandbox);
 vm.runInNewContext(await readFile(resolve(source,'common/web/demo.js'),'utf8'),sandbox);
 const target='http://192.168.1.18',origin='http://127.0.0.1:25181',mac='aabbccdd0110';
 const types={'.html':'text/html','.js':'text/javascript','.css':'text/css','.json':'application/json','.svg':'image/svg+xml','.png':'image/png','.webmanifest':'application/manifest+json'};
@@ -139,6 +140,71 @@ for(const [engine,type] of engines){
   }
   const {context,frame,calls,errors}=await fixture(browser,kind,'en',390,false);
   try{await expect(frame.locator('#display0Mode')).toHaveCount(0);assert.equal(await frame.locator('body').evaluate(()=>UI.userDisplay.enabled),true);assert(calls.some(request=>request.action==='display_source.get'));assert.equal(calls.some(request=>request.action==='display_profile.get'),false);assert.deepEqual(errors,[]);console.log(`PASS built ${kind} ${engine}: legacy v2 fallback`);}finally{await context.close();}
+ }}finally{await browser.close();}
+}
+// The compiled demo runs its simulator in the host window. A helper inside its
+// device iframe cannot satisfy that separate runtime dependency.
+for(const [engine,type] of engines){
+ const browser=await type.launch(engine==='webkit'&&process.env.PHICOMM_WEBKIT_EXECUTABLE_PATH?{executablePath:process.env.PHICOMM_WEBKIT_EXECUTABLE_PATH}:{});
+ try{for(const kind of ['demos/platform','demos/m1'])for(const language of ['en','zh-CN'])for(const width of kind==='demos/platform'?[390,1440]:[390]){
+  const context=await browser.newContext({viewport:{width,height:950},locale:language,serviceWorkers:'block'});
+  const page=await context.newPage(),errors=[],network=[];
+  page.on('pageerror',error=>errors.push(error.message));
+  await context.addInitScript(language=>{
+   try{localStorage.setItem('phicomm.language',language);}catch{}
+   window.__m1DisplayCalls=[];
+   window.addEventListener('message',event=>{if(event.data?.type==='device-command')window.__m1DisplayCalls.push(event.data.request);});
+  },language);
+  await context.route('**/*',async route=>{
+   const url=new URL(route.request().url());network.push(url.href);assert.equal(url.origin,origin,'demo attempted a real network request');
+   if(url.pathname.endsWith('/config.json'))return route.fulfill({json:{}});
+   const directory=resolve(bundle,kind),file=resolve(directory,url.pathname.slice(1)||'index.html');
+   assert(file.startsWith(directory+'/'));
+   return route.fulfill({contentType:types[extname(file)]||'application/octet-stream',body:await readFile(file)});
+  });
+  try{
+   await page.goto(origin+(kind==='demos/platform'?'/#/':'/#settings/device'));
+   if(kind==='demos/platform'){
+    await expect.poll(()=>page.evaluate(()=>typeof window.M1DisplayFormat?.encode),'the demo host must load the shared formatter itself').toBe('function');
+    if(width>800)await page.locator('.device-list .device-select').nth(1).click();
+    else{await page.locator('.device-picker-trigger').click();await page.locator('.picker-list > li button').nth(1).click();}
+   }else{
+    await page.evaluate(()=>{const original=window.fetch;window.fetch=(url,options={})=>{if(url==='/api/v1/command')window.__m1DisplayCalls.push(JSON.parse(options.body));return original(url,options);};});
+   }
+   const view=kind==='demos/platform'?page.frameLocator('iframe.device-home'):page;
+   await expect.poll(()=>view.locator('body').evaluate(()=>UI.state?.model)).toBe('m1');
+   if(kind==='demos/platform'){await view.locator('.tabs a[data-tab=settings]').click();await view.locator('.side a[href="#settings/device"]').click();}
+   await expect(view.locator('#displaySourceSave')).toBeEnabled();
+   await expect(view.locator('#displaySourceConfig h2')).toHaveText(language==='en'?'User readings on the device screen':'设备屏幕用户读数');
+   await view.locator('#displaySelectedSource').selectOption('user');await view.locator('#displayDoubleClick').selectOption('switch_display');
+   for(const slot of [0,1])await view.locator('#display'+slot+'Source').selectOption('api');
+   await view.locator('#displaySourceSave').click();await expect(view.locator('#display0Write')).toBeEnabled();
+   for(const slot of [0,1]){
+    const id='#display'+slot;
+    await view.locator(id+'Value').fill(slot?'864':'123');await view.locator(id+'WriteTTL').fill('10');
+    if(!slot)await view.locator(id+'Decimal').check();
+    await view.locator(id+'WriteGlyph').check();await view.locator(id+'WriteLamp0red').check();await view.locator(id+'WriteLamp1yellow').check();await view.locator(id+'WriteLamp2green').check();
+    await view.locator(id+'Write').click();await expect(view.locator(id+'Write')).toBeEnabled();
+    await expect(view.locator(id+'Status')).toContainText(slot?'864 µg/m³':'1.23 mg/m³');
+    const calls=await page.evaluate(()=>window.__m1DisplayCalls),write=calls.findLast(request=>request.action==='display_value.set');
+    assert.equal(write.params.slot,slot);assert.equal(write.params.number,slot?864:123);assert.equal(write.params.decimal,!slot);
+    assert.deepEqual(write.params.lamps,[{red:true,green:false,yellow:false},{red:false,green:false,yellow:true},{red:false,green:true,yellow:false}]);
+    assert(calls.slice(calls.indexOf(write)+1).some(request=>request.action==='display_profile.get'));
+   }
+   for(const slot of [0,1]){
+    await view.locator('#display'+slot+'Clear').click();await expect(view.locator('#display'+slot+'Write')).toBeEnabled();
+    const calls=await page.evaluate(()=>window.__m1DisplayCalls),write=calls.findLast(request=>request.action==='display_value.set');
+    assert.deepEqual(write.params,{revision:2,slot,ttl_seconds:0});
+    assert(calls.slice(calls.indexOf(write)+1).some(request=>request.action==='display_profile.get'));
+   }
+   assert.equal(await view.locator('#toasts .toast.bad').count(),0);assert.deepEqual(errors,[]);
+   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+   assert.equal(await view.locator('body').evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+   const screenshot=`${kind.replaceAll('/','-')}-${engine}-${language}-${width}.png`;
+   await page.screenshot({path:resolve(evidence,screenshot),fullPage:true});
+   results.push({kind,engine,language,width,result:'PASS',screenshot,checks:['real_demo_dependency','profile_get_set','raw_frame_and_lamps','independent_get','both_TTL_zero_clears','translated_form','no_pageerror','no_external_request']});
+   console.log(`PASS built ${kind} ${engine} ${language} ${width}: simulator dependency, three actions, two raw frames/lamps and TTL0 readback`);
+  }finally{await context.close();}
  }}finally{await browser.close();}
 }
 await writeFile(resolve(evidence,'results.json'),JSON.stringify({result:'PASS',cases:results,device_mutations:false},null,2)+'\n');

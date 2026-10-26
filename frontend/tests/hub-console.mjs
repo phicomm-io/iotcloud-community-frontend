@@ -53,7 +53,9 @@ try{
  const deviceRecords=[['aabbccddeeff','tc1'],['aabbccddee01','a1'],['aabbccddee02','m1'],['aabbccddee03','daikin']];
  for(const [mac,model] of deviceRecords)assert.equal((await request({method:'POST',path:'/api/devices',token,body:JSON.stringify({mac,model,version:'v2'})})).status,201);
  const connection=await mqtt.connectAsync(`mqtt://127.0.0.1:${tcp}`,{username:'local',password:'fixture-local-password',clientId:'fixture-tc1'});clients.push(connection);
- const sandbox={window:{},structuredClone,performance};vm.runInNewContext(await readFile(resolve('../common/web/demo.js'),'utf8'),sandbox);
+ const sandbox={window:{},structuredClone,performance};
+ vm.runInNewContext(await readFile(resolve('../M1/web/display-format.js'),'utf8'),sandbox);
+ vm.runInNewContext(await readFile(resolve('../common/web/demo.js'),'utf8'),sandbox);
  let fixtures={};const deviceWrites=[];
  connection.on('message',(topic,payload)=>{
   const [,model,mac]=topic.match(/^phicomm\/v2\/u_6c6f63616c\/([^/]+)\/([^/]+)\/command$/)||[];
