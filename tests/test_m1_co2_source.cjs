@@ -75,3 +75,12 @@ test('M1 CO2 source rejects bad IDs, recovers conflicts, and gates unsupported M
  }finally{x.dom.window.close();}
  const old=await setup('en',false);try{assert.equal(old.card.hidden,true);assert.equal(old.calls.some(c=>c.action.startsWith('co2_source.')),false);}finally{old.dom.window.close();}
 });
+test('legacy CO2 source accepts compact or colon-separated MACs and normalizes before sending',async()=>{
+ const x=await setup();try{
+  x.edit(x.mode,'mqtt');
+  for(const value of ['AA:BB:CC:DD:EE:FF','AABBCCDDEEFF']){x.edit(x.id,value);await x.submit();assert.equal(x.calls.findLast(c=>c.action==='co2_source.set').params.device_id,'aabbccddeeff');}
+  const count=x.calls.filter(c=>c.action==='co2_source.set').length;
+  for(const value of ['aa-bb-cc-dd-ee-ff','a:ab:bc:cd:de:ef','aa:bb:cc:dd:ee:ff:']){x.edit(x.id,value);await x.submit();}
+  assert.equal(x.calls.filter(c=>c.action==='co2_source.set').length,count);
+ }finally{x.dom.window.close();}
+});

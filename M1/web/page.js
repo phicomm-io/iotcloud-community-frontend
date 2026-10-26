@@ -115,7 +115,7 @@ co2Display.append(h('h2',{i18n:'co2screen.title'}),h('p',{class:'help',i18n:'co2
 document.querySelector('[data-settings-page="device"]').append(co2Display);
 let sourceConfig=null,sourcePending=false,sourceEditing=false,sourceRead=0;
 const sourceMode=h('select',{id:'co2SourceMode'},h('option',{value:'local',i18n:'co2source.local'}),h('option',{value:'mqtt',i18n:'co2source.mqtt'}));
-const sourceID=h('input',{id:'co2SourceID',maxlength:12,pattern:'[0-9a-fA-F]{12}',autocomplete:'off'});
+const sourceID=h('input',{id:'co2SourceID',maxlength:17,pattern:'[0-9a-fA-F]{12}|[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){5}',autocomplete:'off'});
 sourceID.setAttribute('list','co2SourceCandidates');
 const sourceCandidates=h('datalist',{id:'co2SourceCandidates'});
 const doubleClick=h('select',{id:'co2DoubleClick'},h('option',{value:'none',i18n:'co2source.no_action'}),h('option',{value:'switch_display',i18n:'co2source.switch'}));
@@ -156,8 +156,8 @@ async function loadCo2Source(){
 }
 UI.onSubmit(sourceForm,async()=>{
  if(!sourceConfig||sourcePending)throw Error(t('co2source.unavailable'));
- const id=sourceMode.value==='mqtt'?sourceID.value.trim().toLowerCase():'';
- if(sourceMode.value==='mqtt'&&!/^[0-9a-f]{12}$/.test(id))throw Error(t('co2source.invalid'));
+ const id=sourceMode.value==='mqtt'?M1DisplayFormat.deviceID(sourceID.value):'';
+ if(sourceMode.value==='mqtt'&&!id)throw Error(t('co2source.invalid'));
  const params={source:sourceMode.value,device_id:id,double_click:doubleClick.value,revision:sourceConfig.revision};
  sourcePending=true;sourceRead++;renderSource();
  try{
