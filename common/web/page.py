@@ -12,7 +12,7 @@ def render_page(path, *, minify=False):
     text = path.read_text()
     # The product page lists its own fragments; a name resolves to common/web
     # first and to the product's web directory second.
-    for name in ("style.css", "i18n.js", "service.js", "provision.js", "ui.js", "automation.js", "sensor.js", "display.js", "page.js"):
+    for name in ("style.css", "i18n.js", "service.js", "provision.js", "ui.js", "automation.js", "sensor.js", "display-format.js", "display.js", "display-profile.js", "page.js"):
         if "@include " + name not in text:
             continue
         content = _source(path, name)

@@ -1,0 +1,43 @@
+{
+  "schema": 3,
+  "revision": 7,
+  "selected_source": "user",
+  "double_click": "switch_display",
+  "lanes": [
+    {
+      "slot": 0,
+      "source": "api",
+      "device_id": "",
+      "metric": "power",
+      "unit": "W",
+      "display": {"mode": "decimal_1", "show_label": true, "show_unit": false},
+      "ttl_seconds": 20,
+      "color": {"mode": "fixed", "lamps": [
+        {"red": true, "green": true, "yellow": false},
+        {"red": false, "green": false, "yellow": true},
+        {"red": false, "green": true, "yellow": true}
+      ]}
+    },
+    {
+      "slot": 1,
+      "source": "local",
+      "device_id": "",
+      "metric": "pm25",
+      "unit": "µg/m³",
+      "display": {"mode": "integer", "show_label": true, "show_unit": true},
+      "ttl_seconds": 20,
+      "color": {"mode": "thresholds", "low": 35, "high": 75}
+    }
+  ],
+  "runtime": {
+    "profile": "formatted",
+    "selected_source": "user",
+    "mcu_supported": true,
+    "confirmed": false,
+    "confirmation": "pending_mcu_readback",
+    "lanes": [
+      {"slot": 0, "valid": false, "value": null, "unit": "W", "age_ms": null, "remaining_ttl_seconds": 0, "effective": false, "reason": "missing", "number": null, "format": null, "lamps": null, "confirmed": false},
+      {"slot": 1, "valid": true, "value": 18, "unit": "µg/m³", "age_ms": 0, "remaining_ttl_seconds": 20, "effective": false, "reason": "ok", "number": 18, "format": 6, "lamps": [{"red": false, "green": true, "yellow": false}, {"red": false, "green": true, "yellow": false}, {"red": false, "green": true, "yellow": false}], "confirmed": false}
+    ]
+  }
+}

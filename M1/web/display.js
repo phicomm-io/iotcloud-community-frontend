@@ -33,7 +33,7 @@ function metricOptions(source){return source==='none'?['custom']:source==='local
 function readLane(row){
  const source=row.source.value,metric=source==='none'?'custom':row.metric.value;
  if(source==='none')return {slot:row.slot,source,device_id:'',metric:'custom',unit:'',decimals:0,scale:1,ttl_seconds:20,color:{mode:'fixed',value:'off'}};
- return {slot:row.slot,source,device_id:source==='mqtt'?row.device.value.trim().toLowerCase():'',metric,
+ return {slot:row.slot,source,device_id:source==='mqtt'?M1DisplayFormat.deviceID(row.device.value):'',metric,
   unit:source==='none'?'':metric==='custom'?row.unit.value:units[metric],decimals:Number(row.decimals.value),scale:Number(row.scale.value),ttl_seconds:Number(row.ttl.value),
   color:row.colorMode.value==='fixed'?{mode:'fixed',value:row.color.value}:{mode:'thresholds',low:Number(row.low.value),high:Number(row.high.value)}};
 }
@@ -154,7 +154,7 @@ async function writeData(row,clear=false){
 for(let slot=0;slot<2;slot++){
  const id='display'+slot;
  const row={slot,source:select(id+'Source',['none','local','mqtt','api'],'display.source.'),metric:select(id+'Metric',['custom'],'display.metric.'),
-  device:h('input',{id:id+'Device',maxlength:12,pattern:'[0-9a-fA-F]{12}',autocomplete:'off'}),candidate:h('select',{id:id+'Candidate'}),unit:h('select',{id:id+'Unit'}),
+  device:h('input',{id:id+'Device',maxlength:17,pattern:'[0-9a-fA-F]{12}|[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){5}',autocomplete:'off'}),candidate:h('select',{id:id+'Candidate'}),unit:h('select',{id:id+'Unit'}),
   decimals:h('select',{id:id+'Decimals'},...[0,1,2].map(value=>h('option',{value:String(value)},(0).toFixed(value)))),scale:h('select',{id:id+'Scale'},h('option',{value:'1'},'÷1'),h('option',{value:'1000'},'÷1000')),
   ttl:number(id+'TTL',1,60),colorMode:select(id+'ColorMode',['fixed','thresholds'],'display.color.'),color:select(id+'Color',colors,'display.color.'),low:number(id+'Low',null,null,'any'),high:number(id+'High',null,null,'any'),
   value:number(id+'Value',null,null,'any'),writeTTL:number(id+'WriteTTL',1,60),live:h('p',{id:id+'Status',class:'help',role:'status'}),preview:h('p',{id:id+'Preview',class:'help'}),example:h('pre',{class:'help'})};
@@ -178,6 +178,6 @@ for(let slot=0;slot<2;slot++){
 form.addEventListener('input',()=>{markEditing();render();});form.addEventListener('change',event=>{if(event.target!==rows[0].value&&event.target!==rows[1].value&&event.target!==rows[0].writeTTL&&event.target!==rows[1].writeTTL){markEditing();render();}});
 UI.onSubmit(form,saveConfig,'toast.accepted');
 I18N.onChange(()=>{for(const row of rows)options(row);render();});
-UI.userDisplay={enabled:false,load,poll:()=>{if(UI.activePage()==='device'&&Date.now()-lastRead>=2000)load().catch(()=>{});},enable(caps){this.enabled=['display_source.get','display_source.set','display_data.set'].every(action=>caps.actions?.includes(action));card.hidden=!this.enabled;if(this.enabled)UI.run(null,load,null);}};
+UI.userDisplay={enabled:false,load,poll:()=>{if(UI.activePage()==='device'&&Date.now()-lastRead>=2000)load().catch(()=>{});},unmount(){this.enabled=false;card.remove();},enable(caps){this.enabled=['display_source.get','display_source.set','display_data.set'].every(action=>caps.actions?.includes(action));card.hidden=!this.enabled;document.querySelector('[data-settings-page="device"]').append(card);if(this.enabled)UI.run(null,load,null);}};
 render();
 })();
