@@ -15,6 +15,8 @@ const server=http.createServer(async(req,res)=>{
   let body='';for await(const chunk of req)body+=chunk;
   const request=JSON.parse(body);calls.push(request);
   const data=request.action==='display_source.get'&&nullRead?null:fixture.command(request.action,request.params);
+  // This regression deliberately serves a v2-only device. V3 has its own suite.
+  if(request.action==='capabilities.get')data.actions=data.actions.filter(action=>!['display_profile.get','display_profile.set','display_value.set'].includes(action));
   res.writeHead(200,{'Content-Type':'application/json'}).end(JSON.stringify({code:request.action.endsWith('.get')?'ok':'accepted',data}));
  }catch(error){res.writeHead(400,{'Content-Type':'application/json'}).end(JSON.stringify({code:error.message}));}
 });
