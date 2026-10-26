@@ -10,7 +10,7 @@ TC1 智能排插、M1 空气检测仪、A1 空气净化器和 DAIKIN 大金空�
 
 - **设备页面**：TC1 插口、功率与定时；M1 / DAIKIN 空气读数、显示与联动；A1 风机、滤芯、灯环与自动模式。控件按固件能力显示。
 - **平台与本地直连**：平台账号管理设备，也可连接自己的 MQTT Broker；局域网直连使用设备网页密码，无需平台账号。平台接入与设备配置见[使用指南](https://phicomm-io.github.io/guides/iotcloud-connect.html)。
-- **DAIKIN 中枢**：独立构建使用本地账户管理 Broker、上游 MQTT 和转发；不提供邮箱注册或 GitHub 登录。v1 中枢尚未正式发布，安装与切换条件见[大金指南](https://phicomm-io.github.io/guides/daikin-guide.html)。
+- **DAIKIN 中枢**：独立构建使用本地账户管理 Broker、上游 MQTT 和转发；不提供邮箱注册或 GitHub 登录。v1.0.0-rc 提供独立中枢预发布构建，v1 稳定版尚未发布；安装与切换条件见[大金指南](https://phicomm-io.github.io/guides/daikin-guide.html)。
 - **静态网页与演示**：IoTCloud 可单独托管、添加到桌面；演示使用模拟数据。
 
 | 路径 | 内容 |
