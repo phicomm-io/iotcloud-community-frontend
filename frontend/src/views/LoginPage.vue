@@ -5,8 +5,8 @@ import { ref,onMounted } from "vue";
 import {hubMode} from "../deployment";
 import HubSetup from "../components/HubSetup.vue";
 const setupRequired=ref(false);
-onMounted(async()=>{if(hubMode)try{setupRequired.value=!!(await api("/register/status")).setup_required;}catch(e){message.value=e.message;}});
-import { useRouter } from "vue-router";
+onMounted(async()=>{if(hubMode){if(route.query.reason==='hub-session-expired')message.value=t('hub.home.sessionExpired');try{setupRequired.value=!!(await api("/register/status")).setup_required;}catch(e){message.value=e.message;}}});
+import { useRoute,useRouter } from "vue-router";
 import GitHubButton from "../components/GitHubButton.vue";
 import AuthShell from "../components/AuthShell.vue";
 import LocalConnect from "../components/LocalConnect.vue";
@@ -15,6 +15,7 @@ import { api, account, applyAccount } from "../account";
 import {track} from "../analytics";
 import {legacyCredentials, rememberLogin, savedPassword} from "../connectionPreferences";
 const candidate = legacyCredentials();
+const route=useRoute();
 const username = ref(candidate?.username || ""),
   password = ref(candidate?.password || ""),
   message = ref(""),

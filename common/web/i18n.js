@@ -142,8 +142,6 @@ const D={
 "fw.convert_hub_help":["Install signed hub firmware over the device’s local HTTP connection to enable hub features.", "通过设备的本地 HTTP 连接上传中枢签名固件，启用中枢功能。"],
 "fw.convert_hub_confirm":["Switch to hub firmware and restart? Wi-Fi, MQTT and the web password will be kept. Hub features will be enabled. Use a signed hub OTA file and a local HTTP connection.", "确认切换为中枢版本并重启？将保留 Wi-Fi、MQTT 和网页管理密码，并启用中枢功能。请通过本地 HTTP 连接上传中枢版本的签名 OTA 文件。"],
 "fw.convert_hub_signed":["Choose a signed hub OTA file (.signed). Unsigned rescue cannot be combined with this switch.", "请选择中枢版本的签名 OTA 文件（.signed），切换版本不能使用未签名救援。"],
-"fw.convert_hub_password":["Set a web password in Device settings before switching to hub firmware.", "切换为中枢版本前，请先在设备设置中设置网页管理密码。"],
-"fw.set_web_password":["Set web password", "设置网页管理密码"],
 "error.invalid_params":["Invalid settings", "配置参数无效"],
 "error.busy":["Device busy; retry later", "设备忙，请稍后重试"],
 "error.storage_error":["Could not save settings", "配置保存失败"],

@@ -481,19 +481,16 @@ function firmwarePage(dev){
  const conversionSupported=UI.caps?.ota_variant_conversion==='full-to-hub';
  const conversion=conversionSupported?switchRow('hubConversion','fw.convert_hub','fw.convert_hub_help'):null;
  const conversionInput=conversion?.querySelector('input'),unsignedInput=unsigned.querySelector('input');
- const passwordGuide=h('div',{id:'hubConversionPassword',class:'stack',hidden:true},h('p',{class:'help',i18n:'fw.convert_hub_password'}),
-  h('button',{class:'btn',type:'button',i18n:'fw.set_web_password',onclick:()=>{if(UI.embedded)UI.embeddedRoute='settings/device';else location.hash='settings/device';showRoute();$('webPassword')?.focus();}}));
  function conversionMode(){
   const selected=!!conversionInput?.checked;
   if(selected)unsignedInput.checked=false;
   unsignedInput.disabled=selected;
   file.accept=selected?'.signed':'.bin,.raw,.signed';
-  passwordGuide.hidden=!selected||identity?.web_password_set===true;
  }
  conversionInput?.addEventListener('change',conversionMode);
  const url=h('input',{id:'otaUrl',type:'url',maxLength:499,required:true,placeholder:'https://…/'+dev.otaName});
  const fileForm=h('form',{id:'fileForm',class:'stack'},h('label',{class:'field'},h('span',{},t('fw.file',{m:dev.model})),file),
-  h('details',{class:'more'},h('summary',{i18n:'common.advanced'}),unsigned,...(conversion?[conversion,passwordGuide]:[])),
+  h('details',{class:'more'},h('summary',{i18n:'common.advanced'}),unsigned,...(conversion?[conversion]:[])),
   h('div',{class:'form-actions'},h('button',{class:'btn primary',type:'submit'},h('span',{i18n:'fw.upload'}))));
  const urlForm=h('form',{id:'urlForm',class:'stack',hidden:true},h('label',{class:'field'},h('span',{i18n:'fw.url'}),url),
   h('div',{class:'form-actions'},h('button',{class:'btn primary',type:'submit'},h('span',{i18n:'fw.download'}))));
@@ -505,7 +502,6 @@ function firmwarePage(dev){
   const rescue=unsignedInput.checked,convert=!!conversionInput?.checked;
   if(convert){
    if(rescue||!f.name?.endsWith('.signed')){toast(t('fw.convert_hub_signed'),true);return;}
-   if(identity?.web_password_set!==true){passwordGuide.hidden=false;toast(t('fw.convert_hub_password'),true);return;}
    if(!window.confirm(t('fw.convert_hub_confirm')))return;
   }
   if(rescue&&!window.confirm(t('fw.unsigned_confirm')))return;
@@ -524,7 +520,7 @@ function firmwarePage(dev){
  const fileLabel=fileForm.querySelector('.field>span');I18N.onChange(()=>{fileLabel.textContent=t('fw.file',{m:dev.model});});
  return {el:h('div',{class:'stack'},pageHead('nav.firmware','fw.lead'),sum,...(mcu?[mcu.el]:[]),card('fw.compare_title',null,h('p',{class:'help',i18n:'fw.compare_help'}),comparison),online,
   card('fw.install',null,picker,h('div',{style:'margin-top:16px'},fileForm,urlForm),h('div',{class:'stack',style:'margin-top:20px'},prog,state,cancel),info(dev.otaHintKey))),
-  status(s){identity=s;comparisonLink();passwordGuide.hidden=!conversionInput?.checked||s.web_password_set===true;if(mcu)mcu.refresh().catch(()=>{});sum.replaceChildren(summary([['fw.version',h('span',{class:'num'},s.version||'—')],['fw.state',t('s.'+(s.ota_state||'idle'))],s.ota_error?['fw.error',h('span',{class:'badge bad'},s.ota_error)]:null]));
+  status(s){identity=s;comparisonLink();if(mcu)mcu.refresh().catch(()=>{});sum.replaceChildren(summary([['fw.version',h('span',{class:'num'},s.version||'—')],['fw.state',t('s.'+(s.ota_state||'idle'))],s.ota_error?['fw.error',h('span',{class:'badge bad'},s.ota_error)]:null]));
    cancel.hidden=!s.ota_active||s.ota_mode==='committing';
    if(s.ota_active){prog.value=s.ota_progress;state.textContent=t('fw.progress',{p:s.ota_progress});}}};
 }

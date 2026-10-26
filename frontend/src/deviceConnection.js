@@ -77,7 +77,6 @@ export function createDeviceTransport({fetcher=globalThis.fetch,records={},onSta
   if(!e||e.mode==='mqtt'||!records[key]?.ready)return reject(t('p.6bc40dfa1f9f'));
   if(target!==undefined){
    if(target?.variant!=='hub'||target?.confirm!=='full-to-hub'||e.device.model!=='daikin'||rescue)return reject(t('p.bcce0d150ca6'));
-   if(!e.password)return reject(t('ota.conversion_password'));
    try{if(localAddress(e.address)!==e.address)return reject(t('p.6bc40dfa1f9f'));}catch{return reject(t('p.6bc40dfa1f9f'));}
   }
   const xhr=new XMLHttpRequestClass(),controller={abort:()=>xhr.abort()};e.controllers.add(controller);

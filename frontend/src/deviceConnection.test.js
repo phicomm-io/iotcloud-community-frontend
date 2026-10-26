@@ -38,7 +38,7 @@ test('only two probes run concurrently and stale identity replies cannot enable 
  while(gates.length||active){gates.splice(0).forEach(r=>r());await new Promise(setImmediate);}
  await Promise.all(jobs);assert.equal(max,2);assert.equal(records.d0.ready,false);t.stop();
 });
-test('local uploads preserve ordinary routes; signed hub conversion needs explicit target and web password',async()=>{
+test('signed hub conversion keeps explicit guards and authenticates only when a web password exists',async()=>{
  const requests=[];
  class XHR{
   constructor(){this.upload={};this.headers={};}
@@ -62,8 +62,11 @@ test('local uploads preserve ordinary routes; signed hub conversion needs explic
  const count=requests.length;
  for(const invalid of [null,{}, {variant:'full',confirm:'hub-to-full'}, {variant:'hub',confirm:'wrong'}])assert.equal((await t.upload('d',file,false,()=>{},XHR,invalid).promise).status,0);
  assert.equal((await t.upload('d',file,true,()=>{},XHR,target).promise).status,0);
- configure('');await t.probe('d');assert.equal((await t.upload('d',file,false,()=>{},XHR,target).promise).status,0);
+ assert.equal(requests.length,count,'failed conversion guards cannot send an upload');
+ configure('');await t.probe('d');assert.equal((await t.upload('d',file,false,()=>{},XHR,target).promise).status,202);
+ assert.equal(requests.at(-1).file,file);assert.equal(requests.at(-1).url,'http://192.168.1.115/api/v1/ota/convert');
+ assert.deepEqual(requests.at(-1).headers,{'Content-Type':'application/octet-stream','X-IoTCloud-Target-Variant':'hub','X-IoTCloud-Confirm':'full-to-hub'});
  t.configure('d',daikin,{mode:'mqtt',address:'http://192.168.1.115'},'web-secret');assert.equal((await t.upload('d',file,false,()=>{},XHR,target).promise).status,0);
- assert.equal(requests.length,count,'failed conversion guards cannot send an upload');t.stop();
- const a1=fixture(async url=>response(url.endsWith('/info')?info:status));await a1.t.probe('d');assert.equal((await a1.t.upload('d',file,false,()=>{},XHR,target).promise).status,0);a1.t.stop();assert.equal(requests.length,count);
+ assert.equal(requests.length,count+1,'MQTT-only conversion cannot send an upload');t.stop();
+ const a1=fixture(async url=>response(url.endsWith('/info')?info:status));await a1.t.probe('d');assert.equal((await a1.t.upload('d',file,false,()=>{},XHR,target).promise).status,0);a1.t.stop();assert.equal(requests.length,count+1);
 });
