@@ -140,6 +140,8 @@ const D={
 "recovery.hint":["The saved configuration cannot be migrated. Original data is retained. Confirm clearing it to configure the device again.", "原配置无法迁移，原始数据已保留。请明确确认清空后重新配网。"],
 "recovery.clear":["Clear configuration and set up again", "清空配置并重新设置"],
 "recovery.confirm":["Clear all saved settings, including Wi-Fi and MQTT credentials? This cannot be undone.", "清空包括 Wi-Fi、MQTT 密码在内的所有配置？此操作无法撤销。"],
+"recovery.ready":["Configuration cleared. You can set up the device again.", "配置已清空，可以重新配网。"],
+"recovery.unconfirmed":["The device restarted but still requires configuration recovery. Clearing was not confirmed; reconnect and try again.", "设备已重启，但仍需恢复配置。清空结果未确认，请重新连接后重试。"],
 "fw.notes_unavailable":["The browser could not load a verified upgrade comparison. Open the comparison page or retry.", "浏览器暂时无法加载已校验的升级差异，请打开对比页面或重试。"],
 "fw.notes_confirm":["Upgrade differences are unavailable. Continue with the upgrade anyway?", "暂时无法查看升级差异，仍确认继续升级？"],
 "fw.convert_hub":["Switch to hub firmware", "切换为中枢版本"],
@@ -400,7 +402,7 @@ const D={
 'common.copy':['Copy','复制'],'common.copied':['Copied','已复制'],'common.advanced':['Advanced','高级'],'common.more_info':['Details','说明'],
 'common.prev':['Previous','上一页'],'common.next':['Next','下一页'],'common.yes':['Yes','是'],'common.no':['No','否'],'common.saving':['Saving…','保存中…'],'common.saved':['Saved','已保存'],'common.max':['Up to {n} items','最多 {n} 项'],
 'unit.s':['s','秒'],'time.dh':['{d} d {h} h','{d} 天 {h} 小时'],'time.hm':['{h} h {m} min','{h} 小时 {m} 分'],'time.m':['{m} min','{m} 分钟'],
-'toast.accepted':['Request accepted','设备已接受请求'],'toast.rebooting':['Restarting… reconnect in about 20 s','正在重启，约 20 秒后重新连接'],'toast.resetting':['Settings cleared. The device is restarting.','配置已清除，设备正在重启'],
+'toast.accepted':['Request accepted','设备已接受请求'],'toast.rebooting':['Restarting… reconnect in about 20 s','正在重启，约 20 秒后重新连接'],'toast.resetting':['Clear request accepted. Waiting for restart; reconnect to the device hotspot if disconnected.','清空请求已接受，等待设备重启；连接断开后请重新连接设备热点。'],
 'pref.lang_auto':['Auto','自动'],'pref.theme_system':['System','跟随系统'],'pref.theme_light':['Light','浅色'],'pref.theme_dark':['Dark','深色'],
 
 /* kinds and navigation */
