@@ -84,6 +84,9 @@ jobs:
       - run: NODE_PATH=frontend/node_modules node tests/test_daikin_co2_browser.cjs
       - run: NODE_PATH=frontend/node_modules node tests/test_binding_layout.cjs
       - run: NODE_PATH=frontend/node_modules node tests/test_a1_effect_countdown_browser.cjs
+      - run: NODE_PATH=frontend/node_modules node tests/test_a1_linkage_refresh_browser.cjs
+      - run: BROWSER=chromium NODE_PATH=frontend/node_modules node tests/test_a1_linkage_refresh_browser.cjs
+      - run: WEB_TEST_MINIFIED=1 NODE_PATH=frontend/node_modules node tests/test_a1_linkage_refresh_browser.cjs
       - run: NODE_PATH=frontend/node_modules node tests/test_interaction_layout.cjs
       - run: NODE_PATH=frontend/node_modules node tests/test_m1_pressure_browser.cjs
       - run: BROWSER=webkit NODE_PATH=frontend/node_modules node tests/test_m1_pressure_browser.cjs

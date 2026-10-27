@@ -312,13 +312,15 @@ let linkageDraws=[];
 async function showLinkage(){
  const page=document.querySelector('[data-settings-page="linkage"]');
  try{bindingStatus=await api('/binding/status');}catch{}
- linkageDraws=[];page.replaceChildren();
+ // Keep the last complete view while both controllers are being read.
+ const content=document.createDocumentFragment(),draws=[];
  for(const fresh of UI.caps?.fresh_air?[false,true]:[false]){
-  const section=h('section',{class:'stack','data-auto-fan':fresh?'fresh':'primary'});page.append(section);
-  await showFanRules(fresh,section);
+  const section=h('section',{class:'stack','data-auto-fan':fresh?'fresh':'primary'});content.append(section);
+  await showFanRules(fresh,section,draws);
  }
+ page.replaceChildren(content);linkageDraws=draws;
 }
-async function showFanRules(fresh,page){
+async function showFanRules(fresh,page,draws){
  const m=await (fresh?command('fresh_air.linkage.get',{}):api('/linkage/config'));
  const modern=UI.caps?.actions?.includes('fan.mode.set');
  const supportsMetric=bit=>{const available=bindingStatus.average?.fields;return available?!!available[({1:'pm25',2:'formaldehyde',4:'co2'})[bit]]:bit===4?!!bindingStatus.average?.co2_valid:!!bindingStatus.average?.valid;};
@@ -372,7 +374,7 @@ async function showFanRules(fresh,page){
     return (fresh?command('fresh_air.linkage.set',m):api('/linkage/config',m)).then(saved=>{m.revision=saved.revision;return refresh();});
    }));
  };
- linkageDraws.push(draw);draw();
+ draws.push(draw);draw();
 }
 
 /* Accessory controls are admitted by the device capability, including cloud embeds. */
