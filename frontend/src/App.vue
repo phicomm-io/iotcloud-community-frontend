@@ -32,7 +32,7 @@ const route=useRoute(),router=useRouter();
 const localMode=route.name==='Local';
 const installApp=ref(null),listReady=ref(false);
 const home=ref(null),devicePicker=ref(null),nameDialog=ref(null),aliases=ref({});
-function displayName(d){const name=aliases.value[deviceKey(d)]||states[deviceKey(d)]?.name||d.name;if(name)return name;const peers=list.value.filter(x=>x.model===d.model);return deviceType(d)+(peers.length>1?' '+(peers.findIndex(x=>deviceKey(x)===deviceKey(d))+1):'');}
+function displayName(d){const name=aliases.value[deviceKey(d)]||viewStates.value[deviceKey(d)]?.name||d.name;if(name)return name;const peers=list.value.filter(x=>x.model===d.model);return deviceType(d)+(peers.length>1?' '+(peers.findIndex(x=>deviceKey(x)===deviceKey(d))+1):'');}
 function renameDevice(d,name,done){
  if(d.version==='v1'){
   if(name)aliases.value[deviceKey(d)]=name;else delete aliases.value[deviceKey(d)];

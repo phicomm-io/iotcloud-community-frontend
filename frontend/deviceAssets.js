@@ -13,11 +13,12 @@ export async function buildDeviceAssets({sourceRoot,appRoot,watch=()=>{}}){
  const read=file=>{watch(file);return readFileSync(file,'utf8');};
  const pages=Object.fromEntries(Object.entries(products).map(([model,path])=>{
   const file=resolve(sourceRoot,path);
-  let html=read(file).replace(/<script>\s*\/\* @include ([\w.]+) \*\/\s*<\/script>/g,(_,name)=>'<script data-device-part="'+name+'">/* @include '+name+' */</script>');
-  html=html.replace(/\/\* @include ([\w.]+) \*\//g,(_,name)=>{
+  let html=read(file).replace(/<script>\s*\/\* @include ([\w.-]+) \*\/\s*<\/script>/g,(_,name)=>'<script data-device-part="'+name+'">/* @include '+name+' */</script>');
+  html=html.replace(/\/\* @include ([\w.-]+) \*\//g,(_,name)=>{
    const shared=resolve(sourceRoot,'common/web',name);
    return read(existsSync(shared)?shared:resolve(dirname(file),name));
   });
+  if(html.includes('@include'))throw Error('Unresolved device include: '+path);
   return [model,html.replace('</head>','<script>'+read(resolve(sourceRoot,'common/web/appearance.js'))+'</script></head>')];
  }));
  // A single dictionary covers the actual references in all four products. This

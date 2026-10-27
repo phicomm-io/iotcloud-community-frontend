@@ -4,6 +4,7 @@ const copy=value=>JSON.parse(JSON.stringify(value));
 const settle=async()=>{for(let i=0;i<12;i++)await new Promise(resolve=>setImmediate(resolve));};
 const lamps=()=>Array.from({length:3},()=>({red:false,green:false,yellow:false}));
 const defaults=slot=>({slot,source:'none',device_id:'',metric:'custom',unit:'',display:{mode:'integer',show_label:false,show_unit:false},ttl_seconds:20,color:{mode:'fixed',lamps:lamps()}});
+const remote=(f,slot,field_id='power',unit='W',device='123456abcdef')=>{f.edit(`display${slot}Source`,'mqtt');f.edit(`display${slot}Device`,device);f.edit(`display${slot}FieldId`,field_id);f.edit(`display${slot}SourceUnit`,unit);};
 async function fixture(language='en',{initialRead=null,candidates=[],clock=null,fullCaps=true}={}){
  const html=require('./render_page.cjs')('M1/web/index.html'),dom=new JSDOM(html,{runScripts:'outside-only',url:'http://device.local#settings/device'}),w=dom.window,calls=[];
  let config={revision:7,selected_source:'original',double_click:'none',lanes:[defaults(0),defaults(1)]},leases={},samples={},failure='',badRead=false,hold=null,override=null,transform=null,profile='formatted';
@@ -25,7 +26,7 @@ async function fixture(language='en',{initialRead=null,candidates=[],clock=null,
  w.getDeviceSensorSources=async()=>candidates;
  w.fetch=async(url,options)=>{
   const request=JSON.parse(options.body);calls.push(request);let data={},code='ok';
-  if(request.action==='display_profile.get'){if(initialRead)await initialRead;data=badRead?null:{schema:3,...copy(config),runtime:override||runtime()};}
+  if(request.action==='display_profile.get'){if(initialRead)await initialRead;data=badRead?null:{schema:4,...copy(config),runtime:override||runtime()};}
   if(request.action==='display_source.get')data={revision:7,selected_source:'original',double_click:'none',lanes:[0,1].map(slot=>({slot,source:'none',device_id:'',metric:'custom',unit:'',decimals:0,scale:1,ttl_seconds:20,color:{mode:'fixed',value:'off'}})),runtime:{profile:'dual',selected_source:'original',mcu_supported:true,confirmed:false,confirmation:'pending_mcu_readback',lanes:[0,1].map(slot=>({slot,valid:false,value:null,unit:'',age_ms:null,remaining_ttl_seconds:0,effective:false,reason:'disabled',number:null,format:null,color:null,confirmed:false}))}};
   if(request.action==='display_profile.set'){
    if(hold)await hold;
@@ -55,16 +56,16 @@ async function fixture(language='en',{initialRead=null,candidates=[],clock=null,
 for(const language of ['en','zh-CN'])test(`formatted pair ${language}: physical modes, separate segments and raw API frame receipt`,async()=>{
  const f=await fixture(language);try{
   assert.equal(f.w.document.querySelectorAll('#displaySourceConfig').length,1);
-  assert.equal(f.calls.some(request=>request.action==='display_source.get'),false,'new capabilities select only v3');
+  assert.equal(f.calls.some(request=>request.action==='display_source.get'),false,'new capabilities select only the current profile');
   assert.equal(f.element('co2SourceConfig').hidden,true);assert.equal(f.card.querySelectorAll('table input[type=checkbox]').length,36);
   assert.equal(f.element('display0Mode').options.length,5);assert.equal(f.element('display1Mode').options.length,1);assert.equal(f.element('display1Mode').disabled,true);
   f.edit('displaySelectedSource','user');f.edit('displayDoubleClick','switch_display');
-  f.edit('display0Source','mqtt');f.edit('display0Device','AA:BB:CC:DD:EE:FF');f.edit('display0Metric','co2');f.edit('display0Mode','auto_kilo');f.edit('display0Label',true);f.edit('display0Glyph',false);
+  remote(f,0,'new_co2','ppm','AA:BB:CC:DD:EE:FF');f.edit('display0Mode','auto_kilo');f.edit('display0Label',true);f.edit('display0Glyph',false);
   f.edit('display0Lamp0red',true);f.edit('display0Lamp0green',true);f.edit('display0Lamp1yellow',true);f.edit('display0Lamp2green',true);
   f.edit('display1Source','api');f.edit('display1WriteGlyph',true);f.edit('display1WriteLamp2yellow',true);
   assert.equal(f.element('display1Write').disabled,true);await f.submit();
   const write=f.writes()[0];assert.equal(write.action,'display_profile.set');assert.equal(write.params.revision,7);assert.equal(Object.hasOwn(write.params,'schema'),false);
-  assert.deepEqual(write.params.lanes[0],{...defaults(0),source:'mqtt',device_id:'aabbccddeeff',metric:'co2',unit:'ppm',display:{mode:'auto_kilo',show_label:true,show_unit:false},color:{mode:'fixed',lamps:[{red:true,green:true,yellow:false},{red:false,green:false,yellow:true},{red:false,green:true,yellow:false}]}});
+  assert.deepEqual(write.params.lanes[0],{slot:0,source:'mqtt',device_id:'aabbccddeeff',field_id:'new_co2',type:'number',unit:'ppm',ttl_seconds:20,display:{mode:'auto_kilo',show_label:true,show_unit:false},color:{mode:'fixed',lamps:[{red:true,green:true,yellow:false},{red:false,green:false,yellow:true},{red:false,green:true,yellow:false}]}});
   assert.deepEqual(write.params.lanes[1],{...defaults(1),source:'api'},'new API sources store neutral unused metadata');
   assert.equal(f.calls[f.calls.indexOf(write)+1].action,'display_profile.get');
   f.setSamples({0:1234});await f.w.UI.userDisplay.load();assert.match(f.element('display0Preview').textContent,/1\.23/);
@@ -78,7 +79,7 @@ for(const language of ['en','zh-CN'])test(`formatted pair ${language}: physical 
 });
 test('each of nine fixed segments is saved independently and the other region is untouched',async()=>{
  const f=await fixture();try{
-  for(const slot of [0,1]){f.edit('display'+slot+'Source','mqtt');f.edit('display'+slot+'Device','123456abcdef');}await f.submit();
+  for(const slot of [0,1])remote(f,slot);await f.submit();
   const expected=lamps();
   for(const position of [0,1,2])for(const color of ['red','green','yellow']){
    f.edit(`display0Lamp${position}${color}`,true);expected[position][color]=true;await f.submit();
@@ -88,7 +89,7 @@ test('each of nine fixed segments is saved independently and the other region is
  }finally{f.dom.window.close();}
 });
 test('source MAC accepts either representation, candidates normalize, malformed IDs never write',async()=>{
- const f=await fixture('en',{candidates:[{device_id:'AA:BB:CC:DD:EE:FF',name:'A1',metric:'fan_speed_percent',unit:'%',value:65}]});try{
+ const f=await fixture('en',{candidates:[{device_id:'AA:BB:CC:DD:EE:FF',device_name:'Air purifier',name:'Effective fan output',field_id:'fan_speed_percent',type:'number',unit:'%',value:65}]});try{
   f.edit('display0Source','mqtt');f.edit('display0Candidate','0');await f.submit();assert.equal(f.writes()[0].params.lanes[0].device_id,'aabbccddeeff');
   for(const id of ['123456ABCDEF','12:34:56:AB:CD:EF']){f.edit('display0Device',id);await f.submit();assert.equal(f.writes().at(-1).params.lanes[0].device_id,'123456abcdef');}
   const count=f.writes().length;for(const id of ['aa-bb-cc-dd-ee-ff','a:ab:bc:cd:de:ef','123456abcdex','']){f.edit('display0Device',id);await f.submit();}assert.equal(f.writes().length,count);
@@ -96,7 +97,7 @@ test('source MAC accepts either representation, candidates normalize, malformed 
 });
 test('physical source float32 thresholds and positive overflow keep their configured conversion',async()=>{
  const f=await fixture();try{
-  f.edit('display0Source','mqtt');f.edit('display0Device','123456abcdef');f.edit('display0Metric','power');f.edit('display0Mode','decimal_1');f.edit('display0ColorMode','thresholds');
+  remote(f,0,'custom_load','kVA');f.edit('display0Mode','decimal_1');f.edit('display0ColorMode','thresholds');
   f.edit('display0Low',.1);f.edit('display0High',.3);await f.submit();assert.equal(f.toasts().at(-1).classList.contains('bad'),false);
   f.setSamples({0:999999});await f.w.UI.userDisplay.load();assert.match(f.element('display0Preview').textContent,/9\.90/);
   const count=f.writes().length;
@@ -105,9 +106,38 @@ test('physical source float32 thresholds and positive overflow keep their config
   f.edit('display0Source','none');await f.submit();assert.deepEqual(f.getConfig().lanes[0],defaults(0),'disabled lanes normalize unfinished fields');
  }finally{f.dom.window.close();}
 });
+test('generic candidate names and units replace model adapters and never choose unsupported types',async()=>{
+ const candidates=[
+  {device_id:'123456abcdef',device_name:'Custom publisher',field_id:'new_load',name:'Apparent load',type:'number',unit:'kVA',value:12.5},
+  {device_id:'abcdef123456',device_name:'Future publisher',field_id:'new_mode',name:'Operating mode',type:'text',unit:'',value:'0'},
+  {device_id:'abcdef123456',device_name:'Invalid publisher',field_id:'new_count',name:'Count',type:'number',unit:'',value:null}
+ ];
+ const f=await fixture('en',{candidates});try{
+  f.edit('display0Source','mqtt');assert.equal(f.element('display0Candidate').options.length,2);assert.equal(f.element('display0FieldId').value,'','opening a source does not bind its first candidate');
+  assert.match(f.element('display0Candidate').textContent,/Custom publisher · Apparent load · 12.5 kVA/);assert.doesNotMatch(f.element('display0Candidate').textContent,/Operating mode|Invalid publisher|display.metric/);
+  f.edit('display0Candidate','0');await f.submit();const lane=f.getConfig().lanes[0];
+  assert.equal(lane.field_id,'new_load');assert.equal(lane.type,'number');assert.equal(lane.unit,'kVA');assert.equal(Object.hasOwn(lane,'metric'),false);assert.equal(Object.hasOwn(lane,'model'),false);assert.equal(Object.hasOwn(lane,'name'),false);
+  f.setSamples({0:12.5});await f.w.UI.userDisplay.load();assert.match(f.element('display0Status').textContent,/12.5 kVA/);assert.match(f.element('display0Preview').textContent,/13/);
+  f.edit('display0FieldId','manual_load');f.edit('display0SourceUnit','界'.repeat(8));candidates.splice(0,1,{...candidates[0],name:'Renamed field',unit:'W'});await f.w.UI.userDisplay.load();
+  assert.equal(f.element('display0FieldId').value,'manual_load');assert.equal(f.element('display0SourceUnit').value,'界'.repeat(8));
+  await f.submit();assert.equal(f.getConfig().lanes[0].field_id,'manual_load');assert.equal(f.getConfig().lanes[0].unit,'界'.repeat(8));
+  const writes=f.writes().length;for(const id of ['bad-id','Uppercase','a'.repeat(33),'']){f.edit('display0FieldId',id);await f.submit();}assert.equal(f.writes().length,writes);
+  f.edit('display0FieldId','manual_load');for(const unit of ['界'.repeat(9),'x\u007f']){f.edit('display0SourceUnit',unit);await f.submit();}assert.equal(f.writes().length,writes);
+ }finally{f.dom.window.close();}
+});
+test('independent profile receipts require exact field identity, type and unit',async()=>{
+ const f=await fixture();try{
+  remote(f,0,'custom_ratio','ratio');
+  f.setTransform((action,data)=>{if(action==='display_profile.get'&&data?.lanes[0].source==='mqtt')data.lanes[0].field_id='other_ratio';return data;});
+  await f.submit();assert.equal(f.toasts().at(-1).classList.contains('bad'),true);assert.equal(f.element('display0FieldId').value,'custom_ratio');
+  for(const patch of [{type:'text'},{field_id:'Invalid'},{unit:'界'.repeat(9)},{metric:'power'}]){
+   f.setTransform((action,data)=>{if(action==='display_profile.get')Object.assign(data.lanes[0],patch);return data;});await assert.rejects(f.w.UI.userDisplay.load());
+  }
+ }finally{f.dom.window.close();}
+});
 test('pending controls, CAS edit revision and failed independent confirmation preserve edits',async()=>{
  const f=await fixture();try{
-  f.edit('display0Source','mqtt');f.edit('display0Device','AABBCCDDEEFF');f.edit('display0Lamp1yellow',true);f.setRevision(9);await f.w.UI.userDisplay.load();
+  remote(f,0,'custom_load','kVA','AABBCCDDEEFF');f.edit('display0Lamp1yellow',true);f.setRevision(9);await f.w.UI.userDisplay.load();
   assert.equal(f.element('display0Device').value,'AABBCCDDEEFF');assert.equal(f.element('display0Lamp1yellow').checked,true);
   await f.submit();assert.equal(f.writes()[0].params.revision,7);assert.equal(f.toasts().at(-1).classList.contains('bad'),true);
   let release;f.hold(new Promise(resolve=>release=resolve));await f.submit();
@@ -132,10 +162,22 @@ test('contract example and strict runtime validation preserve confirmed, project
   const upgrade=copy(sample.runtime);upgrade.mcu_supported=false;upgrade.confirmation='requires_mcu_upgrade';f.setRuntime(upgrade);await f.w.UI.userDisplay.load();assert.match(f.element('displaySourceStatus').textContent,/Update the M1 sensor MCU/);
  }finally{f.dom.window.close();}
 });
-test('partial v3 capabilities fall back to the existing v2 form',async()=>{
+test('missing profile capabilities explain the required upgrade without using removed APIs',async()=>{
  const f=await fixture('en',{fullCaps:false});try{
-  assert.equal(f.card.hidden,false);assert(f.element('display0Decimals'));assert.equal(f.element('display0Mode'),null);
-  assert.equal(f.calls.some(request=>request.action==='display_profile.get'),false);assert.equal(f.calls.some(request=>request.action==='display_source.get'),true);
+  assert.equal(f.card.hidden,false);assert.equal(f.card.querySelector('form').hidden,true);assert.match(f.card.textContent,/Update this M1’s Wi-Fi firmware/);
+  assert.equal(f.element('display0Decimals'),null);assert.equal(f.calls.some(request=>request.action.startsWith('display_')),false);
+ }finally{f.dom.window.close();}
+});
+test('production C schema4 MQTT descriptors bind arbitrary field IDs and units without a model adapter',async()=>{
+ const f=await fixture();try{
+  const sample=copy(require('./fixtures/m1-display-v4-mqtt-production-get.json'));f.setRead(sample);await f.w.UI.userDisplay.load();
+  assert.equal(f.element('display0FieldId').value,'custom_sensor');assert.equal(f.element('display0SourceUnit').value,'mSv/h');
+  assert.equal(f.element('display1FieldId').value,'other_numeric');assert.equal(f.element('display1SourceUnit').value,'ticks/interval');
+  assert.match(f.element('display0Status').textContent,/1234 mSv\/h/);assert.match(f.element('display0Preview').textContent,/1\.23/);
+  assert.match(f.element('display1Status').textContent,/42 ticks\/interval/);assert.equal(f.element('display0Metric').closest('label').hidden,true);
+  await f.submit();assert.deepEqual(f.writes().at(-1).params.lanes,sample.lanes,'saving preserves the production descriptor bindings exactly');
+  const stale=copy(sample);for(const lane of stale.runtime.lanes)Object.assign(lane,{valid:false,value:null,age_ms:21000,remaining_ttl_seconds:0,reason:'stale',number:null,format:null,lamps:null});
+  f.setRead(stale);await f.w.UI.userDisplay.load();assert.equal(f.element('display0FieldId').value,'custom_sensor');assert.equal(f.element('display0SourceUnit').value,'mSv/h');assert.match(f.element('display0Status').textContent,/Reading expired/);
  }finally{f.dom.window.close();}
 });
 test('same-value renewals require new age and TTL, with actual transport delay allowed',async()=>{
@@ -150,10 +192,10 @@ test('same-value renewals require new age and TTL, with actual transport delay a
 });
 test('raw API digits and lamps are independent of saved physical modes, with exact receipt and strict bounds',async()=>{
  const f=await fixture();try{
-  const sample=copy(require('./fixtures/m1-display-v3-production-get.json'));f.setRead(sample);await f.w.UI.userDisplay.load();
+  const sample=copy(require('./fixtures/m1-display-v4-production-get.json'));f.setRead(sample);await f.w.UI.userDisplay.load();
   assert.equal(f.element('display0Value').value,'123');assert.equal(f.element('display0Decimal').checked,true);assert.equal(f.element('display0WriteLabel').checked,false);assert.equal(f.element('display0WriteGlyph').checked,true);
   assert.equal(f.element('display1Value').value,'999');assert.equal(f.element('display1WriteLabel').checked,true);assert.equal(f.element('display1WriteGlyph').checked,false);
-  assert.match(f.element('display0WritePreview').textContent,/1\.23.*mg\/m³/);assert.match(f.element('displaySourceStatus').textContent,/Controller confirmed/);
+  assert.match(f.element('display0WritePreview').textContent,/1\.23.*mg\/m³/);assert.match(f.element('displaySourceStatus').textContent,/Waiting for controller confirmation/);
   f.edit('display0Value',234);f.edit('display0WriteLamp0red',true);assert.equal(f.element('display0Write').disabled,false,'raw edits do not dirty persistent configuration');
   await f.click('display0Write');const raw=f.writes().at(-1);assert.equal(raw.action,'display_value.set');assert.equal(raw.params.number,234);assert.equal(raw.params.decimal,true);assert.equal(raw.params.lamps[0].red,true);
   assert.equal(Object.hasOwn(raw.params,'value'),false);assert.equal(Object.hasOwn(raw.params,'unit'),false);assert.match(f.element('display0Status').textContent,/2\.34 mg\/m³/);

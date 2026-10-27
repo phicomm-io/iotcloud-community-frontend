@@ -67,28 +67,31 @@ try{for(const [engine,type] of engines){
   const frame=page.frameLocator('iframe');await expect(frame.locator('#homePage')).toBeVisible();
   await frame.locator('.tabs a[data-tab=settings]').click();await frame.locator('.side a[href="#settings/firmware"]').click();
   await frame.locator('#fileForm > .more > summary').click();await frame.locator('#hubConversion').check();
-  await expect(frame.locator('#unsignedRescue')).toBeDisabled();await expect(frame.locator('#hubConversionPassword')).toBeVisible();
-  await frame.locator('#hubConversionPassword button').click();await expect(frame.locator('#webPassword')).toBeFocused();
-  await frame.locator('#webPassword').fill(password);await frame.locator('#authForm button[type=submit]').click();await expect.poll(()=>webPassword).toBe(password);
-  await frame.locator('.side a[href="#settings/firmware"]').click();await expect(frame.locator('#hubConversionPassword')).toBeHidden();await expect(frame.locator('#hubConversion')).toBeChecked();
+  await expect(frame.locator('#unsignedRescue')).toBeDisabled();await expect(frame.locator('#hubConversionPassword')).toHaveCount(0);
   await frame.locator('#firmware').setInputFiles({name:'daikin-hub.ota.bin.signed',mimeType:'application/octet-stream',buffer:bytes});
   let confirmation='';page.once('dialog',dialog=>{confirmation=dialog.message();return dialog.dismiss();});await frame.locator('#fileForm button[type=submit]').click();assert.equal(uploads.length,0);
   assert.match(confirmation,/Wi-Fi/);assert.match(confirmation,/MQTT/);assert.match(confirmation,/HTTP/);assert.match(confirmation,language==='en'?/password will be kept/:/网页管理密码/);
   page.once('dialog',dialog=>dialog.accept());await frame.locator('#fileForm button[type=submit]').click();await expect.poll(()=>uploads.length).toBe(1);
-  assert.equal(uploads[0].path,'/api/v1/ota/convert');assert.equal(uploads[0].headers['x-iotcloud-target-variant'],'hub');assert.equal(uploads[0].headers['x-iotcloud-confirm'],'full-to-hub');assert.equal(uploads[0].headers.authorization,'Basic '+Buffer.from('admin:'+password).toString('base64'));
+  assert.equal(uploads[0].path,'/api/v1/ota/convert');assert.equal(uploads[0].headers['x-iotcloud-target-variant'],'hub');assert.equal(uploads[0].headers['x-iotcloud-confirm'],'full-to-hub');assert.equal(uploads[0].headers.authorization,undefined);
   await expect.poll(()=>sentBytes.length).toBe(1);assert.equal(sentBytes[0].url,address+'/api/v1/ota/convert');assert.deepEqual(Buffer.from(sentBytes[0].bytes),bytes);if(uploads[0].bytes!==null)assert.deepEqual(uploads[0].bytes,bytes);
-  await frame.locator('#hubConversion').uncheck();await frame.locator('#fileForm button[type=submit]').click();await expect.poll(()=>uploads.length).toBe(2);
-  await frame.locator('#unsignedRescue').check();page.once('dialog',dialog=>dialog.accept());await frame.locator('#fileForm button[type=submit]').click();await expect.poll(()=>uploads.length).toBe(3);
-  assert.deepEqual(uploads.slice(1).map(x=>x.path),['/api/v1/ota/upload','/api/v1/ota/upload-unsigned']);for(const upload of uploads.slice(1)){assert.equal(upload.headers['x-iotcloud-target-variant'],undefined);assert.equal(upload.headers['x-iotcloud-confirm'],undefined);}
-  await expect.poll(()=>sentBytes.length).toBe(3);for(const sent of sentBytes)assert.deepEqual(Buffer.from(sent.bytes),bytes);
+  // A configured device password remains required by the device and is sent
+  // through the real local transport; it is not created just to enable hub mode.
+  await frame.locator('.side a[href="#settings/device"]').click();await frame.locator('#webPassword').fill(password);await frame.locator('#authForm button[type=submit]').click();await expect.poll(()=>webPassword).toBe(password);
+  await frame.locator('.side a[href="#settings/firmware"]').click();await expect(frame.locator('#hubConversion')).toBeChecked();
+  page.once('dialog',dialog=>dialog.accept());await frame.locator('#fileForm button[type=submit]').click();await expect.poll(()=>uploads.length).toBe(2);
+  assert.equal(uploads[1].path,'/api/v1/ota/convert');assert.equal(uploads[1].headers.authorization,'Basic '+Buffer.from('admin:'+password).toString('base64'));assert.equal(uploads[1].headers['x-iotcloud-target-variant'],'hub');assert.equal(uploads[1].headers['x-iotcloud-confirm'],'full-to-hub');assert.deepEqual(uploads[1].bytes,bytes);
+  await frame.locator('#hubConversion').uncheck();await frame.locator('#fileForm button[type=submit]').click();await expect.poll(()=>uploads.length).toBe(3);
+  await frame.locator('#unsignedRescue').check();page.once('dialog',dialog=>dialog.accept());await frame.locator('#fileForm button[type=submit]').click();await expect.poll(()=>uploads.length).toBe(4);
+  assert.deepEqual(uploads.slice(2).map(x=>x.path),['/api/v1/ota/upload','/api/v1/ota/upload-unsigned']);for(const upload of uploads.slice(2)){assert.equal(upload.headers['x-iotcloud-target-variant'],undefined);assert.equal(upload.headers['x-iotcloud-confirm'],undefined);assert.equal(upload.headers.authorization,'Basic '+Buffer.from('admin:'+password).toString('base64'));}
+  await expect.poll(()=>sentBytes.length).toBe(4);for(const sent of sentBytes)assert.deepEqual(Buffer.from(sent.bytes),bytes);
   // A same-origin iframe still cannot smuggle a reverse/unknown target to HTTP.
   await frame.locator('body').evaluate(()=>{window.invalidUpload=null;window.addEventListener('message',e=>{if(e.data?.type==='device-upload-result'&&e.data.id==='invalid-conversion')window.invalidUpload=e.data.result;});parent.postMessage({type:'device-upload',id:'invalid-conversion',file:new Blob(['fixture']),rescue:false,target:{variant:'full',confirm:'hub-to-full'}},parent.location.origin);});
-  await expect.poll(()=>frame.locator('body').evaluate(()=>window.invalidUpload?.status)).toBe(0);assert.equal(uploads.length,3);
+  await expect.poll(()=>frame.locator('body').evaluate(()=>window.invalidUpload?.status)).toBe(0);assert.equal(uploads.length,4);
   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   const layout=await frame.locator('body').evaluate(()=>({width:innerWidth,scroll:document.documentElement.scrollWidth,overflow:[...document.querySelectorAll('body *')].map(el=>({tag:el.tagName,id:el.id,class:el.className,text:el.textContent?.slice(0,100),right:el.getBoundingClientRect().right,left:el.getBoundingClientRect().left})).filter(el=>el.right>innerWidth||el.left<0)}));
   await page.screenshot({path:resolve(evidence,`${engine}-${language}-${width}.png`),fullPage:true});assert(layout.scroll<=layout.width,JSON.stringify(layout));assert.deepEqual(errors,[]);
   const storage=await page.evaluate(()=>JSON.stringify({...localStorage,...sessionStorage}));assert.equal(storage.includes(password),false);
   await context.close();
-  console.log(`PASS ${engine} ${language} ${width}: password setup, explicit signed conversion/cancel, exact Basic and target headers, original uploads, invalid target, private storage, layout`);
+  console.log(`PASS ${engine} ${language} ${width}: password-free and authenticated signed conversion/cancel, exact Basic and target headers, original uploads, invalid target, private storage, layout`);
  }}finally{await browser.close();}
 }}finally{await new Promise(done=>server.close(done));}

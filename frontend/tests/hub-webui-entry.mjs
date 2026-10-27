@@ -18,12 +18,13 @@ const evidence=process.env.HUB_ENTRY_EVIDENCE;
 if(evidence)await mkdir(evidence,{recursive:true});
 const screenshot=async(page,name)=>{if(evidence)await page.screenshot({path:resolve(evidence,name+'.png'),fullPage:true});};
 
-async function fixtureContext(browser,language,{variant='hub',owner=false}={}){
+async function fixtureContext(browser,language,{variant='hub',owner=false,webPasswordSet=false,selfDevice=false}={}){
  const context=await browser.newContext({viewport:{width:390,height:950},serviceWorkers:'block'});
  const device=sandbox.window.PhicommDemo.create('daikin');
  Object.assign(device.state,{device_id:mac,ip:'192.168.1.18',firmware_variant:variant});
- const records=[],requests=[],errors=[];let setup=owner,identityUnavailable=false;
- await context.addInitScript(language=>{try{localStorage.setItem('phicomm.language',language);localStorage.setItem('mqtt_auto_connect','false');}catch{}},language);
+ if(selfDevice){device.state.name='Local hub sensor';device.state.sensors.pm25={value:12,unit:'ug/m3',valid:true,age_ms:0};}
+ const records=[],requests=[],errors=[],setups=[];let setup=owner,identityUnavailable=false;
+ await context.addInitScript(({language,selfDevice,mac,target})=>{try{localStorage.setItem('phicomm.language',language);localStorage.setItem('mqtt_auto_connect','false');if(selfDevice)localStorage.setItem('phicomm.device-connection.'+encodeURIComponent(target+':local')+':'+encodeURIComponent(mac),JSON.stringify({mode:'auto',address:target,lastAddress:''}));}catch{}},{language,selfDevice,mac,target});
  context.on('page',page=>page.on('pageerror',error=>errors.push(error.message)));
  await context.route('**/*',async route=>{
   const request=route.request(),url=new URL(request.url());requests.push({origin:url.origin,path:url.pathname,method:request.method()});
@@ -40,12 +41,15 @@ async function fixtureContext(browser,language,{variant='hub',owner=false}={}){
    if(path==='/register/status')data={hub:true,enabled:false,setup_required:!setup,mqtt_uri:'mqtt://192.168.1.18:1883',mqtt_ws_uri:'ws://192.168.1.18:9001/mqtt'};
    else if(path==='/auth/me')return route.fulfill({status:401,json:{code:'unauthorized'}});
    else if(path==='/hub/setup'){
-    assert.equal(url.origin,target);assert.equal(request.headers().authorization,'Basic '+Buffer.from('admin:'+webSecret).toString('base64'));
-    assert.deepEqual(request.postDataJSON(),{username:'local',password:secret});setup=true;data={code:'accepted'};
+    assert.equal(url.origin,target);const authorization=request.headers().authorization;setups.push({authorization,body:request.postDataJSON()});
+    assert.deepEqual(request.postDataJSON(),{username:'local',password:secret});
+    if(webPasswordSet&&authorization!=='Basic '+Buffer.from('admin:'+webSecret).toString('base64'))return route.fulfill({status:401,json:{code:'unauthorized'}});
+    if(!webPasswordSet)assert.equal(authorization,undefined,'password-free setup must omit device authentication');
+    setup=true;data={code:'accepted'};
    }else if(path==='/auth/login')data={username:'local',mqtt_username:'local',is_admin:false};
    else if(path==='/devices'){
     if(request.method()==='POST')records.push({...request.postDataJSON(),status:'active',username:'local'});
-    data=records;
+    data=[...(selfDevice?[{mac,model:'daikin',version:'v2',status:'active',username:'local',self:true}]:[]),...records];
    }else if(path==='/hub/homekit')data={enabled:false,protocol:'hap',ready:false,paired:false,devices:0,code:'disabled'};
    else if(path==='/hub/bridge')data={enabled:false,mappings:[],mqtt:{host:'',port:1883,user:'',password_set:false}};
    else if(path==='/integrations/bemfa')data={enabled:false,key_set:false,mappings:[],max_mappings:8,status:'disabled'};
@@ -59,7 +63,7 @@ async function fixtureContext(browser,language,{variant='hub',owner=false}={}){
   const file=resolve(base,path);assert(file.startsWith(base+'/'));
   try{return route.fulfill({contentType:types[extname(file)]||'application/octet-stream',body:await readFile(file)});}catch{return route.fulfill({status:404,body:''});}
  });
- return {context,requests,errors,setIdentityUnavailable(){identityUnavailable=true;}};
+ return {context,requests,errors,setups,setIdentityUnavailable(){identityUnavailable=true;}};
 }
 
 async function passwordBounds(page,language,isHub,requests){
@@ -108,18 +112,33 @@ for(const engine of [chromium,webkit]){
    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,variant+' root overflow');
    assert.deepEqual(errors,[]);await context.close();
   }
-  const {context,requests,errors}=await fixtureContext(browser,language),page=await context.newPage();
+  // Existing device authentication still protects setup, while a hub without
+  // a device WebUI password can create its independent owner account directly.
+  const protectedHub=await fixtureContext(browser,language,{webPasswordSet:true}),protectedPage=await protectedHub.context.newPage();await protectedPage.goto(target+'/iotcloud/');
+  await protectedPage.getByLabel(zh?'用户名':'Username',{exact:true}).fill('local');await protectedPage.getByLabel(zh?'本地账户密码':'Local account password',{exact:true}).fill(secret);
+  const optionalPassword=protectedPage.getByLabel(zh?'设备 WebUI 密码':'Device WebUI password',{exact:true});assert.equal(await optionalPassword.getAttribute('required'),null);
+  await protectedPage.getByRole('button',{name:zh?'创建本地账户':'Create local account',exact:true}).click();await expect(protectedPage.getByRole('alert')).toBeVisible();assert.equal(protectedHub.setups.length,1);assert.equal(protectedHub.setups[0].authorization,undefined);
+  await optionalPassword.fill(webSecret);await protectedPage.getByRole('button',{name:zh?'创建本地账户':'Create local account',exact:true}).click();await expect(protectedPage.getByRole('button',{name:zh?'设置':'Settings',exact:true})).toBeVisible();
+  assert.deepEqual(protectedHub.setups.map(item=>item.authorization),[undefined,'Basic '+Buffer.from('admin:'+webSecret).toString('base64')]);assert.deepEqual(protectedHub.errors,[]);await protectedHub.context.close();
+  const {context,requests,errors,setups}=await fixtureContext(browser,language,{selfDevice:true}),page=await context.newPage();
   await page.goto(target+'/iotcloud/');await page.getByRole('button',{name:zh?'创建本地账户':'Create local account',exact:true}).waitFor();
-  await page.getByLabel(zh?'用户名':'Username',{exact:true}).fill('local');await page.getByLabel(zh?'本地账户密码':'Local account password',{exact:true}).fill(secret);await page.getByLabel(zh?'设备 WebUI 密码':'Device WebUI password',{exact:true}).fill(webSecret);
+  await page.getByLabel(zh?'用户名':'Username',{exact:true}).fill('local');const ownerPassword=page.getByLabel(zh?'本地账户密码':'Local account password',{exact:true});
+  await ownerPassword.fill('x'.repeat(7));assert.equal(await ownerPassword.evaluate(node=>node.checkValidity()),false);await page.getByRole('button',{name:zh?'创建本地账户':'Create local account',exact:true}).click();assert.equal(setups.length,0,'independent owner password remains required');
+  assert.equal(await ownerPassword.getAttribute('minlength'),'8');assert.equal(await ownerPassword.getAttribute('maxlength'),'63');await ownerPassword.fill(secret);
   await page.getByRole('button',{name:zh?'创建本地账户':'Create local account',exact:true}).click();await page.getByRole('button',{name:zh?'设置':'Settings',exact:true}).click();
+  assert.deepEqual(setups,[{authorization:undefined,body:{username:'local',password:secret}}]);
   const manual=page.locator('.provision-device');await expect(manual.locator('.hub-broker-details')).toBeVisible();
   const details=await manual.innerText();assert(details.includes('192.168.1.18'));assert(details.includes('1883'));assert(details.includes('local'));assert(!details.includes(secret));assert(!details.includes(webSecret));
   await expect(manual.getByRole('button')).toHaveCount(0);
   await page.getByRole('button',{name:zh?/中枢服务/:/Hub services/}).click();await expect(page.getByRole('heading',{name:'HomeKit',exact:true})).toBeVisible();await expect(page.getByRole('heading',{name:zh?'上游转发':'Upstream forwarding',exact:true})).toBeVisible();
   await screenshot(page,`${engine.name()}-${language}-owner`);
-  await page.getByRole('button',{name:zh?/设备管理/:/Device management/}).click();await page.getByRole('button',{name:zh?'添加设备':'Add device',exact:true}).click();
-  await page.locator('.add-device-panel input').fill('AABBCCDDEE01');await page.locator('.add-device-panel').getByRole('button').click();await expect(page.locator('.managed-device')).toHaveCount(1);
-  await page.getByRole('button',{name:/Bemfa|巴法/}).click();await expect(page.locator('.bemfa-card')).toBeVisible();
+  await page.getByRole('button',{name:zh?/设备管理/:/Device management/}).click();
+  const selfRow=page.locator('.managed-device').filter({has:page.getByText(zh?'本机中枢':'This hub',{exact:true})});await expect(selfRow).toHaveCount(1);await expect(selfRow.locator('.device-summary .stat')).toContainText('12');await expect(selfRow.locator('.rack-head b')).toHaveText('Local hub sensor');
+  await selfRow.locator('.device-details summary').click();await expect(selfRow.locator('.local-connection')).toHaveCount(0);await expect(selfRow.locator('button.danger')).toHaveCount(0);await expect(selfRow.locator('.device-details dd').first()).toHaveText(mac);
+  await page.getByRole('button',{name:zh?'添加设备':'Add device',exact:true}).click();
+  await page.locator('.add-device-panel input').fill('AABBCCDDEE01');await page.locator('.add-device-panel').getByRole('button').click();await expect(page.locator('.managed-device')).toHaveCount(2);
+  const remoteRow=page.locator('.managed-device').nth(1);await expect(remoteRow.locator('.local-connection')).toHaveCount(1);await expect(remoteRow.locator('button.danger')).toHaveCount(1);await screenshot(page,`${engine.name()}-${language}-self-device`);
+  await page.getByRole('button',{name:/Bemfa|巴法/}).click();await expect(page.locator('.bemfa-card')).toBeVisible();await expect(page.locator('.bemfa-card option[value="'+mac+'"]')).toHaveCount(0);
   await passwordBounds(page,language,true,requests);
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'owner settings overflow');assert.deepEqual(errors,[]);await context.close();
   const cloudOwner=await fixtureContext(browser,language,{owner:true}),cloudPage=await cloudOwner.context.newPage();await cloudPage.goto(platform+'/#/login');
@@ -148,6 +167,6 @@ for(const engine of [chromium,webkit]){
   }
   const localHub=await fixtureContext(browser,language),localPage=await localHub.context.newPage();await localPage.goto(target+'/iotcloud/#/local');await localPage.getByRole('button',{name:zh?'设置':'Settings',exact:true}).click();
   await expect(localPage.getByRole('button',{name:zh?/中枢服务/:/Hub services/})).toHaveCount(0);assert(!localHub.requests.some(r=>r.path.startsWith('/api/hub/')));await localHub.context.close();
-  console.log(`PASS ${engine.name()} ${language} 390: conditional root/iframe entry, owner setup + back link, manual broker details, devices/Bemfa/HomeKit, hub/cloud password bounds, cloud local hub/full identity`);
+  console.log(`PASS ${engine.name()} ${language} 390: conditional root/iframe entry, password-free/authenticated owner setup + back link, manual broker details, devices/Bemfa/HomeKit, hub/cloud password bounds, cloud local hub/full identity`);
  }}finally{await browser.close();}
 }

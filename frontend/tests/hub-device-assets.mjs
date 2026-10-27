@@ -35,6 +35,7 @@ test('shared device assets keep all products and share the standalone DAIKIN cod
 test('cold root and embedded pages work locally with Basic auth, typed controls and both languages',async()=>{
  await mkdir(evidence,{recursive:true});
  const sandbox={window:{},structuredClone,performance};
+ vm.runInNewContext(await readFile(resolve(sourceRoot,'M1/web/display-format.js'),'utf8'),sandbox);
  vm.runInNewContext(await readFile(resolve(sourceRoot,'common/web/demo.js'),'utf8'),sandbox);
  let fixtures,writes,rootRequests;const requests=[];
  const reset=()=>{

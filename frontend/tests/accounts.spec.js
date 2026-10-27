@@ -12,7 +12,9 @@ test('all four current TMCP models auto-discover and use correlated commands',as
  test.setTimeout(60000);const {default:mqtt}=await import('mqtt');const user='tmcp_'+Date.now();await page.goto('/#/login');await register(page,user);await login(page,user);
  const c=await new Promise((resolve,reject)=>{const client=mqtt.connect(baseURL.replace(/^http/,'ws')+'/mqtt',{username:user,password,reconnectPeriod:500});client.once('connect',()=>resolve(client));client.once('error',reject);});
  const scope='u_'+Buffer.from(user).toString('hex');
- const sandbox={window:{},structuredClone};runInNewContext(fs.readFileSync(new URL('../../common/web/demo.js',import.meta.url),'utf8'),sandbox);
+ const sandbox={window:{},structuredClone,performance};
+ runInNewContext(fs.readFileSync(new URL('../../M1/web/display-format.js',import.meta.url),'utf8'),sandbox);
+ runInNewContext(fs.readFileSync(new URL('../../common/web/demo.js',import.meta.url),'utf8'),sandbox);
  try{for(const [model,mac] of [['tc1','020000001001'],['m1','020000001002'],['a1','020000001003'],['daikin','020000001004']]){
   await new Promise((resolve,reject)=>c.publish(`phicomm/v2/${scope}/discovery/${mac}`,JSON.stringify({schema:1,model,version:'v2',protocol:'tmcp',protocol_version:2}),{qos:1,retain:false},e=>e?reject(e):resolve()));
   const device=page.locator('.device-select').filter({hasText:model.toUpperCase()});await expect(device).toBeVisible({timeout:12000});

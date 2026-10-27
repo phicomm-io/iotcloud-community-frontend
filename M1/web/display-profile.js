@@ -1,11 +1,10 @@
-/* V3 presentation is additive. Devices advertising only v2 keep the old form. */
+/* Generic MQTT fields share the physical presentation with local/API sources. */
 (()=>{
 'use strict';
-const legacy=UI.userDisplay,{h,info}=UI,{t}=I18N;
-const {colors,units,customUnits,modes,record,exact,physical,samePhysical,deviceID,validLamps,uniformLamps,validDisplay,metricValid,encode}=M1DisplayFormat;
+const {h,info}=UI,{t}=I18N;
+const {colors,units,customUnits,modes,record,exact,physical,samePhysical,fieldID,descriptorText,deviceID,validLamps,uniformLamps,validDisplay,metricValid,encode}=M1DisplayFormat;
 const actions=['display_profile.get','display_profile.set','display_value.set'];
 const localMetrics=['temperature','humidity','pm25','formaldehyde','co2','pressure'];
-const remoteMetrics=Object.keys(units).filter(key=>key!=='custom');
 const positions=['left','middle','right'];
 const field=(key,input)=>h('label',{class:'field'},h('span',{i18n:key}),input);
 const select=(id,values,prefix)=>h('select',{id},...values.map(value=>h('option',{value,i18n:prefix+value})));
@@ -15,22 +14,24 @@ const selected=select('displaySelectedSource',['original','user'],'display.selec
 const doubleClick=select('displayDoubleClick',['none','switch_display'],'display.double.');
 const status=h('p',{id:'displaySourceStatus',class:'help',role:'status'});
 const projected=h('p',{class:'help',i18n:'display.profile.projected',hidden:true});
+const unsupported=h('p',{class:'help',i18n:'display.profile.unsupported',hidden:true});
 // Raw frame inputs are independent from the persisted profile and validate on Write.
 const form=h('form',{class:'stack',noValidate:true},field('display.selected',selected),field('display.double',doubleClick));
 const lanes=h('div',{class:'grid'});form.append(lanes);
 const save=h('button',{type:'submit',class:'btn primary',id:'displaySourceSave',i18n:'common.save'});form.append(save);
 const card=h('section',{id:'displaySourceConfig',class:'card stack',hidden:true},h('h2',{i18n:'display.title'}),
- h('p',{class:'help',i18n:'display.profile.help'}),info('display.profile.glass'),status,projected,form);
+ h('p',{class:'help',i18n:'display.profile.help'}),info('display.profile.glass'),status,projected,unsupported,form);
 let config=null,editing=false,editRevision=null,pending=false,loading=false,generation=0,lastRead=0,candidates=[];
 const rows=[];
-const metricOptions=source=>source==='none'?['custom']:source==='local'?localMetrics:source==='mqtt'?remoteMetrics:Object.keys(units);
+const metricOptions=source=>source==='none'||source==='mqtt'?['custom']:source==='local'?localMetrics:Object.keys(units);
 const emptyLane=slot=>({slot,source:'none',device_id:'',metric:'custom',unit:'',display:{mode:'integer',show_label:false,show_unit:false},ttl_seconds:20,color:{mode:'fixed',lamps:uniformLamps('off')}});
 function markEditing(){if(!editing)editRevision=config?.revision;editing=true;}
 function validLane(lane,slot){
- return exact(lane,['slot','source','device_id','metric','unit','display','ttl_seconds','color'])&&lane.slot===slot&&
-  ['none','local','mqtt','api'].includes(lane.source)&&metricOptions(lane.source).includes(lane.metric)&&
+ return record(lane)&&exact(lane,['slot','source','device_id',...(lane.source==='mqtt'?['field_id','type']:['metric']),'unit','display','ttl_seconds','color'])&&lane.slot===slot&&
+  ['none','local','mqtt','api'].includes(lane.source)&&(lane.source==='mqtt'?fieldID(lane.field_id)&&lane.type==='number'&&descriptorText(lane.unit,0,24):
+   metricOptions(lane.source).includes(lane.metric)&&(lane.metric==='custom'?customUnits.includes(lane.unit):lane.unit===units[lane.metric]))&&
   typeof lane.device_id==='string'&&(lane.source==='mqtt'?/^[0-9a-f]{12}$/.test(lane.device_id):lane.device_id==='')&&
-  (lane.metric==='custom'?customUnits.includes(lane.unit):lane.unit===units[lane.metric])&&(lane.source!=='none'||lane.unit==='')&&
+  (lane.source!=='none'||lane.unit==='')&&
   validDisplay(lane.display,slot)&&Number.isInteger(lane.ttl_seconds)&&lane.ttl_seconds>=1&&lane.ttl_seconds<=60&&
   (lane.color?.mode==='fixed'?exact(lane.color,['mode','lamps'])&&validLamps(lane.color.lamps):lane.color?.mode==='thresholds'&&
    exact(lane.color,['mode','low','high'])&&physical(lane.color.low)&&physical(lane.color.high)&&Math.fround(lane.color.low)<Math.fround(lane.color.high));
@@ -42,14 +43,14 @@ function validConfig(value){
 }
 function validRead(value){
  const bad=()=>{throw Error(t('control.unconfirmed'));};
- if(!exact(value,['schema','revision','selected_source','double_click','lanes','runtime'])||value.schema!==3||!validConfig(value))bad();
+ if(!exact(value,['schema','revision','selected_source','double_click','lanes','runtime'])||value.schema!==4||!validConfig(value))bad();
  const runtime=value.runtime;
  if(!exact(runtime,['profile','selected_source','mcu_supported','confirmed','confirmation','lanes'])||
     !['legacy','dual','formatted'].includes(runtime.profile)||!['original','user'].includes(runtime.selected_source)||
     typeof runtime.mcu_supported!=='boolean'||typeof runtime.confirmed!=='boolean'||!Array.isArray(runtime.lanes)||runtime.lanes.length!==2||
     !runtime.lanes.every((lane,slot)=>{
      if(!exact(lane,['slot','valid','value','unit','age_ms','remaining_ttl_seconds','effective','reason','number','format','lamps','confirmed'])||lane.slot!==slot||
-        typeof lane.valid!=='boolean'||typeof lane.effective!=='boolean'||typeof lane.confirmed!=='boolean'||!customUnits.includes(lane.unit)||
+        typeof lane.valid!=='boolean'||typeof lane.effective!=='boolean'||typeof lane.confirmed!=='boolean'||!descriptorText(lane.unit,0,24)||
         !Number.isInteger(lane.remaining_ttl_seconds)||lane.remaining_ttl_seconds<0||lane.remaining_ttl_seconds>60||
         !(lane.age_ms===null||Number.isInteger(lane.age_ms)&&lane.age_ms>=0&&lane.age_ms<=4294967295)||
         !['ok','disabled','missing','stale','offline','invalid','out_of_range','unsupported'].includes(lane.reason))return false;
@@ -66,7 +67,7 @@ function validRead(value){
 }
 const sameLamps=(actual,expected)=>actual.every((lamp,i)=>colors.every(color=>lamp[color]===expected[i][color]));
 const sameConfig=(actual,expected)=>actual.selected_source===expected.selected_source&&actual.double_click===expected.double_click&&actual.lanes.every((lane,slot)=>{
- const target=expected.lanes[slot];return ['slot','source','device_id','metric','unit','ttl_seconds'].every(key=>lane[key]===target[key])&&
+ const target=expected.lanes[slot];return ['slot','source','device_id',...(target.source==='mqtt'?['field_id','type']:['metric']),'unit','ttl_seconds'].every(key=>lane[key]===target[key])&&
   ['mode','show_label','show_unit'].every(key=>lane.display[key]===target.display[key])&&lane.color.mode===target.color.mode&&
   (target.color.mode==='fixed'?sameLamps(lane.color.lamps,target.color.lamps):samePhysical(lane.color.low,target.color.low)&&samePhysical(lane.color.high,target.color.high));
 });
@@ -77,8 +78,8 @@ function readLane(row){
   const previous=config?.lanes[row.slot],base=previous?.source==='api'?previous:emptyLane(row.slot);
   return {...base,slot:row.slot,source:'api',device_id:'',ttl_seconds:Number(row.ttl.value)};
  }
- return {slot:row.slot,source,device_id:source==='mqtt'?deviceID(row.device.value):'',metric,
-  unit:metric==='custom'?row.unit.value:units[metric],display:{mode:row.mode.value,show_label:row.label.checked,show_unit:row.glyph.checked},ttl_seconds:Number(row.ttl.value),
+ return {slot:row.slot,source,device_id:source==='mqtt'?deviceID(row.device.value):'',...(source==='mqtt'?{field_id:row.fieldId.value,type:'number'}:{metric}),
+  unit:source==='mqtt'?row.remoteUnit.value:metric==='custom'?row.unit.value:units[metric],display:{mode:row.mode.value,show_label:row.label.checked,show_unit:row.glyph.checked},ttl_seconds:Number(row.ttl.value),
   color:row.colorMode.value==='fixed'?{mode:'fixed',lamps:row.lamps.map(lamp=>Object.fromEntries(colors.map(color=>[color,lamp[color].checked])))}:
    {mode:'thresholds',low:Number(row.low.value),high:Number(row.high.value)}};
 }
@@ -93,7 +94,8 @@ function options(row,metric=row.metric.value){
 function setConfig(value,reset){
  config=value;
  if(reset){editing=false;editRevision=value.revision;selected.value=value.selected_source;doubleClick.value=value.double_click;
-  for(const row of rows){const lane=value.lanes[row.slot];row.source.value=lane.source;options(row,lane.metric);row.device.value=lane.device_id;row.unit.value=lane.unit;
+  for(const row of rows){const lane=value.lanes[row.slot];row.source.value=lane.source;options(row,lane.metric);row.device.value=lane.device_id;
+   if(lane.source==='mqtt'){row.fieldId.value=lane.field_id;row.remoteUnit.value=lane.unit;}else row.unit.value=lane.unit;
    row.mode.value=lane.display.mode;row.label.checked=lane.display.show_label;row.glyph.checked=lane.display.show_unit;row.ttl.value=lane.ttl_seconds;row.colorMode.value=lane.color.mode;
    row.lamps.forEach((lamp,i)=>colors.forEach(color=>lamp[color].checked=lane.color.mode==='fixed'&&lane.color.lamps[i][color]));
    row.low.value=lane.color.mode==='thresholds'?lane.color.low:'';row.high.value=lane.color.mode==='thresholds'?lane.color.high:'';
@@ -112,10 +114,10 @@ function render(){
  for(const input of form.querySelectorAll('input,select,button'))input.disabled=pending||!config;
  for(const row of rows){
   const lane=runtime?.lanes[row.slot],source=row.source.value,metric=row.metric.value;
-  row.settings.hidden=source==='none';row.mqtt.hidden=source!=='mqtt';row.api.hidden=source!=='api';row.presentation.hidden=source==='api';
+  row.settings.hidden=source==='none';row.mqtt.hidden=source!=='mqtt';row.api.hidden=source!=='api';row.presentation.hidden=source==='api';row.metricField.hidden=row.unitField.hidden=source==='mqtt';
   row.unit.disabled=pending||!config||metric!=='custom';row.mode.disabled=pending||!config||row.slot===1;
   row.fixed.hidden=row.colorMode.value!=='fixed';row.thresholds.hidden=row.colorMode.value!=='thresholds';
-  row.low.required=row.high.required=row.colorMode.value==='thresholds'&&source!=='none'&&source!=='api';row.device.required=source==='mqtt';row.fanHelp.hidden=source==='api'||metric!=='fan_speed_percent';
+  row.low.required=row.high.required=row.colorMode.value==='thresholds'&&source!=='none'&&source!=='api';row.device.required=row.fieldId.required=source==='mqtt';
   row.rawDecimal.disabled=pending||!config||row.slot===1;
   row.modeHelp.textContent=t('display.mode_help.'+row.mode.value);
   row.write.disabled=row.clear.disabled=pending||editing||!config||runtime.profile!=='formatted'||config.lanes[row.slot].source!=='api';
@@ -123,12 +125,12 @@ function render(){
   row.live.textContent=!lane?t('display.loading'):t(lane.effective?'display.effective':'display.original_fallback')+' · '+
    (lane.valid?String(Number(lane.value.toPrecision(7)))+' '+lane.unit+' · '+t('display.remaining',{seconds:lane.remaining_ttl_seconds}):t('display.reason.'+lane.reason));
   const value=lane?.valid?lane.value:null;
-  const preview=value===null?null:metricValid(metric,value)?encode({mode:row.mode.value,show_label:row.label.checked,show_unit:row.glyph.checked},row.slot,value):null;
+  const preview=value===null?null:(source==='mqtt'?physical(value):metricValid(metric,value))?encode({mode:row.mode.value,show_label:row.label.checked,show_unit:row.glyph.checked},row.slot,value):null;
   row.preview.textContent=value===null?t('display.preview_empty'):preview?t('display.profile.preview',{value:preview.text})+
    (row.label.checked?' · '+t('display.label'+row.slot):'')+(row.glyph.checked?' · '+(row.slot?'µg/m³':'mg/m³'):''):t('display.profile.invalid_value');
   for(const lamps of [row.lamps,row.rawLamps])lamps.forEach((lamp,i)=>colors.forEach(color=>lamp[color].setAttribute('aria-label',t('display.lamp_label',{position:t('display.position.'+positions[i]),color:t('display.color.'+color)}))));
-  row.candidate.replaceChildren(h('option',{value:'',i18n:'display.manual_device'}),...candidates.map((candidate,index)=>h('option',{value:String(index)},candidate.name+' · '+t('display.metric.'+candidate.metric)+' · '+candidate.value+' '+candidate.unit)));
-  const match=candidates.findIndex(candidate=>candidate.device_id===deviceID(row.device.value)&&candidate.metric===metric);row.candidate.value=match<0?'':String(match);
+  row.candidate.replaceChildren(h('option',{value:'',i18n:'display.manual_field'}),...candidates.map((candidate,index)=>h('option',{value:String(index)},candidate.device_name+' · '+candidate.name+' · '+candidate.value+' '+candidate.unit)));
+  const match=candidates.findIndex(candidate=>candidate.device_id===deviceID(row.device.value)&&candidate.field_id===row.fieldId.value&&candidate.unit===row.remoteUnit.value);row.candidate.value=match<0?'':String(match);
   const frame=rawFrame(row),digits=frame.number.toString().padStart(3,'0');
   row.rawPreview.textContent=row.value.value===''?t('display.preview_empty'):validFrame(row,frame)?t('display.profile.preview',{value:frame.decimal?digits[0]+'.'+digits.slice(1):String(frame.number)})+
    (frame.show_label?' · '+t('display.label'+row.slot):'')+(frame.show_unit?' · '+(row.slot?'µg/m³':'mg/m³'):''):t('display.raw_invalid');
@@ -140,7 +142,7 @@ async function load(){
  if(!formatted.enabled||pending||loading)return;
  loading=true;lastRead=Date.now();const current=++generation;
  try{const value=validRead(await command('display_profile.get'));if(current!==generation||pending)return;setConfig(value,!editing);
-  if(window.getDeviceSensorSources){const result=await window.getDeviceSensorSources('display');if(current===generation&&!pending){candidates=Array.isArray(result)?result.filter(item=>record(item)&&deviceID(item.device_id)&&remoteMetrics.includes(item.metric)&&item.unit===units[item.metric]&&metricValid(item.metric,item.value)).map(item=>({...item,device_id:deviceID(item.device_id)})):[];render();}}
+  if(window.getDeviceSensorSources){const result=await window.getDeviceSensorSources('display');if(current===generation&&!pending){candidates=Array.isArray(result)?result.filter(item=>record(item)&&deviceID(item.device_id)&&fieldID(item.field_id)&&item.type==='number'&&descriptorText(item.name,1,64)&&descriptorText(item.unit,0,24)&&physical(item.value)).map(item=>({...item,device_id:deviceID(item.device_id),device_name:typeof item.device_name==='string'?item.device_name:item.device_id})):[];render();}}
  }finally{loading=false;}
 }
 async function saveConfig(){
@@ -176,29 +178,30 @@ for(let slot=0;slot<2;slot++){
  const id='display'+slot;
  const row={slot,source:select(id+'Source',['none','local','mqtt','api'],'display.source.'),metric:select(id+'Metric',['custom'],'display.metric.'),
   device:h('input',{id:id+'Device',maxlength:17,pattern:'[0-9a-fA-F]{12}|[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){5}',autocomplete:'off'}),candidate:h('select',{id:id+'Candidate'}),unit:h('select',{id:id+'Unit'}),
+  fieldId:h('input',{id:id+'FieldId',maxlength:32,pattern:'[a-z][a-z0-9_]{0,31}',autocomplete:'off'}),remoteUnit:h('input',{id:id+'SourceUnit',maxlength:24,autocomplete:'off'}),
   mode:select(id+'Mode',slot?['integer']:modes,'display.mode.'),ttl:number(id+'TTL',1,60),colorMode:select(id+'ColorMode',['fixed','thresholds'],'display.color.'),
   low:number(id+'Low',null,null,'any'),high:number(id+'High',null,null,'any'),value:number(id+'Value',0,999),writeTTL:number(id+'WriteTTL',1,60),rawEdited:false,
   live:h('p',{id:id+'Status',class:'help',role:'status'}),preview:h('p',{id:id+'Preview',class:'help',role:'status'}),modeHelp:h('p',{class:'help'}),example:h('pre',{class:'help'})};
  row.source.value='none';row.ttl.value=row.writeTTL.value=20;
- row.mqtt=h('div',{class:'stack'},field('display.candidates',row.candidate),field('display.device_mac',row.device),h('p',{class:'help',i18n:'display.mqtt_help'}));
+ row.mqtt=h('div',{class:'stack'},field('display.candidates',row.candidate),field('display.device_mac',row.device),field('display.field_id',row.fieldId),field('display.unit',row.remoteUnit),h('p',{class:'help',i18n:'display.field_help'}));
  row.lamps=positions.map((position,i)=>Object.fromEntries(colors.map(color=>[color,h('input',{type:'checkbox',id:id+'Lamp'+i+color})])));
  row.fixed=lampTable(row.lamps);
  row.rawLamps=positions.map((position,i)=>Object.fromEntries(colors.map(color=>[color,h('input',{type:'checkbox',id:id+'WriteLamp'+i+color})])));
  const rawDecimal=checkbox(id+'Decimal','display.raw_decimal'),rawLabel=checkbox(id+'WriteLabel','display.show_label'+slot),rawGlyph=checkbox(id+'WriteGlyph','display.show_unit'+slot);
  rawDecimal.hidden=!!slot;row.rawDecimal=rawDecimal.querySelector('input');row.rawLabel=rawLabel.querySelector('input');row.rawGlyph=rawGlyph.querySelector('input');row.rawPreview=h('p',{id:id+'WritePreview',class:'help',role:'status'});
  row.thresholds=h('div',{class:'grid'},field('display.color.low',row.low),field('display.color.high',row.high));
- row.fanHelp=h('p',{id:id+'FanHelp',class:'help',i18n:'display.fan_help',hidden:true});
  const label=checkbox(id+'Label','display.show_label'+slot),glyph=checkbox(id+'Glyph','display.show_unit'+slot);row.label=label.querySelector('input');row.glyph=glyph.querySelector('input');
  row.write=h('button',{type:'button',class:'btn',id:id+'Write',i18n:'display.write',onclick:()=>UI.run(row.write,()=>writeData(row),'toast.accepted')});
  row.clear=h('button',{type:'button',class:'btn ghost',id:id+'Clear',i18n:'display.clear',onclick:()=>UI.run(row.clear,()=>writeData(row,true),'toast.accepted')});
  row.api=h('div',{class:'stack'},h('p',{class:'help',i18n:'display.raw_help'}),field('display.raw_number',row.value),rawDecimal,rawLabel,rawGlyph,row.rawPreview,lampTable(row.rawLamps),field('display.write_ttl',row.writeTTL),
   h('div',{class:'form-actions'},row.write,row.clear),h('details',{class:'info'},h('summary',{i18n:'display.api_example'}),h('p',{i18n:'display.api_endpoint'}),row.example));
- row.presentation=h('div',{class:'stack'},row.mqtt,field('display.metric',row.metric),field('display.unit',row.unit),field('display.mode',row.mode),row.modeHelp,row.preview,
-  label,glyph,row.fanHelp,field('display.color.mode',row.colorMode),row.fixed,row.thresholds);
+ row.metricField=field('display.metric',row.metric);row.unitField=field('display.unit',row.unit);
+ row.presentation=h('div',{class:'stack'},row.mqtt,row.metricField,row.unitField,field('display.mode',row.mode),row.modeHelp,row.preview,
+  label,glyph,field('display.color.mode',row.colorMode),row.fixed,row.thresholds);
  row.settings=h('div',{class:'stack'},row.presentation,field('display.ttl',row.ttl),h('p',{class:'help',i18n:'display.ttl_help'}),row.api);
  lanes.append(h('section',{class:'stack','aria-labelledby':id+'Title'},h('h3',{id:id+'Title',i18n:'display.slot'+slot}),field('display.source',row.source),row.live,row.settings));
  row.source.onchange=()=>{options(row);markEditing();render();};row.metric.onchange=()=>{options(row);markEditing();render();};
- row.candidate.onchange=()=>{const candidate=candidates[Number(row.candidate.value)];if(row.candidate.value!==''&&candidate){row.device.value=candidate.device_id;options(row,candidate.metric);}markEditing();render();};
+ row.candidate.onchange=()=>{const candidate=candidates[Number(row.candidate.value)];if(row.candidate.value!==''&&candidate){row.device.value=candidate.device_id;row.fieldId.value=candidate.field_id;row.remoteUnit.value=candidate.unit;}markEditing();render();};
  row.candidate.oninput=event=>event.stopPropagation();
  row.rawInputs=[row.value,row.writeTTL,row.rawDecimal,row.rawLabel,row.rawGlyph,...row.rawLamps.flatMap(lamp=>colors.map(color=>lamp[color]))];
  for(const input of row.rawInputs)input.oninput=event=>{event.stopPropagation();row.rawEdited=true;render();};
@@ -208,13 +211,9 @@ form.addEventListener('input',markEditing);
 form.addEventListener('change',event=>{if(!rows.some(row=>row.rawInputs.includes(event.target)))markEditing();render();});
 UI.onSubmit(form,saveConfig,'toast.accepted');
 I18N.onChange(()=>{for(const row of rows)options(row);render();});
-const formatted={enabled:false,load,poll(){if(UI.activePage()==='device'&&Date.now()-lastRead>=2000)load().catch(()=>{});},
- enable(){this.enabled=true;card.hidden=false;document.querySelector('[data-settings-page="device"]').append(card);UI.run(null,load,null);},
- unmount(){this.enabled=false;generation++;card.remove();}};
-let active=legacy;
-UI.userDisplay={get enabled(){return active.enabled;},load:()=>active.load(),poll:()=>active.poll(),enable(caps){
- if(actions.every(action=>caps.actions?.includes(action))){legacy.unmount();active=formatted;formatted.enable();}
- else{formatted.unmount();active=legacy;legacy.enable(caps);}
+const formatted=UI.userDisplay={enabled:false,load,poll(){if(UI.activePage()==='device'&&Date.now()-lastRead>=2000)load().catch(()=>{});},enable(caps){
+ this.enabled=actions.every(action=>caps.actions?.includes(action));card.hidden=false;form.hidden=status.hidden=projected.hidden=!this.enabled;unsupported.hidden=this.enabled;
+ document.querySelector('[data-settings-page="device"]').append(card);if(this.enabled)UI.run(null,load,null);
 }};
 render();
 })();

@@ -7,8 +7,8 @@ const username=ref(''),password=ref(''),devicePassword=ref(''),busy=ref(false),e
 async function setup(){
  busy.value=true;error.value='';
  try{
-  const basic=btoa(String.fromCharCode(...new TextEncoder().encode('admin:'+devicePassword.value)));
-  await api('/hub/setup',{method:'POST',headers:{Authorization:'Basic '+basic},body:JSON.stringify({username:username.value,password:password.value})});
+  const headers=devicePassword.value?{Authorization:'Basic '+btoa(String.fromCharCode(...new TextEncoder().encode('admin:'+devicePassword.value)))}:{};
+  await api('/hub/setup',{method:'POST',headers,body:JSON.stringify({username:username.value,password:password.value})});
   emit('created',{username:username.value,password:password.value});
  }catch(e){error.value=e.message;}finally{busy.value=false;}
 }
@@ -18,7 +18,8 @@ async function setup(){
 <p>{{t('hub.setupHelp')}} <a href="/#settings/device">{{t('hub.deviceSettings')}}</a></p>
 <label>{{t('hub.username')}}<input v-model="username" autocomplete="username" pattern="[A-Za-z0-9_]{3,32}" minlength="3" maxlength="32" required/></label>
 <label>{{t('hub.password')}}<input v-model="password" type="password" autocomplete="new-password" minlength="8" maxlength="63" required/></label>
-<label>{{t('hub.devicePassword')}}<input v-model="devicePassword" type="password" autocomplete="current-password" minlength="8" maxlength="32" required/></label>
+<label>{{t('hub.devicePassword')}}<input v-model="devicePassword" type="password" autocomplete="current-password" minlength="8" maxlength="32" aria-describedby="hub-device-password-help"/></label>
+<p id="hub-device-password-help" class="help">{{t('hub.devicePasswordHelp')}}</p>
 <p v-if="error" class="form-message error" role="alert">{{error}}</p>
 <button class="primary-button auth-submit" :disabled="busy">{{busy?t('hub.saving'):t('hub.create')}}</button>
 </form>

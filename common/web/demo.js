@@ -39,7 +39,7 @@ const create=model=>{
     return {slot:lane.slot,source:lane.source,device_id:lane.device_id,metric:lane.metric,unit:lane.unit,ttl_seconds:lane.ttl_seconds,
      display:{mode:lane.slot?'integer':lane.scale===1000?'milli':lane.decimals===1?'decimal_1':lane.decimals===2?'decimal_2':'integer',show_label:glyph,show_unit:glyph},
      color:lane.color.mode==='fixed'?{mode:'fixed',lamps:f.uniformLamps(lane.color.value)}:structuredClone(lane.color)};})};
-  return {schema:3,...structuredClone(config),runtime:{profile:displayProfile,selected_source:config.selected_source,mcu_supported:true,confirmed:false,confirmation:'pending_mcu_readback',lanes:config.lanes.map(lane=>{
+  return {schema:4,...structuredClone(config),runtime:{profile:displayProfile,selected_source:config.selected_source,mcu_supported:true,confirmed:false,confirmation:'pending_mcu_readback',lanes:config.lanes.map(lane=>{
    const lease=(displayProfile==='formatted'?formattedLeases:leases)[lane.slot],age=lease?Math.max(0,performance.now()-lease.started):0,expired=lease&&age>=lease.ttl_seconds*1000;
    if(displayProfile==='formatted'&&lane.source==='api'){
     const valid=!!lease&&!expired,format=valid?Number(lease.decimal)|(lease.show_label?2:0)|(lease.show_unit?4:0):null;

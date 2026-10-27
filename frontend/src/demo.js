@@ -1,3 +1,4 @@
+import '../../M1/web/display-format.js';
 import '../../common/web/demo.js';
 import {watchEffect} from 'vue';
 import {t,language} from './i18n.js';

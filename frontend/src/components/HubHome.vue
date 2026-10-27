@@ -1,14 +1,17 @@
 <script setup>
 import {computed,onBeforeUnmount,onMounted,ref,watch} from 'vue';
+import {useRouter} from 'vue-router';
 import QRCode from 'qrcode';
 import {api} from '../account';
 import {t} from '../i18n';
 
-const state=ref({}),enabled=ref(false),loaded=ref(false),loading=ref(false),busy=ref(false),error=ref(''),pendingRestart=ref(false);
+const state=ref({}),enabled=ref(false),loaded=ref(false),loading=ref(false),busy=ref(false),error=ref(''),pendingRestart=ref(false),sessionExpired=ref(false);
 const dialog=ref(),qr=ref(''),qrFailed=ref(false);
+const router=useRouter();
 let timer,request,disposed=false;
 const restarting=computed(()=>pendingRestart.value||state.value.code==='restart_required');
-const disabled=computed(()=>busy.value||loading.value||restarting.value);
+const refreshDisabled=computed(()=>busy.value||loading.value||sessionExpired.value);
+const disabled=computed(()=>refreshDisabled.value||restarting.value);
 const status=computed(()=>restarting.value?'restarting':error.value?'unavailable':!loaded.value?'loading':!state.value.enabled?'disabled':!state.value.ready?'unavailable':state.value.paired?'paired':'ready');
 const detail=computed(()=>{
  if(error.value||!loaded.value||restarting.value||!state.value.enabled)return '';
@@ -26,7 +29,7 @@ watch(()=>pairing.value?.setup_uri,async uri=>{
 });
 function schedule(){
  clearTimeout(timer);
- if(!disposed&&!restarting.value)timer=setTimeout(()=>{if(document.hidden)schedule();else load();},5000);
+ if(!disposed&&!sessionExpired.value)timer=setTimeout(()=>{if(document.hidden)schedule();else load();},5000);
 }
 async function call(path,options={}){
  const controller=new AbortController();request=controller;
@@ -34,16 +37,27 @@ async function call(path,options={}){
  try{return await api(path,{...options,cache:'no-store',signal:controller.signal});}
  finally{clearTimeout(timeout);if(request===controller)request=undefined;}
 }
+function sessionLost(){
+ if(disposed||sessionExpired.value)return;
+ sessionExpired.value=true;pendingRestart.value=false;state.value={};loaded.value=false;error.value=t('hub.home.sessionExpired');clearTimeout(timer);
+ router.replace({name:'Login',query:{reason:'hub-session-expired'}});
+}
 async function load(){
- if(disposed||loading.value||busy.value||restarting.value)return;
+ if(disposed||refreshDisabled.value)return;
  clearTimeout(timer);loading.value=true;
  try{
   const data=await call('/hub/homekit');
   if(disposed)return;
   const unchanged=!loaded.value||enabled.value===!!state.value.enabled;
   state.value=data;if(unchanged)enabled.value=!!data.enabled;
+  if(data.code!=='restart_required')pendingRestart.value=false;
   loaded.value=true;error.value='';
- }catch(e){if(!disposed){state.value={...state.value,setup_code:undefined,setup_uri:undefined};error.value=e.code?e.message:t('hub.home.connectionFailed');}}
+ }catch(e){if(!disposed){
+  state.value={...state.value,setup_code:undefined,setup_uri:undefined};
+  if(e.code==='unauthorized')sessionLost();
+  else if(e.code==='restart_required'){pendingRestart.value=true;error.value='';}
+  else if(!restarting.value)error.value=e.code?e.message:t('hub.home.connectionFailed');
+ }}
  finally{loading.value=false;schedule();}
 }
 async function change(reset=false){
@@ -58,17 +72,18 @@ async function change(reset=false){
  }catch(e){if(!disposed)error.value=e.code?e.message:t('hub.home.changeUnconfirmed');}
  finally{busy.value=false;schedule();}
 }
-onMounted(load);
-onBeforeUnmount(()=>{disposed=true;clearTimeout(timer);request?.abort();});
+onMounted(()=>{window.addEventListener('phicomm-session-expired',sessionLost);load();});
+onBeforeUnmount(()=>{disposed=true;window.removeEventListener('phicomm-session-expired',sessionLost);clearTimeout(timer);request?.abort();});
 </script>
 
 <template>
 <section class="card hub-home" aria-labelledby="hub-home-title">
- <header><div><h2 id="hub-home-title">HomeKit</h2><p class="help">{{t('hub.home.help')}}</p></div><button class="btn" type="button" :disabled="disabled" @click="load">{{t('hub.home.refresh')}}</button></header>
+ <header><div><h2 id="hub-home-title">HomeKit</h2><p class="help">{{t('hub.home.help')}}</p></div><button class="btn" type="button" :disabled="refreshDisabled" @click="load">{{t('hub.home.refresh')}}</button></header>
  <p v-if="error" class="error" role="alert">{{error}}</p>
  <div class="home-status" role="status"><span class="badge" :class="['ready','paired'].includes(status)?'ok':status==='unavailable'?'bad':status==='restarting'?'warn':''">{{t('hub.home.status.'+status)}}</span><span v-if="loaded&&state.enabled&&state.ready&&!error&&!restarting" class="help">{{t('hub.home.devices',{count:state.devices||0})}}</span></div>
  <p v-if="detail" class="home-detail" :class="{error:status==='unavailable'}">{{detail}}</p>
  <div v-if="restarting" class="home-restart" role="status"><p>{{t('hub.home.restartingHelp')}}</p><a class="btn" href="#/login">{{t('hub.home.signIn')}}</a></div>
+ <a v-else-if="sessionExpired" class="btn" href="#/login">{{t('hub.home.signIn')}}</a>
  <template v-else-if="loaded">
   <form class="home-enable" @submit.prevent="change()">
    <label class="enable"><input v-model="enabled" type="checkbox" :disabled="disabled"/>{{t('hub.home.enabled')}}</label>

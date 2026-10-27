@@ -4,25 +4,54 @@ const $=id=>document.getElementById(id), model='__MODEL__', {t}=I18N;
 I18N.apply();$('language').value=I18N.preference;$('language').onchange=()=>I18N.set($('language').value);
 document.title=t('setup.title',{m:model});I18N.onChange(()=>{document.title=t('setup.title',{m:model});if(initialized)refresh().catch(()=>{});});
 let caps={};
-let initialized=false,saving=false,stopped=false,ticket=null,received=false,importedOriginal=null;
+let initialized=false,saving=false,stopped=false,resetPending=false,refreshGeneration=0,ticket=null,received=false,importedOriginal=null;
+let lastUptime,resetUptime,resetSawPending=false;
 const message=(text,kind='info')=>{$('message').textContent=text;$('message').className='banner '+kind;};
 $('protocolField').hidden=model!=='TC1';
 try{$('theme').value=localStorage.getItem('phicomm.appearance')||'system';}catch{}
 $('theme').onchange=()=>{const theme=$('theme').value;if(theme==='system')delete document.documentElement.dataset.theme;else document.documentElement.dataset.theme=theme;try{localStorage.setItem('phicomm.appearance',theme);}catch{}};
-async function refresh(){
+async function refresh(force=false){
+ const generation=refreshGeneration;
  const s=await command('status.get');
+ if(stopped||generation!==refreshGeneration)return;
+ if(!initialized||caps.config_recovery||resetPending||force){
+  const nextCaps=await command('capabilities.get'),config=await command('config.get');
+  if(stopped||generation!==refreshGeneration)return;
+  const wasRecovery=!!caps.config_recovery;
+  caps=nextCaps;
+  caps.config_recovery=!!caps.config_recovery||config.migration_state==='confirmation_required';
+  if(resetPending&&s.reboot_pending)resetSawPending=true;
+  const restarted=resetSawPending||(Number.isFinite(resetUptime)&&s.uptime_seconds<resetUptime);
+  const finished=resetPending&&!s.reboot_pending&&(!caps.config_recovery||restarted);
+  const cleared=!s.reboot_pending&&!caps.config_recovery&&(finished||wasRecovery);
+  if(finished){resetPending=false;$('clearConfig').disabled=false;}
+  $('recovery').hidden=!caps.config_recovery;
+  $('setup').hidden=caps.config_recovery||(resetPending&&!cleared);
+  $('deviceLanguageRow').hidden=!caps.device_language;
+  if(!initialized||cleared){
+   $('deviceLanguage').value=config.language||'zh-CN';$('host').value=s.mqtt_host||'';$('port').value=s.mqtt_port||1883;$('user').value=s.mqtt_user||'';$('ssid').value=s.ssid||'';$('protocol').value=s.mqtt_protocol||'tmcp';
+  }
+  if(!initialized){initialized=true;if(ticket)$('accept').disabled=false;message(t('setup.85fb2e4e23'));}
+  if(finished)message(t(cleared?'recovery.ready':'recovery.unconfirmed'),cleared?'info':'warn');
+ }
  $('status').textContent=t('setup.status',{wifi:t(s.wifi_connected?'setup.connected':s.ap_active?'setup.hotspot':'setup.disconnected'),ssid:s.ssid||'—',ip:s.ip||'—',mqtt:t(s.mqtt_connected?'setup.connected':'setup.disconnected')})+(s.wifi_trial_status?' · '+s.wifi_trial_status:'');
- if(!initialized){caps=await command('capabilities.get');const config=await command('config.get');$('recovery').hidden=!caps.config_recovery;$('setup').hidden=!!caps.config_recovery;$('deviceLanguageRow').hidden=!caps.device_language;$('deviceLanguage').value=config.language||'zh-CN';$('host').value=s.mqtt_host||'';$('port').value=s.mqtt_port||1883;$('user').value=s.mqtt_user||'';$('ssid').value=s.ssid||'';$('protocol').value=s.mqtt_protocol||'tmcp';initialized=true;if(ticket)$('accept').disabled=false;message(t('setup.85fb2e4e23'));}
+ lastUptime=s.uptime_seconds;
  return s;
 }
-$('clearConfig').onclick=async()=>{if(!confirm(t('recovery.confirm')))return;try{await command('system.reset',{full:true});message(t('setup.resetting'));}catch(e){message(e.message,'warn');}};
-$('refresh').onclick=()=>refresh().catch(e=>message(e.message,'warn'));
+$('clearConfig').onclick=async()=>{
+ if(saving||resetPending||!confirm(t('recovery.confirm')))return;
+ saving=true;$('clearConfig').disabled=true;refreshGeneration++;resetUptime=lastUptime;resetSawPending=false;
+ try{await command('system.reset',{full:true});refreshGeneration++;resetPending=true;message(t('setup.resetting'));}
+ catch(e){message(e.message,'warn');}
+ finally{saving=false;$('clearConfig').disabled=resetPending;}
+};
+$('refresh').onclick=()=>refresh(true).catch(e=>message(e.message,'warn'));
 $('scan').onclick=async()=>{
  $('scan').disabled=true;
  try{await command('wifi.scan');for(let i=0;i<25;i++){await new Promise(r=>setTimeout(r,700));if(stopped)return;const r=await command('wifi.scan.get');if(r.scanning)continue;$('networks').replaceChildren(...(r.networks||[]).sort((a,b)=>b.rssi-a.rssi).map(n=>{const o=document.createElement('option');o.value=n.ssid;o.label=n.rssi+' dBm'+(n.security===0?t('setup.f803459a02'):'');return o;}));message(t('setup.9b8e58bc4b'));return;}throw Error(t('setup.21e341916d'));}catch(e){message(e.message,'warn');}finally{$('scan').disabled=false;}
 };
 $('setup').onsubmit=async e=>{
- e.preventDefault();if(saving)return;if(!initialized){message(t('setup.10bfe8eea2'),'warn');return;}
+ e.preventDefault();if(saving||resetPending)return;if(!initialized){message(t('setup.10bfe8eea2'),'warn');return;}
  const admin=$('adminPassword').value,bytes=s=>new TextEncoder().encode(s).length;
  if(admin&&!/^[\x20-\x7e]{8,32}$/.test(admin)){message(t('setup.5a5f5ab562'),'warn');return;}
  if(bytes($('ssid').value)>32||bytes($('user').value)>63||bytes($('mqttPassword').value)>256||bytes($('wifiPassword').value)>63){message(t('setup.3a2a307ad0'),'warn');return;}

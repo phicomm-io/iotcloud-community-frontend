@@ -18,7 +18,8 @@ const server=createServer(async(req,res)=>{
 });
 await new Promise(done=>server.listen(0,'127.0.0.1',done));
 const base=`http://127.0.0.1:${server.address().port}`;
-const sandbox={window:{},structuredClone};
+const sandbox={window:{},structuredClone,performance};
+runInNewContext(await readFile('../M1/web/display-format.js','utf8'),sandbox);
 runInNewContext(await readFile('../common/web/demo.js','utf8'),sandbox);
 const createDevice=sandbox.window.PhicommDemo.create;
 const engines=process.env.BROWSER?[process.env.BROWSER]:['chromium','webkit'];
