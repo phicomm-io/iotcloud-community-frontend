@@ -167,6 +167,7 @@ let fullGeneration=1,loadedGeneration=0,lastFullAt=0;
 UI.invalidateStatus=()=>{fullGeneration++;};
 UI.activePage=()=>/^settings\/([a-z]+)$/.exec(UI.embeddedRoute??location.hash.slice(1))?.[1]||null;
 UI.statusParams=()=>{
+ if(UI.caps?.config_recovery||resetPending)return {};
  const page=UI.activePage(),ttl=page==='diagnostics'?5000:['network','mqtt','device','firmware'].includes(page)?10000:30000;
  return UI.caps?.status_views?.includes('live')&&loadedGeneration===fullGeneration&&Date.now()-lastFullAt<ttl?{view:'live'}:{};
 };

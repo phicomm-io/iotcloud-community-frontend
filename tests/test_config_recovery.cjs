@@ -28,7 +28,11 @@ async function fixture(model='m1',setup=false,recovery=true){
   const request=JSON.parse(options.body);calls.push(request);
   if(!online)throw Error('disconnected');
   let data={};
-  if(request.action==='status.get'){data={...state};if(readGate){const gate=readGate;readGate=null;await gate;}}
+  if(request.action==='status.get'){
+   data={...state};
+   if(request.params.view==='live')for(const key of ['ssid','mqtt_host','mqtt_user','mqtt_port'])delete data[key];
+   if(readGate){const gate=readGate;readGate=null;await gate;}
+  }
   if(request.action==='capabilities.get')data={...caps};
   if(request.action==='config.get')data={language:'zh-CN',migration_state:caps.config_recovery?'confirmation_required':'ready'};
   if(request.action==='system.reset'){
@@ -41,7 +45,7 @@ async function fixture(model='m1',setup=false,recovery=true){
  for(const script of d.scripts)w.eval(script.textContent);
  await settle();
  const element=id=>d.getElementById(id),reset=()=>setup?element('clearConfig'):d.querySelector('[data-settings-page="maintenance"] button.danger');
- const refresh=async()=>{if(setup)await element('refresh').onclick();else await w.UI.reload({full:true});await settle();};
+ const refresh=async(full=true)=>{if(setup)await element('refresh').onclick();else await w.UI.reload({full});await settle();};
  const clickReset=async()=>{assert(reset(),'clear action must be mounted');await reset().onclick();await settle();};
  const text=()=>setup?element('message').textContent:d.querySelector('#toasts')?.textContent||'';
  const ready=()=>{caps.config_recovery=false;Object.assign(state,{reboot_pending:false,uptime_seconds:2,ssid:'',mqtt_host:'',mqtt_user:''});};
@@ -99,6 +103,15 @@ for(const setup of [true,false])test(`${setup?'setup':'full'}: a read started be
   const old=f.refresh();await settle();await f.clickReset();f.caps.config_recovery=false;
   release();await old;assert.equal(f.reset().disabled,true);assert.doesNotMatch(f.text(),/配置已清空，可以重新配网/);
   await f.refresh();assert.equal(f.reset().disabled,true);f.ready();await f.refresh();assert.equal(f.reset().disabled,false);
+ }finally{f.dom.window.close();}
+});
+
+test('full: automatic recovery polling reads complete post-reset network defaults',async()=>{
+ const f=await fixture();try{
+  f.ready();await f.refresh(false);
+  const status=f.calls.filter(r=>r.action==='status.get').at(-1);
+  assert.deepEqual(status.params,{},'recovery polling cannot use a live view without network fields');
+  assert.equal(f.element('ssid').value,'');assert.equal(f.w.UI.caps.config_recovery,false);
  }finally{f.dom.window.close();}
 });
 
