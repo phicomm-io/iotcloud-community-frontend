@@ -216,8 +216,16 @@
     "设备热点已开启"
   ],
   "setup.resetting": [
-    "Configuration cleared. Reconnect to the device hotspot after reboot.",
-    "配置已清空，重启后请连接设备热点。"
+    "Clear request accepted. Waiting for restart; reconnect to the device hotspot if disconnected.",
+    "清空请求已接受，等待设备重启；连接断开后请重新连接设备热点。"
+  ],
+  "recovery.ready": [
+    "Configuration cleared. You can set up the device again.",
+    "配置已清空，可以重新配网。"
+  ],
+  "recovery.unconfirmed": [
+    "The device restarted but still requires configuration recovery. Clearing was not confirmed; reconnect and try again.",
+    "设备已重启，但仍需恢复配置。清空结果未确认，请重新连接后重试。"
   ],
   "recovery.hint": [
     "The saved configuration cannot be migrated. Original data is retained. Confirm clearing it to configure the device again.",

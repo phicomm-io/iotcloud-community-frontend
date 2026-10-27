@@ -152,6 +152,7 @@ const TZ=[-720,-660,-600,-540,-480,-420,-360,-300,-240,-210,-180,-120,-60,0,60,1
 function tzLabel(m){const sg=m<0?'−':'+',a=Math.abs(m);return 'UTC'+sg+String(Math.floor(a/60)).padStart(2,'0')+':'+String(a%60).padStart(2,'0')+(m===480?' · '+t('tz.cn'):'');}
 
 /* ---------- Header, navigation, banners ---------- */
+let resetPending=false,resetAccepted=false,resetGeneration=0,resetUptime,resetSawPending=false;
 const UI=window.UI={$,h,icon,toast,run,onSubmit,confirm:confirmDialog,switchRow,seg,daysPicker,presetDays,daysText,hhmm,toMinutes,duration,summary,card,info,pageHead,saveBar,num,flag,slider,normalizeMac,prettyMac,clone,AIR,grade,airScale,tzLabel,state:null,caps:null,pages:{},device:null,clockCard,maintenancePage,scanNetworks};
 // Keep requested output visible until a fresh read confirms it. Polls may still
 // contain the pre-write state while the device applies an accepted command.
@@ -166,6 +167,7 @@ let fullGeneration=1,loadedGeneration=0,lastFullAt=0;
 UI.invalidateStatus=()=>{fullGeneration++;};
 UI.activePage=()=>/^settings\/([a-z]+)$/.exec(UI.embeddedRoute??location.hash.slice(1))?.[1]||null;
 UI.statusParams=()=>{
+ if(UI.caps?.config_recovery||resetPending)return {};
  const page=UI.activePage(),ttl=page==='diagnostics'?5000:['network','mqtt','device','firmware'].includes(page)?10000:30000;
  return UI.caps?.status_views?.includes('live')&&loadedGeneration===fullGeneration&&Date.now()-lastFullAt<ttl?{view:'live'}:{};
 };
@@ -215,6 +217,7 @@ function renderBanners(s,lost){
  const add=(cls,ic,text)=>b.append(h('div',{class:'banner '+cls,role:cls==='bad'?'alert':null},icon(ic),h('span',{},text)));
  if(lost){add('bad','alert',t('banner.lost'));return;}
  if(UI.caps?.config_recovery)add('warn','alert',t('recovery.hint'));
+ if(resetPending)add('info','auto',t('toast.resetting'));
  if(s.ota_active)add('info','auto',t('banner.ota',{p:s.ota_progress}));
  if(s.reboot_pending)add('info','auto',t('banner.rebooting'));
  if(s.mqtt_cleanup_warning)add('warn','alert',t('banner.cleanup'));
@@ -590,14 +593,24 @@ function maintenancePage(dev){
  const reboot=h('button',{type:'button',class:'btn'},h('span',{i18n:'sys.reboot'}));
  reboot.onclick=async()=>{if(await confirmDialog({title:t('sys.reboot_q',{m:dev.model}),body:t('sys.reboot_body'),ok:t('sys.reboot')}))run(reboot,()=>api('/reboot',{}),'toast.rebooting');};
  const items=[h('div',{class:'item'},h('div',{class:'grow'},h('b',{i18n:'sys.reboot'}),h('span',{i18n:'sys.reboot_desc'})),reboot)];
+ let reset;
  if(dev.factoryReset||UI.caps?.config_recovery){
-  const reset=h('button',{type:'button',class:'btn danger'},h('span',{i18n:'sys.reset'}));
-  reset.onclick=async()=>{if(await confirmDialog({title:t('sys.reset_q'),body:t(UI.caps?.config_recovery?'recovery.confirm':'sys.reset_body'),ok:t('sys.reset'),danger:true}))run(reset,()=>api('/device/reset',{full:true}),'toast.resetting');};
+  reset=h('button',{type:'button',class:'btn danger'},h('span',{i18n:'sys.reset'}));
+  reset.onclick=async()=>{
+   if(resetPending||!await confirmDialog({title:t('sys.reset_q'),body:t(UI.caps?.config_recovery?'recovery.confirm':'sys.reset_body'),ok:t('sys.reset'),danger:true})||resetPending)return;
+   resetPending=true;resetAccepted=false;resetGeneration++;resetUptime=UI.confirmed?.uptime_seconds;resetSawPending=false;
+   await run(reset,async()=>{
+    try{const result=await api('/device/reset',{full:true});resetAccepted=true;resetGeneration++;return result;}
+    catch(e){resetPending=false;throw e;}
+   },'toast.resetting');
+   reset.disabled=resetPending;
+  };
   items.push(h('div',{class:'item'},h('div',{class:'grow'},h('b',{i18n:'sys.reset'}),h('span',{i18n:'sys.reset_desc'})),reset));
  }
- return h('div',{class:'stack'},pageHead('nav.maintenance','sys.lead'),backupCard(),
+ return {el:h('div',{class:'stack'},pageHead('nav.maintenance','sys.lead'),backupCard(),
   h('section',{class:'card danger-zone'},h('div',{class:'list'},items),
-   h('p',{class:'help',style:'margin-top:12px',i18n:dev.buttonHintKey},t(dev.buttonHintKey))));
+   h('p',{class:'help',style:'margin-top:12px',i18n:dev.buttonHintKey},t(dev.buttonHintKey)))),
+  status(){if(reset)reset.disabled=resetPending;}};
 }
 /* Slots shared by every "General" page. */
 function nameCard(){
@@ -639,7 +652,7 @@ const lockedControls=new Map();
 function lockHome(){if(!UI.embedded)return;for(const el of document.querySelectorAll('#homePage button,#homePage input,#homePage select')){if(!lockedControls.has(el))lockedControls.set(el,el.disabled);el.disabled=true;}}
 function unlockHome(){for(const [el,disabled] of lockedControls)el.disabled=disabled;lockedControls.clear();}
 async function load(){
- const lifecycle=pollGeneration;
+ const lifecycle=pollGeneration,resetVersion=resetGeneration;
  try{
   const params=UI.statusParams(),generation=fullGeneration;
   const raw=await command('status.get',params);
@@ -647,6 +660,21 @@ async function load(){
   failures=0;lastSuccess=Date.now();unlockHome();
   if(!params.view&&!raw.ota_mode){lastFullAt=Date.now();loadedGeneration=generation;}
   if(raw.ota_active&&raw.ota_mode){UI.pages.firmware?.status(raw);return raw;}
+  if(!params.view||UI.caps?.config_recovery||resetPending){
+   const caps=await command('capabilities.get'),config=await command('config.get');
+   if(stopped||lifecycle!==pollGeneration||resetVersion!==resetGeneration)return null;
+   const wasRecovery=!!UI.caps?.config_recovery;
+   UI.caps={...UI.caps,...caps};
+   UI.caps.config_recovery=!!UI.caps.config_recovery||config.migration_state==='confirmation_required';
+   if(resetPending&&raw.reboot_pending)resetSawPending=true;
+   if(wasRecovery&&!UI.caps.config_recovery&&!raw.reboot_pending)initialized=false;
+   const restarted=resetSawPending||(Number.isFinite(resetUptime)&&raw.uptime_seconds<resetUptime);
+   if(resetAccepted&&!raw.reboot_pending&&(!UI.caps.config_recovery||restarted)){
+    resetPending=resetAccepted=false;
+    if(!UI.caps.config_recovery)initialized=false;
+    toast(t(UI.caps.config_recovery?'recovery.unconfirmed':'recovery.ready'),!!UI.caps.config_recovery);
+   }
+  }
   const s=UI.acceptStatus(raw,params.view==='live');
   readMcuVersion().catch(()=>{});
   $('title').textContent=UI.device.model+' '+(s.name||'');
