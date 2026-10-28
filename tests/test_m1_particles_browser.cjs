@@ -5,6 +5,8 @@ const engine=process.env.BROWSER||'chromium';let supported=true,available=true;
 const base={model:'m1',version:'test',device_id:'aabbccddeeff',name:'房间空气质量',wifi_connected:true,mqtt_connected:true,mqtt_status:'ready',sensor_received:true,sensor_valid:true,age_ms:100,pm25:19,formaldehyde:.02,temperature:25,humidity:50,brightness_requested:2};
 const details=()=>({supported,available,fresh:available,healthy:available,age_ms:628,pm:{atmospheric_ug_m3:{pm1:13,pm25:19,pm10:19},cf1_ug_m3:{pm1:13,pm25:19,pm10:19},particles_per_0_1_l:{gt_0_3:2196,gt_0_5:639,gt_1_0:114,gt_2_5:0,gt_5_0:0,gt_10_0:0}},diagnostics:{sht_aux:{raw_hex:'039ce8ad8480'}}});
 const server=http.createServer((req,res)=>{
+ // Existing business scenarios exercise firmware without token endpoints.
+ if(req.url==='/api/v1/auth/login'){res.writeHead(404,{'Content-Type':'application/json'}).end(JSON.stringify({code:'not_found'}));return;}
  if(req.method==='GET'){res.setHeader('Content-Type','text/html');res.end(html);return;}
  let body='';req.on('data',c=>body+=c);req.on('end',()=>{
   const {action}=JSON.parse(body);const data=action==='status.get'?base:action==='sensor_details.get'?details():action==='capabilities.get'?{actions:['status.get','sensor_details.get']}:{};
