@@ -128,3 +128,16 @@ test('late logout completion cannot clear or revoke a replacement session',async
  finishLogout();await logout;assert.equal(auth.headers().Authorization,'Bearer '+other);assert.equal(auth.authenticated,true);assert.equal(auth.needsLogin,false);assert.equal(required,0);
  assert.deepEqual(retired,['Bearer '+token,'Bearer '+token],'both logout requests target only the original session');
 });
+
+test('late unauthenticated legacy 401 cannot clear a replacement Basic identity',async()=>{
+ let finishOld,required=0;const authorization='Basic '+btoa('admin:adminfjr');
+ const auth=createDeviceAuth({onRequired:()=>required++,fetcher:async(url,options)=>{
+  if(url.endsWith('/login'))return new Response('',{status:404});
+  if(options.headers.Authorization===authorization)return reply({code:'ok'});
+  return new Promise(resolve=>finishOld=()=>resolve(reply({code:'unauthorized'},401)));
+ }});
+ const old=auth.fetch('/api/v1/command',{method:'POST',body:'{}'});await new Promise(setImmediate);
+ await auth.login('adminfjr');assert.equal(auth.headers().Authorization,authorization);
+ finishOld();assert.equal((await old).status,401);assert.equal(auth.headers().Authorization,authorization);assert.equal(auth.authenticated,true);assert.equal(auth.needsLogin,false);assert.equal(required,0);
+ assert.equal((await auth.fetch('/api/v1/command',{method:'POST',body:'{}'})).status,200);
+});

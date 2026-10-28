@@ -10,7 +10,7 @@ export function createDeviceAuth({fetcher=globalThis.fetch,origin='',onRequired=
  const headers=()=>token?{Authorization:'Bearer '+token}:legacy?{Authorization:legacy}:{};
  const reset=({requireLogin=true}={})=>{generation++;loginAbort?.abort();loginAbort=null;token=legacy='';legacyReady=false;emptySession=false;blocked=requireLogin;pending=null;};
  function required(){if(!blocked){blocked=true;onRequired();}}
- function observe(status,authorization){if(authorization!==undefined&&authorization!==headers().Authorization)return;if(status===401){if(emptySession&&token){reset({requireLogin:false});return login('').catch(()=>{});}token=legacy='';legacyReady=false;required();}}
+ function observe(status,authorization){if(arguments.length>1&&authorization!==headers().Authorization)return;if(status===401){if(emptySession&&token){reset({requireLogin:false});return login('').catch(()=>{});}token=legacy='';legacyReady=false;required();}}
  async function login(password=''){
   if(pending)return pending;
   const previous=token;token=legacy='';legacyReady=false;emptySession=false;
