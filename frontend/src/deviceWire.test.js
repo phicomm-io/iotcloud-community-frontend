@@ -27,3 +27,9 @@ test('business busy and network error preserve selected MP and never replay writ
 test('forced rediscovery invalidates previous authenticated identity when firmware changes',async()=>{
  let firmware='rc4';const fetcher=async p=>p.endsWith('/info')?reply({code:'ok',data:{...info,firmware_version:firmware}}):reply({code:'ok',data:{token}});const wire=createDeviceWire({fetcher}),auth=createDeviceAuth({fetcher,wire});await auth.login('adminfjr');assert(auth.authenticated);firmware='rc5';await wire.discover({force:true});assert.equal(auth.authenticated,false);assert.equal(wire.identity.firmware_version,'rc5');
 });
+test('explicit password may verify a Basic-protected legacy info endpoint but never downgrade new info',async()=>{
+ for(const newer of [false,true]){
+  let calls=0;const fetcher=async(p,o)=>{calls++;if(!o.headers.Authorization)return reply({code:'unauthorized'},'json',401);assert.equal(o.headers.Authorization,'Basic '+btoa('admin:adminfjr'));return reply({code:'ok',data:newer?info:{api_version:1,device_id:id,model:'a1',version:'old'}},newer?'msgpack':'json');};const wire=createDeviceWire({fetcher});
+  if(newer)await assert.rejects(wire.discover({legacyPassword:'adminfjr'}),/Invalid legacy discovery/);else {await wire.discover({legacyPassword:'adminfjr'});assert.equal(wire.format,'json');}assert.equal(calls,2);
+ }
+});

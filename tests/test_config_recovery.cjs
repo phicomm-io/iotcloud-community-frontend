@@ -40,7 +40,7 @@ async function fixture(model='m1',setup=false,recovery=true){
   if(request.action==='config.get')data={language:'zh-CN',migration_state:caps.config_recovery?'confirmation_required':'ready'};
   if(request.action==='system.reset'){
    assert.deepEqual(request.params,{full:true});assert(request.request_id);
-   if(resetFailure)return {ok:false,status:503,json:async()=>({code:'storage_error',message:'storage failed'})};
+   if(resetFailure)return {ok:false,status:503,headers:{get:()=> 'application/json'},json:async()=>({code:'storage_error',message:'storage failed'})};
    state.reboot_pending=true;
   }
   return {ok:true,status:200,json:async()=>({code:'ok',data})};
