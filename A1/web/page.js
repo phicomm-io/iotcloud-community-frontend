@@ -13,12 +13,12 @@ const power=$('power');power.append(icon('power'));
 const speed=$('speed');let dragging=false;
 const presets=seg([[20,()=>t('a1.p_quiet')+' 20%'],[40,()=>t('a1.p_low')+' 40%'],[60,()=>t('a1.p_mid')+' 60%'],[100,()=>t('a1.p_max')+' 100%']],v=>setSpeed(v),{full:true});
 $('presets').replaceWith(presets);
-const fanModes=seg([['manual','auto.manual'],['auto','auto.auto']],mode=>run(null,()=>UI.control('fan.mode.set',{mode},{fan_mode:mode}).then(refresh),null),{full:true});
+const fanModes=seg([['manual','auto.manual'],['auto','auto.auto']],mode=>run(null,()=>UI.control('fan.mode.set',{mode},{fan_mode:mode}).then(()=>{startFanFeedback();return refresh();}),null),{full:true});
 $('fanMode').append(fanModes);
-function setSpeed(v){speed.value=v;$('speedValue').textContent=v+'%';return run(null,()=>api('/fan/config',{speed:Number(v)}).then(refresh),null);}
+function setSpeed(v){speed.value=v;$('speedValue').textContent=v+'%';return run(null,()=>api('/fan/config',{speed:Number(v)}).then(()=>{startFanFeedback();return refresh();}),null);}
 speed.addEventListener('input',()=>{dragging=true;$('speedValue').textContent=speed.value+'%';presets.set(Number(speed.value));});
 speed.addEventListener('change',()=>{dragging=false;setSpeed(speed.value);});
-power.onclick=()=>{const on=!UI.state.fan_on;power.setAttribute('aria-pressed',String(on));run(power,()=>UI.control('fan.set',{on},{fan_on:on}),null);};
+power.onclick=()=>{const on=!UI.state.fan_on;power.setAttribute('aria-pressed',String(on));run(power,()=>UI.control('fan.set',{on},{fan_on:on}).then(startFanFeedback),null);};
 for(const id of ['childLock','childLockDevice'])$(id).onchange=e=>run(null,()=>UI.control('child_lock.set',{enabled:e.target.checked},{child_lock:e.target.checked}),e.target.checked?'a1.lock_on':'a1.lock_off');
 function renderFan(s){
  const locked=s.ota_active||s.reboot_pending||UI.controlBusy;
@@ -103,7 +103,7 @@ function renderAuto(){
 
 /* ---------- Home: light ring ---------- */
 const SWATCHES=[[217,80,0],[255,255,255],[255,170,60],[0,90,255],[0,200,120],[170,60,255],[255,30,60]];
-let lightDirty=false,lightTimer=null,ringAnimationTimer=null,previewTarget=null,ringPolling=false,ringPolledAt=0,color=[0,0,255];
+let lightDirty=false,lightTimer=null,ringAnimationTimer=null,previewTarget=null,color=[0,0,255];
 const hex=c=>'#'+c.map(n=>n.toString(16).padStart(2,'0')).join('');
 const custom=h('input',{type:'color','aria-label':'custom'});
 $('swatches').append(...SWATCHES.map(c=>h('button',{type:'button',class:'swatch',style:'--c:'+hex(c),'aria-label':hex(c),onclick:()=>{color=c;lightChanged();}})),custom);
@@ -199,14 +199,27 @@ function renderRing(s){
   svg.innerHTML=parts.join('')+'<text x="100" y="98" text-anchor="middle" class="ring-v">'+(enabled?(eff===0?feedbackSpeed:Math.round(brightness*100))+'%':t('state.off'))+'</text><text x="100" y="122" text-anchor="middle" class="ring-l">'+(eff===0?t(touching?'a1.feedback_target':'a1.feedback_pwm'):effectLabel(eff))+'</text>';
  }
 }
+// Animation uses the last accepted state. Only a successful user control opens
+// a bounded feedback window; a stale PWM value must never enable endless polls.
+let fanFeedbackTimer=null,fanFeedbackUntil=0,fanFeedbackReading=false;
+function ringVisible(){const page=document.querySelector('[data-settings-page="light"]');return !document.hidden&&(!$('homePage').hidden||page&&!page.hidden);}
+function scheduleFanFeedback(){
+ clearTimeout(fanFeedbackTimer);fanFeedbackTimer=null;
+ if(fanFeedbackReading||performance.now()+500>fanFeedbackUntil)return;
+ fanFeedbackTimer=setTimeout(async()=>{
+  fanFeedbackTimer=null;
+  if(!ringVisible()||performance.now()>fanFeedbackUntil)return;
+  fanFeedbackReading=true;
+  try{await UI.reload();}catch{/* Background feedback is best effort. */}finally{fanFeedbackReading=false;scheduleFanFeedback();}
+ },500);
+}
+function startFanFeedback(){fanFeedbackUntil=performance.now()+4000;scheduleFanFeedback();}
+window.addEventListener('pagehide',()=>{fanFeedbackUntil=0;clearTimeout(fanFeedbackTimer);clearInterval(ringAnimationTimer);fanFeedbackTimer=ringAnimationTimer=null;});
+window.addEventListener('pageshow',()=>{if(ringAnimationTimer===null)updateRingAnimation();});
 function updateRingAnimation(){
  clearInterval(ringAnimationTimer);
  ringAnimationTimer=setInterval(()=>{
-  if(!UI.state)return;
-  const lightPage=document.querySelector('[data-settings-page="light"]'),ramping=UI.state.applied_speed!==UI.state.percentage;
-  if(!document.hidden&&(!$('homePage').hidden||lightPage&&!lightPage.hidden)&&(ramping||lightPage&&!lightPage.hidden)&&!ringPolling&&performance.now()-ringPolledAt>=(ramping?200:500)){
-   ringPolling=true;ringPolledAt=performance.now();UI.reload().finally(()=>{ringPolling=false;});
-  }
+  if(!UI.state||!ringVisible())return;
   if(advanced.effect===2||advanced.effect===3||advanced.effect===5||previewTarget!==null)renderRing(UI.state);
  },50);
 }
