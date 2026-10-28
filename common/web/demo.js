@@ -1,5 +1,6 @@
 /* Entirely in-memory simulator. Never forwards requests to a real device. */
 (()=>{
+window.deviceParentTransport=true;
 const messages={
  'demo.deviceBanner':['Interactive demo · Simulated data · No real device connection · Refresh to reset','交互演示 · 模拟数据 · 不连接真实设备 · 刷新重置'],
  'demo.deviceName':['Demo device','演示设备'],'demo.version':['Demo','演示'],
