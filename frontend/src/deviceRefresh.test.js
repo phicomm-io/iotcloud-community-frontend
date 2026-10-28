@@ -33,6 +33,16 @@ test('edits during pending refresh and existing drafts survive leave/revisit; su
  await f.go('linkage');assert.equal(f.reads.length,3);f.reads[2].resolve();await flush();assert.equal(input.value,'server');
  }finally{f.dom.window.close();}
 });
+test('capture tracking preserves segmented and metric edits that synchronously redraw their DOM',async()=>{
+ const f=fixture();try{
+ await f.go('linkage');const box=f.document.querySelector('[data-settings-page="linkage"]');
+ const redraw=()=>box.replaceChildren(f.document.createElement('input'));
+ const seg=f.document.createElement('div');seg.className='seg';const button=f.document.createElement('button');seg.append(button);box.append(seg);button.onclick=redraw;
+ button.click();assert.equal(box.dataset.dirty,'1');assert.equal(box.dataset.editVersion,'1');f.reads[0].resolve();await flush();assert.equal(box.querySelector('input').value,'');
+ delete box.dataset.dirty;const metric=box.querySelector('input');metric.type='checkbox';metric.onchange=redraw;metric.dispatchEvent(new f.dom.window.Event('change',{bubbles:true}));
+ assert.equal(box.dataset.dirty,'1');assert.equal(box.dataset.editVersion,'2');await f.go('binding');await f.go('linkage');assert.equal(f.reads.length,2);
+ }finally{f.dom.window.close();}
+});
 test('hidden rings never accelerate status refresh; visible ramp/light retains previous cadence',()=>{
  const a1=readFileSync(new URL('../../A1/web/page.js',import.meta.url),'utf8');const source=a1.slice(a1.indexOf('function updateRingAnimation(){'),a1.indexOf('function effectLabel('));let callback,reads=0,homeHidden=true,lightHidden=true,hidden=false;
  const context=vm.createContext({clearInterval(){},setInterval(fn){callback=fn;},ringAnimationTimer:null,UI:{state:{applied_speed:10,percentage:20},reload(){reads++;return Promise.resolve();}},document:{get hidden(){return hidden;},querySelector:()=>({get hidden(){return lightHidden;}})},$:()=>({get hidden(){return homeHidden;}}),ringPolling:false,ringPolledAt:0,performance:{now:()=>1000},advanced:{effect:0},previewTarget:null,renderRing(){}});
