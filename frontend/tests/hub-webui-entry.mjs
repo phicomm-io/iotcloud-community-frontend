@@ -10,7 +10,7 @@ const app=fileURLToPath(new URL('..',import.meta.url));
 const hub=resolve(process.env.HUB_TEST_DIST||resolve(app,'../build/hub-webui-entry-hub'));
 const cloud=resolve(process.env.CLOUD_TEST_DIST||resolve(app,'../build/hub-webui-entry-cloud'));
 const target='http://192.168.1.18',platform='http://console-audit.test',mac='aabbccddeeff';
-const secret='fixture-owner-password',webSecret='fixture-web-password';
+const secret='adminfjr',webSecret='adminfjr';
 const sandbox={window:{},structuredClone,performance};
 vm.runInNewContext(await readFile(resolve(app,'../common/web/demo.js'),'utf8'),sandbox);
 const types={'.html':'text/html','.js':'text/javascript','.css':'text/css','.svg':'image/svg+xml','.png':'image/png','.json':'application/json','.webmanifest':'application/manifest+json'};
@@ -29,6 +29,9 @@ async function fixtureContext(browser,language,{variant='hub',owner=false,webPas
  await context.route('**/*',async route=>{
   const request=route.request(),url=new URL(request.url());requests.push({origin:url.origin,path:url.pathname,method:request.method()});
   if(url.pathname==='/api/v1/info')return identityUnavailable?route.fulfill({status:401,json:{code:'unauthorized'}}):route.fulfill({json:{code:'ok',data:{api_version:1,model:'daikin',firmware_variant:variant,device_id:mac}}});
+  // Explicit verified old JSON firmware has no token route; preserve Basic
+  // compatibility checks independently from the MP hub HomeKit fixture.
+  if(url.pathname==='/api/v1/auth/login')return route.fulfill({status:404,json:{code:'not_found'}});
   if(url.pathname==='/api/v1/status')return route.fulfill({json:{code:'ok',data:device.state}});
   if(url.pathname==='/api/v1/command'){
    const body=request.postDataJSON();assert(body.action.endsWith('.get'),'fixture must not issue device writes');
@@ -91,7 +94,7 @@ async function passwordBounds(page,language,isHub,requests){
  }
 }
 
-for(const engine of [chromium,webkit]){
+for(const engine of [chromium,webkit].filter(engine=>!process.env.BROWSER||engine.name()===process.env.BROWSER)){
  const browser=await engine.launch(engine===webkit&&process.env.PHICOMM_WEBKIT_EXECUTABLE_PATH?{executablePath:process.env.PHICOMM_WEBKIT_EXECUTABLE_PATH}:{});
  try{for(const language of ['en','zh-CN']){
   const zh=language==='zh-CN',manage=zh?'中枢管理':'Hub management';
