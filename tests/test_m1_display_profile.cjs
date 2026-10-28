@@ -39,6 +39,7 @@ async function fixture(language='en',{initialRead=null,candidates=[],clock=null,
   if(transform)data=transform(request.action,data);
   return {ok:true,status:200,json:async()=>({code,data})};
  };
+ require('./legacy_device_fixture.cjs')(w);
  const scripts=[...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(match=>match[1]);
  scripts.forEach((source,index)=>{if(index===scripts.length-1)w.UI.start=device=>{w.UI.device=device;device.capabilities({actions:['co2_source.get','co2_source.set','display_source.get','display_source.set','display_data.set',...(fullCaps?['display_profile.get','display_profile.set','display_value.set']:['display_profile.get'])]});};vm.runInContext(source,dom.getInternalVMContext());});
  w.I18N.set(language);await settle();

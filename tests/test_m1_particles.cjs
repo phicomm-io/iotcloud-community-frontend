@@ -6,6 +6,7 @@ test('M1 particle card gates capability, preserves zero, expires and exposes raw
   let now=100,timer,calls=0;
   w.TextEncoder=TextEncoder;w.scrollTo=()=>{};w.setTimeout=()=>0;w.setInterval=fn=>{timer=fn;return 1;};
   Object.defineProperty(w.performance,'now',{value:()=>now});Object.defineProperty(w.document,'hidden',{value:false});
+ require('./legacy_device_fixture.cjs')(w);
   const scripts=[...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m=>m[1]);
   scripts.forEach((source,i)=>{if(i===scripts.length-1)w.UI.start=dev=>{w.UI.device=dev;};vm.runInContext(source,dom.getInternalVMContext());});
   const card=w.document.getElementById('particleCard'),flush=()=>new Promise(setImmediate);

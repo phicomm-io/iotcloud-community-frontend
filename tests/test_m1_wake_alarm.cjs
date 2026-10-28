@@ -15,6 +15,7 @@ async function setup(supported=true,{timezone=0,now,toneSupport=false}={}){
   if(req.action==='schedules.put'&&!fail)tasks=[{at:0,days:0,minute:0,...req.params,id:req.params.id||1,state:'waiting'}];
   if(req.action==='schedules.get')data={items:tasks,next:8,capacity:8,count:tasks.length};
   return {ok:true,json:async()=>({code:fail?'storage_error':'ok',data})};};
+ require('./legacy_device_fixture.cjs')(w);
  const scripts=[...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(x=>x[1]);
  scripts.forEach((s,i)=>{if(i===scripts.length-1){w.UI.start=dev=>{w.UI.device=dev;w.UI.caps=caps;dev.capabilities(caps);};w.UI.reload=async()=>w.UI.state;}vm.runInContext(s,dom.getInternalVMContext());});
  w.I18N.set('en');w.UI.state={time_synced:true,timezone_minutes:timezone};

@@ -9,6 +9,7 @@ test('M1 pressure stays inline, follows detected model and expires without a suc
   w.setInterval=fn=>{timer=fn;return 1;};
   w.clearInterval=()=>{cleared=true;};
   Object.defineProperty(w.performance,'now',{value:()=>now});
+ require('./legacy_device_fixture.cjs')(w);
   const scripts=[...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m=>m[1]);
   scripts.forEach((source,i)=>{
    if(i===scripts.length-1){w.UI.start=dev=>{w.UI.device=dev;};w.UI.reload=async()=>{};}
@@ -83,6 +84,7 @@ for(const model of ['M1','A1','TC1'])test(model+' restores one status polling ch
     if(fail)throw Error('offline');return decoded();
    }finally{active--;}
   };
+ require('./legacy_device_fixture.cjs')(w);
   const scripts=[...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m=>m[1]);
   scripts.forEach((source,i)=>{if(i===scripts.length-1)w.command=command;vm.runInContext(source,dom.getInternalVMContext());});
   await flush();assert.equal(reads.length,1);assert.equal(w.UI.state.name,'current');

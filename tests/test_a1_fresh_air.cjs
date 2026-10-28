@@ -17,6 +17,7 @@ test('Fresh air capability, mapping preview, revisions and independent automatic
    if(r.action==='fresh_air.linkage.get')data={...policy};
    if(r.action==='fresh_air.linkage.set'){assert.equal(r.params.revision,policy.revision);Object.assign(policy,r.params);policy.revision++;data={...policy};}
    return {ok:true,json:async()=>({code:'ok',data})};};
+ require('./legacy_device_fixture.cjs')(w);
   const scripts=[...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m=>m[1]);
   scripts.forEach((source,i)=>{if(i===scripts.length-1){w.UI.start=dev=>{w.UI.device=dev;w.UI.pages=dev.pages;};w.UI.reload=async()=>w.UI.state;}vm.runInContext(source,dom.getInternalVMContext());});
   await flush();w.I18N.set('en');const dev=w.UI.device;

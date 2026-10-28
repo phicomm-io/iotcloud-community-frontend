@@ -48,6 +48,7 @@ const ACTIONS={M1:['schedules.get','schedules.put','schedules.delete','schedules
   let data=fixtures[req.action]||{};
   if(req.action==='status.get'&&req.params.view==='live'){data={...state};delete data.ssid;delete data.free_memory;}
   return {ok:true,status:200,json:async()=>({code:req.action.endsWith('.get')?'ok':'accepted',data})};};
+ require('./legacy_device_fixture.cjs')(w);
  for(const match of html.matchAll(/<script>([\s\S]*?)<\/script>/g))require('node:vm').runInContext(match[1],dom.getInternalVMContext());
  for(let i=0;i<12;i++)await flush();
  if(process.env.WEB_TEST_VIEWS){
