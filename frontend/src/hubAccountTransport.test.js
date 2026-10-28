@@ -12,5 +12,5 @@ test('hub account changes only envelope and preserves its account token, without
  assert.deepEqual(calls.map(c=>c.path),['/api/v1/info','/api/auth/login']);
  const options=calls[1].options;assert.equal(options.headers['Content-Type'],'application/msgpack');assert.equal(options.headers.authorization,'Bearer hub-account');
  assert.deepEqual(decodeWire(options.body),{username:'owner',password:'adminfjr'});
- // The core wire defaults to omit; parent integration enables explicit include.
+ assert.equal(options.credentials,'include');
 });
