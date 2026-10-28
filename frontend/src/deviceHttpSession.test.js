@@ -69,3 +69,31 @@ test('host raw OTA uses Bearer once and replacing/removing entries retires sessi
  transport.retain([]);await new Promise(setImmediate);
  assert.equal(s.calls.filter(c=>c.url.endsWith('/auth/logout')).length,1,'only still-active owned token is retired');transport.stop();
 });
+test('shared discovery owns a deadline; a cancelled subscriber cannot cancel peers',async()=>{
+ const s=server();let finish,first=true,discoverySignal;
+ const session=createDeviceHttpSession({...s,password:'adminfjr',discoveryTimeout:1000,fetcher:async(url,options)=>{
+  if(url.endsWith('/info')&&first){first=false;discoverySignal=options.signal;await new Promise(resolve=>{finish=resolve;});}
+  return s.fetcher(url,options);
+ }});
+ const caller=new AbortController(),cancelled=session.ready(caller.signal),peer=session.ready();
+ caller.abort();await assert.rejects(cancelled,{name:'AbortError'});assert.equal(discoverySignal.aborted,false);
+ finish();await peer;assert.equal(session.auth.authenticated,true);await session.release();
+});
+test('timed-out discovery is aborted and subsequent discovery can recover',async()=>{
+ const s=server();let first=true,aborted=false;
+ const session=createDeviceHttpSession({...s,password:'adminfjr',discoveryTimeout:10,fetcher:async(url,options)=>{
+  if(first&&url.endsWith('/info')){first=false;return new Promise((_,reject)=>options.signal.addEventListener('abort',()=>{aborted=true;reject(new DOMException('timeout','AbortError'));},{once:true}));}
+  return s.fetcher(url,options);
+ }});
+ await assert.rejects(session.ready(),{name:'AbortError'});assert.equal(aborted,true);
+ await session.ready();assert.equal(session.auth.authenticated,true);await session.release();
+});
+test('firmware and wire metadata changes replace discovery and retire the prior session',async()=>{
+ for(const field of ['firmware_version','firmware_variant','variant','wire_format','wire_version']){
+  const s=server(),transport=createDeviceTransport({...s}),prefs={mode:'auto',address:'192.168.1.10'},device={mac:id,model:'a1',version:'v2',firmware_version:'rc4',firmware_variant:'full',variant:'full',wire_format:'msgpack',wire_version:1};
+  transport.configure('d',device,prefs,'adminfjr');await transport.probe('d');
+  transport.configure('d',{...device},prefs,'adminfjr');await transport.probe('d');assert.equal(s.calls.filter(c=>c.url.endsWith('/info')).length,1);
+  transport.configure('d',{...device,[field]:field==='wire_version'?2:field==='wire_format'?'json':field==='firmware_version'?'rc5':'lite'},prefs,'adminfjr');
+  await transport.probe('d');assert.equal(s.calls.filter(c=>c.url.endsWith('/info')).length,2,field);assert.equal(s.calls.filter(c=>c.url.endsWith('/auth/logout')).length,1,field);transport.stop();
+ }
+});

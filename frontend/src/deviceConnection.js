@@ -37,7 +37,7 @@ export function createDeviceTransport({fetcher=globalThis.fetch,records={},onSta
  function invalidate(e){for(const c of e.controllers)c.abort();e.controllers.clear();e.session.release();}
  function configure(key,device,prefs,password='',force=false){
   const address=prefs.address||prefs.lastAddress||'',old=entries.get(key);
-  if(!force&&old&&old.address===address&&old.mode===prefs.mode&&old.password===password&&old.device.mac===device.mac&&old.device.model===device.model)return;
+  if(!force&&old&&old.address===address&&old.mode===prefs.mode&&old.password===password&&['mac','model','firmware_version','firmware_variant','variant','wire_format','wire_version'].every(field=>old.device[field]===device[field]))return;
   if(old)invalidate(old);
   const entry={device:{...device},address,mode:prefs.mode,password,controllers:new Set(),promise:null};
   entry.session=createDeviceHttpSession({fetcher,origin:address,expectedIdentity:device,password,onRequired:()=>{if(current(key,entry))Object.assign(records[key],{ready:false,reason:t('p.aca4ebdbc19f')});}});
