@@ -32,7 +32,7 @@ async function deviceCommand(action,params={},options={}){
  try{
  if(options.signal?.aborted)throw readAbort();
  const response=await deviceFetch('/api/v1/command',{method:'POST',signal:controller.signal,headers:{'Content-Type':'application/json'},body:JSON.stringify(request),cache:'no-store'});
- const reply=response.status===503?{code:'busy'}:await response.json();
+ let reply;try{reply=await response.json();}catch(error){if(response.status!==503)throw error;reply={code:'busy'};}
  if(!response.ok||!['ok','accepted'].includes(reply.code)){const key='error.'+reply.code;const error=Error(globalThis.I18N?.has(key)?I18N.t(key):reply.message||reply.code||('HTTP '+response.status));error.code=reply.code;throw error;}
  if(!action.endsWith('.get')){deviceReadEpoch++;globalThis.UI?.invalidateStatus?.();}
  return reply.data||{};
