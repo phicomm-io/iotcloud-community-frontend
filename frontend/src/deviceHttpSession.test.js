@@ -103,3 +103,12 @@ test('host raw upload decodes a MessagePack error without reading responseText o
  class XHR{constructor(){this.upload={};}open(){}setRequestHeader(){}getResponseHeader(){return 'application/msgpack';}get responseText(){throw Error('binary responseText is unavailable');}send(){sent++;this.status=503;this.response=encodeWire({code:'busy',message:'Try again'}).buffer;this.onload();}}
  assert.deepEqual(await transport.upload('d',new Blob(['firmware']),true,()=>{},XHR).promise,{status:503,text:'Try again'});assert.equal(sent,1);transport.stop();
 });
+test('release queued immediately after readiness cannot relogin or send a command',async()=>{
+ const s=server(),session=createDeviceHttpSession({...s,password:'adminfjr'});
+ const ready=session.ready();ready.then(()=>session.release());
+ await assert.rejects(session.fetch('/api/v1/command',{method:'POST',value:{action:'status.get',params:{}}}),{name:'AbortError'});
+ await new Promise(setImmediate);
+ assert.equal(s.calls.filter(c=>c.url.endsWith('/auth/login')).length,1);
+ assert.equal(s.calls.filter(c=>c.url.endsWith('/command')).length,0);
+ assert.equal(session.auth.authenticated,false);
+});

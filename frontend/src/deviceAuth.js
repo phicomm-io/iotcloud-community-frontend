@@ -34,10 +34,18 @@ export function createDeviceAuth({fetcher=globalThis.fetch,origin='',onRequired=
   })();
   try{return await pending;}finally{clearTimeout(timer);if(version===generation){pending=null;loginAbort=null;}}
  }
- async function ensure(){if(token||legacyReady)return;if(blocked)throw authError('unauthorized',401);await login('');}
+ async function ensure(){
+  const version=generation;
+  if(token||legacyReady)return version;
+  if(blocked)throw authError('unauthorized',401);
+  await login('');
+  if(version!==generation&&rebindGeneration!==generation)throw authError('cancelled',0);
+  return generation;
+ }
  async function request(path,options={}){
-  await ensure();
-  const version=generation,authorization=headers().Authorization;
+  const version=await ensure();
+  if(version!==generation||options.signal?.aborted)throw authError('cancelled',0);
+  const authorization=headers().Authorization;
   const response=await wire.request(path,{...options,credentials:'omit',redirect:'error',cache:'no-store',headers:{...options.headers,...headers()}});
   if(version===generation)await observe(response.status,authorization);
   return response; // Never replay a mutation, including after expiration.
@@ -52,7 +60,7 @@ export function createDeviceAuth({fetcher=globalThis.fetch,origin='',onRequired=
   const previous=token;reset({requireLogin:false});
   return previous?retire(previous):Promise.resolve();
  }
- async function changePassword(password,{relogin=false}={}){await ensure();const version=generation,authorization=headers().Authorization;const response=await request('/api/v1/command',{method:'POST',value:{action:'config.set',request_id:globalThis.crypto?.randomUUID?crypto.randomUUID():Date.now().toString(36)+'-'+Math.random().toString(36).slice(2),params:{section:'auth',values:{password}}}});if(!response.ok)throw authError(response.status===401?'unauthorized':response.status===503?'busy':'HTTP '+response.status,response.status);const reply=await decodeResponse(response);if(!['ok','accepted'].includes(reply?.code))throw authError(reply?.code||'Invalid device response',response.status);if(version!==generation||authorization!==headers().Authorization)return reply;reset({requireLogin:password!==''&&!relogin});if(relogin)await login(password);else if(password!=='')onRequired();return reply;}
+ async function changePassword(password,{relogin=false}={}){const version=await ensure();if(version!==generation)throw authError('cancelled',0);const authorization=headers().Authorization;const response=await request('/api/v1/command',{method:'POST',value:{action:'config.set',request_id:globalThis.crypto?.randomUUID?crypto.randomUUID():Date.now().toString(36)+'-'+Math.random().toString(36).slice(2),params:{section:'auth',values:{password}}}});if(!response.ok)throw authError(response.status===401?'unauthorized':response.status===503?'busy':'HTTP '+response.status,response.status);const reply=await decodeResponse(response);if(!['ok','accepted'].includes(reply?.code))throw authError(reply?.code||'Invalid device response',response.status);if(version!==generation||authorization!==headers().Authorization)return reply;reset({requireLogin:password!==''&&!relogin});if(relogin)await login(password);else if(password!=='')onRequired();return reply;}
  wire.setOnIdentityChange?.(()=>{if(loginAbort){generation++;rebindGeneration=generation;token=legacy='';legacyReady=false;emptySession=false;blocked=false;}else reset({requireLogin:false});});
  return {wire,login,ensure,fetch:request,headers,observe,logout,release,changePassword,reset,setOnRequired(callback){onRequired=callback;},get authenticated(){return !!token||legacyReady;},get needsLogin(){return blocked;}};
 }

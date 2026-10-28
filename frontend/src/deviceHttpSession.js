@@ -24,5 +24,5 @@ export function createDeviceHttpSession({fetcher,origin,expectedIdentity,passwor
   try{await Promise.race([work,new Promise((_,reject)=>{abort=()=>reject(cancelled());signal.addEventListener('abort',abort,{once:true});if(signal.aborted)abort();})]);if(closed)throw cancelled();}
   finally{signal.removeEventListener('abort',abort);}
  }
- return {wire,auth,ready,async fetch(path,options={}){await ready(options.signal);return auth.fetch(path,options);},release(){closed=true;discovery?.abort();return auth.release();}};
+ return {wire,auth,ready,async fetch(path,options={}){await ready(options.signal);if(closed||options.signal?.aborted)throw cancelled();return auth.fetch(path,options);},release(){closed=true;discovery?.abort();return auth.release();}};
 }
