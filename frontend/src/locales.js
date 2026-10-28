@@ -3134,7 +3134,7 @@ Object.assign(messages,{
 "hub.provision.help":["Open the target device’s MQTT settings and enter the local broker details below using TMCP (v2). Save there, then add its MAC in Device management.", "打开目标设备的 MQTT 设置，按以下信息填写本地 Broker，协议选择 TMCP（v2）。在设备上保存后，再到设备管理添加其 MAC。"],
 "hub.provision.passwordHelp":["Enter this hub account’s MQTT password on the target device. It starts as the local account password; a separate MQTT password can be set in Account security.", "在目标设备上填写此中枢账户的 MQTT 密码。默认与本地账户密码相同，也可在账号安全中独立修改 MQTT 密码。"],
 "hub.lan.title":["LAN devices", "局域网设备"],
-"hub.lan.help":["Discovered devices are not registered or paired until you choose an action.", "发现的设备不会自动登记或配对，需由你明确操作。"],
+"hub.lan.help":["Local devices are discovered with mDNS and communicate over UDP. Home Assistant MQTT access requires an external broker. Discovered devices are not registered or paired until you choose an action.", "本地设备通过 mDNS 发现并经 UDP 通信。Home Assistant 的 MQTT 接入需要配置外部 Broker。发现的设备不会自动登记或配对，需由你明确操作。"],
 "hub.lan.unavailable":["LAN discovery is not ready. Check that the hub and devices are on the same network.", "局域网发现尚未就绪，请检查中枢与设备是否在同一网络。"],
 "hub.lan.empty":["No compatible devices were found.", "未发现兼容设备。"],
 "hub.lan.discoveryOnly":["Discovery only reports devices on the local network. It does not grant access.", "发现结果仅显示局域网设备，不会授予访问权限。"],
