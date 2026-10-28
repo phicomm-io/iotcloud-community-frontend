@@ -6,6 +6,9 @@
 (()=>{
 'use strict';
 const {t}=I18N;
+// Native builds specialize only the product; optional capabilities stay live.
+const PRODUCT=/* @device-product */null;
+const mayM1=PRODUCT===null||PRODUCT==='m1';
 const $=id=>document.getElementById(id);
 // Remove the non-secret handshake fragment before any async device requests.
 let importTicket=null,importInvalid=false;
@@ -210,7 +213,7 @@ function renderChips(s){
  const c=$('chips');if(!c)return;
  const wifi=s.wifi_connected?chip('ok','chip.wifi',s.ssid+' · '+s.ip):s.ap_active?chip('warn','chip.hotspot',s.ap_name):chip('bad','chip.wifi',t('state.connecting'));
  const mq=!s.mqtt_host?chip('','chip.mqtt',t('state.off')):s.mqtt_connected?chip('ok','chip.mqtt',t('state.ready')):chip('warn','chip.mqtt',t('s.'+(s.mqtt_status||'connecting')));
- c.replaceChildren(wifi,mq,h('span',{class:'chip'},h('span',{i18n:'chip.firmware'}),h('b',{class:'num'},s.version||'—')),...(UI.device.model==='M1'?[h('span',{class:'chip'},h('span',{i18n:'mcu.version'}),h('b',{class:'num'},mcuVersion?.version_received?mcuVersion.version:t('mcu.unknown')))]:[]),...(UI.device.chips?UI.device.chips(s):[]));
+ c.replaceChildren(wifi,mq,h('span',{class:'chip'},h('span',{i18n:'chip.firmware'}),h('b',{class:'num'},s.version||'—')),...(mayM1&&UI.device.model==='M1'?[h('span',{class:'chip'},h('span',{i18n:'mcu.version'}),h('b',{class:'num'},mcuVersion?.version_received?mcuVersion.version:t('mcu.unknown')))]:[]),...(UI.device.chips?UI.device.chips(s):[]));
 }
 function renderBanners(s,lost){
  const b=$('banners');if(!b)return;b.replaceChildren();
@@ -349,7 +352,7 @@ function mqttPage(dev){
  const port=h('input',{id:'mqttPort',type:'number',min:1,max:65535,required:true,value:'1883'});
  const user=h('input',{id:'mqttUser',maxLength:63,autocomplete:'off'});
  const pass=h('input',{id:'mqttPassword',type:'password',maxLength:256,autocomplete:'new-password',placeholder:t('mqtt.pass_ph')});
- const protocol=dev.model==='TC1'?h('select',{id:'mqttMode'},h('option',{value:'tmcp'},'TMCP (v2)'),h('option',{value:'legacy'},'Legacy (v1)')):null;
+ const protocol=(PRODUCT===null||PRODUCT==='tc1')&&dev.model==='TC1'?h('select',{id:'mqttMode'},h('option',{value:'tmcp'},'TMCP (v2)'),h('option',{value:'legacy'},'Legacy (v1)')):null;
  const clear=switchRow('clearMqttPassword','mqtt.clear','mqtt.clear_desc');
  const imported=mqttImportPanel(dev,{host,port,user,pass,protocol,clear:clear.querySelector('input')});
  const form=h('form',{id:'mqttForm',class:'stack'},
@@ -426,7 +429,7 @@ function backupCard(){
  return card('backup.title',null,h('p',{class:'help',i18n:full?'backup.hint':'backup.partial'}),download,form);
 }
 function firmwarePage(dev){
- const mcu=dev.model==='M1'?mcuVersionPanel():null;
+ const mcu=mayM1&&dev.model==='M1'?mcuVersionPanel():null;
  const comparison=h('a',{id:'otaCompare',class:'btn',target:'_blank',rel:'noopener noreferrer'},h('span',{i18n:'fw.compare'}),icon('external'));
  let identity=null,targetVersion=null;
  function comparisonLink(){
@@ -692,7 +695,7 @@ async function load(){
    }
   }
   const s=UI.acceptStatus(raw,params.view==='live');
-  readMcuVersion().catch(()=>{});
+  if(mayM1)readMcuVersion().catch(()=>{});
   $('title').textContent=UI.device.model+' '+(s.name||'');
   renderChips(s);renderBanners(s,false);
   if(!initialized){for(const p of Object.values(UI.pages))if(p.init)p.init(s);initialized=true;}

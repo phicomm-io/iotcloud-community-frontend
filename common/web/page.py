@@ -34,6 +34,7 @@ def render_page(path, *, minify=False):
         # Specialize embedded A1/M1/TC1 only; cloud keeps common fragment sharing.
         if any(part in ('A1', 'M1', 'TC1') for part in path.parts):
             command.append('--trim-device-exports')
+            command.append('--device-model='+next(part.lower() for part in path.parts if part in ('A1','M1','TC1')))
         data = subprocess.check_output(command, input=data)
     return data
 if __name__ == "__main__":

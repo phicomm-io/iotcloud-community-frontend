@@ -647,9 +647,7 @@ const D={
 'd.ntp_screen_queued':['Screen time queued','屏幕时间已入队'],'d.ntp_last_success':['Last sync','最近成功校时'],'d.ntp_next_seconds':['Next sync in (s)','下次校时（秒后）'],'d.timezone_minutes':['UTC offset (min)','时区（UTC 分钟差）'],
 'd.led_visible':['Light showing','灯环显示中'],'d.led_always_on':['Always on','常亮'],'d.brightness':['Brightness','亮度'],'d.red':['Red','红'],'d.green':['Green','绿'],'d.blue':['Blue','蓝'],
 'd.config_dirty':['Saving settings','设置保存中'],'d.save_error':['Save error','保存错误'],'d.reboot_pending':['Restart pending','等待重启'],
-'d.report_seconds':['Report interval (s)','上报间隔（秒）'],'d.powerCoefficientX100':['Power coefficient (×100)','功率系数（×100）'],'d.mask':['Subnet mask','子网掩码'],'d.gateway':['Gateway','网关']
-};
-Object.assign(D,{
+'d.report_seconds':['Report interval (s)','上报间隔（秒）'],'d.powerCoefficientX100':['Power coefficient (×100)','功率系数（×100）'],'d.mask':['Subnet mask','子网掩码'],'d.gateway':['Gateway','网关'],
  'gen.language':['Device language','设备语言'],
  'gen.language_help':['Controls MQTT entity names. Your browser language is set separately.','控制 MQTT 通告的实体名称，浏览器显示语言单独设置。'],
  'mcu.version':['Sensor MCU firmware','传感器 MCU 固件'],
@@ -660,7 +658,7 @@ Object.assign(D,{
  'mcu.stock17':['Factory 17.x (including 17.1.2.3) differs substantially. Keep the factory MCU until a 17.x image has been obtained and analyzed.','原厂 17.x（包括 17.1.2.3）差异较大，请先保留原厂 MCU，等取得 17.x 固件并完成分析后再考虑刷入。'],
  'mcu.unverified':['This MCU version has not been verified. Keep its original version text when reporting an issue.','此 MCU 版本尚未验证，反馈问题时请保留完整的原始版本号。'],
  'common.retry':['Retry','重试']
-});
+};
 const KEY='phicomm.language';
 let preference='auto';try{preference=localStorage.getItem(KEY)||'auto';}catch{}
 const detect=()=>{for(const l of navigator.languages||[navigator.language||'en']){const s=l.toLowerCase();if(s.startsWith('zh'))return 'zh-CN';if(s.startsWith('en'))return 'en';}return 'en';};
