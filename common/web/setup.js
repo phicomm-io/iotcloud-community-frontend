@@ -65,7 +65,7 @@ $('setup').onsubmit=async e=>{
  try{
   if(caps.device_language)await command('config.set',{section:'device',values:{language:$('deviceLanguage').value}});
   message(t('setup.ae49332c8b'));await command('config.set',{section:'mqtt',values:mqtt});$('mqttPassword').value='';received=false;importedOriginal=null;
-  if($('adminPassword').value){message(t('setup.5ea9986202'));const password=$('adminPassword').value;await api('/auth/password',{password});await DeviceSession.login(password);$('adminPassword').value='';}
+  if($('adminPassword').value){message(t('setup.5ea9986202'));const password=$('adminPassword').value;await DeviceSession.changePassword(password,{relogin:true});$('adminPassword').value='';}
   message(t('setup.340b70ed88'));wifiStarted=true;await command('config.set',{section:'wifi',values:wifi});$('wifiPassword').value='';message(t('setup.673c7d6bfe'));
  }catch(e){message(wifiStarted?t('setup.6bf4396e1e'):e.message,'warn');}
  finally{saving=false;$('save').disabled=false;}

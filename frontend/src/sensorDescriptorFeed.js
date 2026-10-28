@@ -16,9 +16,9 @@ export function applyDescriptorFeed(feeds,topic,message,{username='',retained=fa
  if(data.schema!==3&&match[2]==='state')return false;
  if(detectWire(message)!=='msgpack')return true;
  const id=match[1];if(!deviceIds.includes(id)||!record(data)||data.schema!==3||data.device_id!==id||!uint32(data.boot)||!uint32(data.descriptor_revision)||['schema','boot','descriptor_revision'].some(key=>fractional.has(key)))return true;
- const previous=feeds[id],retired=previous?.retired||[];
- if(previous&&previous.username!==username)delete feeds[id];
- const old=feeds[id];if(old&&old.boot!==data.boot&&retired.includes(data.boot))return true;
+ const key=username+':'+id,previous=feeds[key],retired=previous?.retired||[];
+ if(previous&&previous.username!==username)delete feeds[key];
+ const old=feeds[key];if(old&&old.boot!==data.boot&&retired.includes(data.boot))return true;
  const history=old&&old.boot!==data.boot?[...retired,old.boot].slice(-4):retired;
  if(match[2]==='metadata'){
   if(!record(data.fields)||Object.keys(data.fields).length>16)return true;
@@ -28,7 +28,7 @@ export function applyDescriptorFeed(feeds,topic,message,{username='',retained=fa
    fields[id]={name:field.name,type:field.type,unit:field.unit};
   }
   const same=old?.boot===data.boot&&old.metadata?.revision===data.descriptor_revision;
-  feeds[id]={username,boot:data.boot,sequence:old?.boot===data.boot?old.sequence:0,receivedAt:same?old.receivedAt:now,sensors:same?old.sensors:{},retired:history,metadata:{revision:data.descriptor_revision,fields}};
+  feeds[key]={username,boot:data.boot,sequence:old?.boot===data.boot?old.sequence:0,receivedAt:same?old.receivedAt:now,sensors:same?old.sensors:{},retired:history,metadata:{revision:data.descriptor_revision,fields}};
   return true;
  }
  if(retained||!uint32(data.sequence)||fractional.has('sequence')||!record(data.sensors)||Object.keys(data.sensors).length>16)return true;
@@ -39,5 +39,5 @@ export function applyDescriptorFeed(feeds,topic,message,{username='',retained=fa
   if(!fieldID(field_id)||!field||field.type!=='number'||!record(sample)||sample.valid!==true||!Number.isFinite(sample.value)||!Number.isFinite(Math.fround(sample.value))||!Number.isInteger(sample.age_ms)||sample.age_ms<0||sample.age_ms>=20000||fractional.has('sensors.'+field_id+'.age_ms'))continue;
   sensors[field_id]={...field,value:sample.value,age_ms:sample.age_ms};
  }
- feeds[id]={username,boot:data.boot,sequence:data.sequence,receivedAt:now,sensors,retired:history,...(metadata?{metadata}:{})};return true;
+ feeds[key]={username,boot:data.boot,sequence:data.sequence,receivedAt:now,sensors,retired:history,...(metadata?{metadata}:{})};return true;
 }

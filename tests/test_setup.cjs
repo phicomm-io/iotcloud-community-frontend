@@ -12,7 +12,7 @@ const flush=()=>new Promise(r=>setImmediate(r));
  d.querySelector('#ssid').value='new';d.querySelector('#wifiPassword').value='password123';d.querySelector('#adminPassword').value='admin1234';
  await d.querySelector('#setup').onsubmit({preventDefault(){}});
  assert.deepEqual(calls.filter(x=>x.action==='config.set').map(x=>x.params.section),['mqtt','auth','wifi']);
- assert.match(d.querySelector('#message').textContent,/实际连接状态/);
+ assert.match(d.querySelector('#message').textContent,/实际连接状态/);assert.equal(d.querySelector('dialog'),null,'known setup password is exchanged without a second prompt');
  calls.length=0;fail=true;await d.querySelector('#setup').onsubmit({preventDefault(){}});assert.deepEqual(calls.filter(x=>x.action==='config.set').map(x=>x.params.section),['mqtt']);assert.match(d.querySelector('#message').textContent,/设备忙/);
  assert.equal(d.querySelector('#protocolField').hidden,model!=='tc1');
  d.querySelector('#theme').value='dark';d.querySelector('#theme').onchange();assert.equal(d.documentElement.dataset.theme,'dark');

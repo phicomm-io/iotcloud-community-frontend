@@ -67,7 +67,7 @@ export function displaySourceCandidates(devices,states,feeds,target,username,now
  const owner=d=>d?.mqtt_username||d?.username||username||'';
  return devices.flatMap(d=>{
   if(d.version!=='v2'||d.mac===target?.mac||owner(d)!==owner(target))return [];
-  const feed=feeds[d.mac],state=states[deviceKey(d)]||{},elapsed=now-feed?.receivedAt;
+  const feed=feeds[owner(d)+':'+d.mac]||feeds[d.mac],state=states[deviceKey(d)]||{},elapsed=now-feed?.receivedAt;
   if(!feed||feed.username!==owner(target)||state.available===false||!Number.isFinite(elapsed)||elapsed<0)return [];
   return Object.entries(feed.sensors).flatMap(([field_id,sample])=>sample.age_ms+elapsed>=20000?[]:[{
    device_id:d.mac,device_name:state.name||d.name||(typeof d.model==='string'?d.model.toUpperCase():d.mac),field_id,name:sample.name,type:sample.type,unit:sample.unit,value:sample.value,age_ms:sample.age_ms+elapsed

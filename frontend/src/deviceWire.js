@@ -40,5 +40,5 @@ export function createDeviceWire({fetcher=globalThis.fetch,origin='',expectedIde
   })();try{return await pending;}finally{pending=null;}
  }
  return {discover,get format(){return format;},get identity(){return identity;},setOnIdentityChange(callback){onIdentityChange=callback;},headers:()=>({Accept:wireMime(format),'Content-Type':wireMime(format)}),encode(value){if(!format)throw failure('Discovery required');return encodeWire(value,format);},decodeResponse,
- async request(path,{value,...options}={}){await discover({signal:options.signal});return fetcher(origin+path,{...options,credentials:'omit',redirect:'error',cache:'no-store',...(value===undefined?{}:{body:encodeWire(value,format)}),headers:{Accept:wireMime(format),...(value===undefined?{}:{'Content-Type':wireMime(format)}),...options.headers}});}};
+ async request(path,{value,...options}={}){await discover({signal:options.signal});return fetcher(origin+path,{credentials:'omit',...options,redirect:'error',cache:'no-store',...(value===undefined?{}:{body:encodeWire(value,format)}),headers:{Accept:wireMime(format),...(value===undefined?{}:{'Content-Type':wireMime(format)}),...options.headers}});}};
 }
