@@ -10,7 +10,7 @@ export function fixedDeviceWire({fetcher=globalThis.fetch,origin='',format='json
 // Only public, read-only info discovers the format. Business requests never retry
 // in another format after busy, expiration, timeout or an ambiguous write result.
 export function createDeviceWire({fetcher=globalThis.fetch,origin='',expectedIdentity={}}={}){
- let format=null,identity=null,pending=null,onIdentityChange=()=>{};
+ let format=null,identity=null,pending=null,legacyBasicVerified=false,onIdentityChange=()=>{};
  function validate(data,responseFormat){
   if(!data||typeof data!=='object'||Array.isArray(data)||data.api_version!==1)throw failure('Invalid device discovery');
   const id=canonical(data.device_id),model=data.model;
@@ -36,10 +36,10 @@ export function createDeviceWire({fetcher=globalThis.fetch,origin='',expectedIde
    const type=response.headers?.get('Content-Type')?.split(';')[0],verified=validate(reply.data,type==='application/msgpack'?'msgpack':'json');
    if(legacyRetry&&(verified.format!=='json'||type==='application/msgpack'))throw failure('Invalid legacy discovery');
    if(identity&&JSON.stringify(identity)!==JSON.stringify(verified.identity))onIdentityChange();
-   format=verified.format;identity=Object.freeze(verified.identity);return identity;
+   format=verified.format;legacyBasicVerified=legacyRetry&&format==='json';identity=Object.freeze(verified.identity);return identity;
   })();try{return await pending;}finally{pending=null;}
  }
- return {discover,get format(){return format;},get identity(){return identity;},setOnIdentityChange(callback){onIdentityChange=callback;},headers:()=>({Accept:wireMime(format),'Content-Type':wireMime(format)}),encode(value){if(!format)throw failure('Discovery required');return encodeWire(value,format);},decodeResponse,
+ return {discover,get legacyBasicVerified(){return legacyBasicVerified;},get format(){return format;},get identity(){return identity;},setOnIdentityChange(callback){onIdentityChange=callback;},headers:()=>({Accept:wireMime(format),'Content-Type':wireMime(format)}),encode(value){if(!format)throw failure('Discovery required');return encodeWire(value,format);},decodeResponse,
  async request(path,{value,beforeSend,...options}={}){await discover({signal:options.signal});beforeSend?.();return fetcher(origin+path,{credentials:'omit',...options,redirect:'error',cache:'no-store',...(value===undefined?{}:{body:encodeWire(value,format)}),headers:{Accept:wireMime(format),...(value===undefined?{}:{'Content-Type':wireMime(format)}),...options.headers}});}};
 }
 

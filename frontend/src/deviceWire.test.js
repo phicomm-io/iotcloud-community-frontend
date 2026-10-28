@@ -9,7 +9,7 @@ const reply=(data,format='msgpack',status=200)=>new Response(encodeWire(data,for
 test('public discovery binds format to device/firmware and all auth commands use MP',async()=>{
  const calls=[];const fetcher=async(path,options)=>{calls.push([path,options]);if(path.endsWith('/info'))return reply({code:'ok',data:info});assert.equal(options.headers['Content-Type'],'application/msgpack');const value=decodeWire(options.body,'msgpack');if(path.endsWith('/login')){assert.deepEqual(value,{password:'adminfjr'});return reply({code:'ok',data:{token}});}return reply({code:'ok',data:value});};
  const wire=createDeviceWire({fetcher,expectedIdentity:{mac:id,model:'a1'}}),auth=createDeviceAuth({fetcher,wire});
- await auth.login('adminfjr');const response=await auth.fetch('/api/v1/command',{method:'POST',value:{action:'fan.set',params:{speed:30}}});assert.equal((await wire.decodeResponse(response)).code,'ok');await auth.logout();assert.equal(calls[0][1].headers.Authorization,undefined);assert.equal(calls[2][1].headers.Authorization,'Bearer '+token);assert.deepEqual(wire.identity,{device_id:id,model:'a1',firmware_version:'rc4',variant:'full'});assert.equal(calls.filter(([p])=>p.endsWith('/info')).length,1);
+ await auth.login('adminfjr');const response=await auth.fetch('/api/v1/command',{method:'POST',value:{action:'fan.set',params:{speed:30}}});assert.equal((await wire.decodeResponse(response)).code,'ok');await auth.logout();assert.equal(calls[0][1].headers.Authorization,undefined);assert.equal(calls[1][1].headers.Authorization,undefined);assert.equal(calls[2][1].headers.Authorization,'Bearer '+token);assert.deepEqual(wire.identity,{device_id:id,model:'a1',firmware_version:'rc4',variant:'full'});assert.equal(calls.filter(([p])=>p.endsWith('/info')).length,1);
 });
 test('legacy discovery selects JSON and only explicit login404 permits Basic',async()=>{
  const calls=[],fetcher=async(p,o)=>{calls.push([p,o]);if(p.endsWith('/info'))return reply({code:'ok',data:{api_version:1,device_id:id,model:'a1',version:'old'}},'json');if(p.endsWith('/login'))return reply({code:'not_found'},'json',404);return reply({code:'ok'},'json');};
@@ -43,4 +43,19 @@ test('final send guard runs after discovery and prevents an obsolete waiting wri
  await wire.discover();let current=true;
  const pending=wire.request('/api/v1/command',{method:'POST',value:{action:'fan.set'},beforeSend(){if(!current)throw Object.assign(Error('identity changed'),{code:'identity_changed'});}});
  current=false;await assert.rejects(pending,{code:'identity_changed'});assert.deepEqual(paths,['/api/v1/info']);
+});
+
+test('verified Basic-protected legacy middleware authorizes even an unknown login route before matching',async()=>{
+ const paths=[],authorization='Basic '+btoa('admin:adminfjr'),fetcher=async(path,options)=>{
+  paths.push([path,options]);
+  if(options.headers?.Authorization!==authorization)return reply({code:'unauthorized'},'json',401);
+  if(path.endsWith('/info'))return reply({code:'ok',data:{api_version:1,device_id:id,model:'a1',version:'rc3'}},'json');
+  if(path.endsWith('/auth/login'))return reply({code:'not_found'},'json',404);
+  assert.equal(path,'/api/v1/command');return reply({code:'accepted',data:{}},'json');
+ };
+ const wire=createDeviceWire({fetcher}),auth=createDeviceAuth({wire});await auth.login('adminfjr');
+ await auth.fetch('/api/v1/command',{method:'POST',value:{action:'fan.set',params:{on:true}}});
+ assert.equal(wire.legacyBasicVerified,true);assert.equal(paths.filter(([path])=>path.endsWith('/command')).length,1);
+ assert.equal(paths.find(([path])=>path.endsWith('/auth/login'))[1].headers.Authorization,authorization);
+ assert.equal(paths[0][1].headers.Authorization,undefined);
 });

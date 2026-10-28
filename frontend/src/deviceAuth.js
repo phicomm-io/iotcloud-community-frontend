@@ -22,7 +22,7 @@ export function createDeviceAuth({fetcher=globalThis.fetch,origin='',onRequired=
    await wire.discover({legacyPassword:password,signal:controller.signal,force:discovered});discovered=true;
    if(rebindGeneration===generation&&version===generation-1)version=generation;
    if(version!==generation)throw authError('cancelled',0);
-   const response=await wire.request('/api/v1/auth/login',{method:'POST',signal:controller.signal,credentials:'omit',redirect:'error',cache:'no-store',value:{password}});
+   const response=await wire.request('/api/v1/auth/login',{method:'POST',signal:controller.signal,credentials:'omit',redirect:'error',cache:'no-store',...(wire.format==='json'&&wire.legacyBasicVerified&&password?{headers:{Authorization:basic(password)}}:{}),value:{password}});
    if(version!==generation&&!response.ok)throw authError('cancelled',0);
    if(response.status===404&&allowLegacy&&wire.format==='json'){legacy=password?basic(password):'';legacyReady=true;emptySession=password==='';blocked=false;return;}
    if(response.status===401){token=legacy='';legacyReady=false;emptySession=false;required();throw authError('unauthorized',401);}
