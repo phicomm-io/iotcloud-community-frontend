@@ -204,7 +204,7 @@ function updateRingAnimation(){
  ringAnimationTimer=setInterval(()=>{
   if(!UI.state)return;
   const lightPage=document.querySelector('[data-settings-page="light"]'),ramping=UI.state.applied_speed!==UI.state.percentage;
-  if(!document.hidden&&(ramping||lightPage&&!lightPage.hidden)&&!ringPolling&&performance.now()-ringPolledAt>=(ramping?200:500)){
+  if(!document.hidden&&(!$('homePage').hidden||lightPage&&!lightPage.hidden)&&(ramping||lightPage&&!lightPage.hidden)&&!ringPolling&&performance.now()-ringPolledAt>=(ramping?200:500)){
    ringPolling=true;ringPolledAt=performance.now();UI.reload().finally(()=>{ringPolling=false;});
   }
   if(advanced.effect===2||advanced.effect===3||advanced.effect===5||previewTarget!==null)renderRing(UI.state);
@@ -219,12 +219,13 @@ function renderLight(s){
 
 /* ---------- Settings: light effects ---------- */
 const EFFECTS=[0,1,2,3,4,5];
-async function showLight(){
+async function showLight(options={}){
  const page=document.querySelector('[data-settings-page="light"]');
- try{bindingStatus=await api('/binding/status');}catch{}
- const fields=bindingStatus.average?.fields;
+ let nextBinding=bindingStatus;try{nextBinding=await api('/binding/status',undefined,options);}catch(e){if(e.name==='AbortError')throw e;}
+ const fields=nextBinding.average?.fields;
  const sourceAvailable=v=>!fields||v===5||(v===4?(fields.pm25||fields.formaldehyde):fields[['temperature','humidity','pm25','formaldehyde'][v]]);
- const m=clone(advanced=await api('/light/advanced')),hasSpeed=Number.isInteger(m.speed);updateRingAnimation();
+ const config=await api('/light/advanced',undefined,options);if(options.current&&!options.current())return;
+ bindingStatus=nextBinding;const m=clone(advanced=config),hasSpeed=Number.isInteger(m.speed);updateRingAnimation();
  const refreshDraft=()=>{advanced=clone(m);updateRingAnimation();if(UI.state)renderRing(UI.state);};
  page.oninput=refreshDraft;page.onchange=refreshDraft;
  const draw=()=>{
@@ -263,9 +264,9 @@ async function showLight(){
 }
 
 /* ---------- Settings: M1 binding ---------- */
-async function showBinding(){
- bindingStatus=await api('/binding/status').catch(()=>bindingStatus);
- const m=await api('/binding/config');const page=document.querySelector('[data-settings-page="binding"]');
+async function showBinding(options={}){
+ const nextBinding=await api('/binding/status',undefined,options).catch(e=>{if(e.name==='AbortError')throw e;return bindingStatus;});
+ const m=await api('/binding/config',undefined,options);if(options.current&&!options.current())return;bindingStatus=nextBinding;const page=document.querySelector('[data-settings-page="binding"]');
  const capacity=Number(m.max_peers)||4;
  const save=()=>api('/binding/config',m).then(showBinding);
  const st=mac=>(bindingStatus.peers||[]).find(p=>p.mac===mac)||{};
@@ -309,19 +310,21 @@ async function showBinding(){
 
 /* ---------- Settings: automatic control rules ---------- */
 let linkageDraws=[];
-async function showLinkage(){
+async function showLinkage(options={}){
  const page=document.querySelector('[data-settings-page="linkage"]');
- try{bindingStatus=await api('/binding/status');}catch{}
- linkageDraws=[];page.replaceChildren();
+ let nextBinding=bindingStatus;try{nextBinding=await api('/binding/status',undefined,options);}catch(e){if(e.name==='AbortError')throw e;}
+ const staged=h('div'),draws=[];
  for(const fresh of UI.caps?.fresh_air?[false,true]:[false]){
-  const section=h('section',{class:'stack','data-auto-fan':fresh?'fresh':'primary'});page.append(section);
-  await showFanRules(fresh,section);
+  const section=h('section',{class:'stack','data-auto-fan':fresh?'fresh':'primary'});staged.append(section);
+  draws.push(await showFanRules(fresh,section,options,nextBinding));
  }
+ if(options.current&&!options.current())return;
+ bindingStatus=nextBinding;linkageDraws=draws;page.replaceChildren(...staged.childNodes);
 }
-async function showFanRules(fresh,page){
- const m=await (fresh?command('fresh_air.linkage.get',{}):api('/linkage/config'));
+async function showFanRules(fresh,page,options={},binding=bindingStatus){
+ const m=await (fresh?command('fresh_air.linkage.get',{},options):api('/linkage/config',undefined,options));
  const modern=UI.caps?.actions?.includes('fan.mode.set');
- const supportsMetric=bit=>{const available=bindingStatus.average?.fields;return available?!!available[({1:'pm25',2:'formaldehyde',4:'co2'})[bit]]:bit===4?!!bindingStatus.average?.co2_valid:!!bindingStatus.average?.valid;};
+ const supportsMetric=bit=>{const current=page.isConnected?bindingStatus:binding,available=current.average?.fields;return available?!!available[({1:'pm25',2:'formaldehyde',4:'co2'})[bit]]:bit===4?!!current.average?.co2_valid:!!current.average?.valid;};
  const draw=()=>{
   const supportsCO2=Object.hasOwn(m,'target_co2')&&supportsMetric(4);
   const availableMask=[1,2,...(supportsCO2?[4]:[])].reduce((mask,bit)=>supportsMetric(bit)?mask|bit:mask,0);
@@ -372,7 +375,7 @@ async function showFanRules(fresh,page){
     return (fresh?command('fresh_air.linkage.set',m):api('/linkage/config',m)).then(saved=>{m.revision=saved.revision;return refresh();});
    }));
  };
- linkageDraws.push(draw);draw();
+ draw();return draw;
 }
 
 /* Accessory controls are admitted by the device capability, including cloud embeds. */
@@ -396,8 +399,8 @@ function renderFresh(s){
   h('p',{class:'help'},t('fresh.reason.'+(s.fresh_air_limit_reason||0))+(s.fresh_air_fallback?' · '+t('auto.no_sensor'):'')),
   h('div',{class:'row'},h('a',{class:'btn',href:'#settings/freshair'},t('fresh.settings')),h('a',{class:'btn',href:'#settings/linkage'},t('fresh.auto'))));
 }
-async function showFresh(){
- const m=await command('fresh_air.config.get',{}),page=document.querySelector('[data-settings-page="freshair"]');
+async function showFresh(options={}){
+ const m=await command('fresh_air.config.get',{},options);if(options.current&&!options.current())return;const page=document.querySelector('[data-settings-page="freshair"]');
  const draw=()=>{
   const field=(key,label,options={})=>h('label',{class:'field'},h('span',{},t(label)),num(m,key,options));
   const coupling=seg([[2,'fresh.independent'],[0,'fresh.cap'],[1,'fresh.boost']],v=>{m.coupling=v;draw();});coupling.set(m.coupling);
@@ -419,7 +422,7 @@ async function showFresh(){
 
 /* ---------- Boot ---------- */
 const clock=UI.clockCard({
- load:()=>api('/time/config'),
+ load:options=>api('/time/config',undefined,options),
  save:v=>api('/time/config',v),
  status:s=>[['clock.synced',t((bindingStatus&&bindingStatus.clock_valid)?'s.synced':'s.syncing'),(bindingStatus&&bindingStatus.clock_valid)?'ok':'warn'],
   ['clock.uptime',UI.duration(s.uptime_seconds||0)],['clock.memory',(Math.round((s.free_memory||0)/1024))+' KB']]});
@@ -442,8 +445,8 @@ UI.start({
  chips:s=>s.child_lock?[h('span',{class:'chip'},icon('lock'),h('b',{},t('a1.child_lock')))]:[],
  onStatus:s=>{renderFan(s);renderLight(s);renderFilter(s);renderFresh(s);}
 });
-I18N.onChange(()=>{if(UI.state){renderAuto();for(const key of ['device','light','binding','linkage'])if(!document.querySelector('[data-settings-page="'+key+'"]').hidden&&UI.pages[key].show)UI.pages[key].show();}});
+I18N.onChange(()=>{if(UI.state){renderAuto();UI.showRoute();}});
 // Keep the automatic-control summary fresh even while the home page is idle.
-(async function poll(){try{if(document.hidden||($('homePage').hidden&&UI.activePage()!=='binding'&&UI.activePage()!=='linkage'))return;const previous=JSON.stringify([bindingStatus.average?.fields,bindingStatus.average?.valid,bindingStatus.average?.co2_valid]);bindingStatus=await api('/binding/status');if(previous!==JSON.stringify([bindingStatus.average?.fields,bindingStatus.average?.valid,bindingStatus.average?.co2_valid])&&UI.activePage()==='linkage')linkageDraws.forEach(draw=>draw());if(UI.state)renderFan(UI.state);renderAuto();}catch{}finally{setTimeout(poll,3000);}})();
+(async function poll(){try{if(document.hidden||($('homePage').hidden&&UI.activePage()!=='binding'&&UI.activePage()!=='linkage'))return;const previous=JSON.stringify([bindingStatus.average?.fields,bindingStatus.average?.valid,bindingStatus.average?.co2_valid]);bindingStatus=await api('/binding/status');if(previous!==JSON.stringify([bindingStatus.average?.fields,bindingStatus.average?.valid,bindingStatus.average?.co2_valid])&&UI.activePage()==='linkage'&&!document.querySelector('[data-settings-page="linkage"] [data-dirty="1"], [data-settings-page="linkage"][data-dirty="1"]'))linkageDraws.forEach(draw=>draw());if(UI.state)renderFan(UI.state);renderAuto();}catch{}finally{setTimeout(poll,3000);}})();
 api('/light/advanced').then(a=>{advanced=a;updateRingAnimation();if(UI.state)renderLight(UI.state);}).catch(e=>toast(e.message,true));
 })();

@@ -142,15 +142,16 @@ function validCo2Source(config){
     !['none','switch_display'].includes(config.double_click)||!Number.isInteger(config.revision)||config.revision<0||typeof config.button_events_supported!=='boolean')throw Error(t('control.unconfirmed'));
  return config;
 }
-async function loadCo2Source(){
+async function loadCo2Source(options={}){
  if(sourceCard.hidden||sourcePending)return;
- const generation=++sourceRead,config=validCo2Source(await command('co2_source.get'));
- if(sourcePending||generation!==sourceRead)return;
+ const generation=++sourceRead,config=validCo2Source(await command('co2_source.get',{},options));
+ if(sourcePending||generation!==sourceRead||options.current&&!options.current())return;
  if(!sourceEditing){sourceConfig=config;sourceMode.value=config.source;sourceID.value=config.device_id;doubleClick.value=config.double_click;}
  else if(sourceConfig)sourceConfig.button_events_supported=config.button_events_supported;
  renderSource();
  if(window.getDeviceSensorSources){
   const candidates=await window.getDeviceSensorSources();
+  if(options.current&&!options.current())return;
   sourceCandidates.replaceChildren(...candidates.map(c=>h('option',{value:c.device_id},c.name+' · '+c.ppm+' ppm')));
  }
 }
@@ -174,11 +175,11 @@ const thresholdRows={};
 const thresholdAlarmStatus=h('p',{class:'help',id:'m1AlarmStatus',role:'status'});
 const thresholdCard=h('section',{class:'card stack',id:'m1Thresholds',hidden:true},
  h('h2',{i18n:'m1.thresholds'}),info('m1.threshold_help'),info('m1.alarm_help'),thresholdAlarmStatus);
-async function loadThresholds(){
+async function loadThresholds(options={}){
  if(thresholdCard.hidden||thresholdPending||thresholdLoading)return;
  thresholdLoading=true;thresholdReadAt=Date.now();
  const generation=++thresholdRead;
- try{const config=await command('alarm.get');if(generation===thresholdRead&&!thresholdPending){thresholdConfig=config;renderThresholds();}}
+ try{const config=await command('alarm.get',{},options);if((!options.current||options.current())&&generation===thresholdRead&&!thresholdPending){thresholdConfig=config;renderThresholds();}}
  finally{thresholdLoading=false;}
 }
 function renderThresholds(){
@@ -241,7 +242,7 @@ function renderMusic(){
  window.dispatchEvent(new Event('m1-tone-capability'));
  if(!musicBusy)musicProgress.textContent=musicStatus?.present?t('music.saved',{n:musicStatus.length,s:(musicStatus.duration_ms/1000).toFixed(1)}):t('music.empty');
 }
-async function loadMusic(){if(!UI.m1MusicSupported||musicBusy)return;musicStatus=await command('music.get');renderMusic();}
+async function loadMusic(options={}){if(!UI.m1MusicSupported||musicBusy)return;const value=await command('music.get',{},options);if(options.current&&!options.current())return;musicStatus=value;renderMusic();}
 async function saveMusic(){
  if(musicBusy)return;
  const text=musicText.value.trim();
@@ -338,8 +339,8 @@ function renderPeers(){
  $('peerCard').replaceChildren(head,rows.length?h('div',{class:'list'},rows):h('div',{class:'empty'},t('m1.linked_empty')));
 }
 /* Session status is read-only; sources are configured on each A1. */
-async function showBinding(){
- bindingStatus=await api('/binding/status');renderPeers();
+async function showBinding(options={}){
+ const next=await api('/binding/status',undefined,options);if(options.current&&!options.current())return;bindingStatus=next;renderPeers();
  const rows=peerSessionRows(),capacity=Number(bindingStatus.max_sessions)||4;
  document.querySelector('[data-settings-page="binding"]').replaceChildren(pageHead('nav.permission','m1.perm_lead'),
   h('section',{class:'card'},h('div',{class:'card-head'},h('h2',{i18n:'m1.linked'}),h('span',{class:'badge'},rows.length+' / '+capacity)),
@@ -392,7 +393,7 @@ function installWakeAlarm(){
 
 /* ---------- Boot ---------- */
 const clock=UI.clockCard({
- load:async()=>UI.state||await api('/status'),
+ load:async options=>UI.state||await api('/status',undefined,options),
  save:async v=>{
   const s=UI.state;
   if(v.timezone_minutes!==s.timezone_minutes)await api('/time/config',{timezone_minutes:v.timezone_minutes});
@@ -416,7 +417,7 @@ UI.start({
  scheduleLead:'sch.lead_a1',interval:1000,
  groups:[['grp.network',['network','mqtt']],['grp.device',['device']],['grp.auto',['binding','schedule','night']],['grp.system',['firmware','diagnostics','logs','maintenance']]],
  nav:{network:'nav.wifi',mqtt:'nav.mqtt',device:'nav.general',binding:'nav.permission',schedule:'nav.schedule',night:'nav.sleep',firmware:'nav.firmware',diagnostics:'nav.diagnostics',logs:'nav.logs',maintenance:'nav.maintenance'},
- pages:{device:{show:async()=>{await Promise.all([clock.show(),loadThresholds(),loadMusic(),loadCo2Source(),UI.userDisplay.load()]);},status:clock.status},binding:{show:showBinding}},
+ pages:{device:{show:async(options={})=>{await Promise.all([clock.show(options),loadThresholds(options),loadMusic(options),loadCo2Source(options),UI.userDisplay.load(options)]);},status:clock.status},binding:{show:showBinding}},
  diagGroups:[['diag.g_sensor',['uart_ready','sensor_valid','sensor_received','age_ms','temperature','humidity','formaldehyde','pm25','rx_frames','unknown_frames','uart_errors','discarded_bytes','last_frame']],
   ['diag.g_clock',['timezone_minutes','ntp_host','ntp_status','ntp_server','ntp_synced','ntp_screen_queued','ntp_last_success','ntp_next_seconds']],
   ['diag.g_screen',['brightness_requested']],

@@ -138,11 +138,11 @@ function render(){
  }
  save.disabled=pending||!config;
 }
-async function load(){
+async function load(options={}){
  if(!formatted.enabled||pending||loading)return;
  loading=true;lastRead=Date.now();const current=++generation;
- try{const value=validRead(await command('display_profile.get'));if(current!==generation||pending)return;setConfig(value,!editing);
-  if(window.getDeviceSensorSources){const result=await window.getDeviceSensorSources('display');if(current===generation&&!pending){candidates=Array.isArray(result)?result.filter(item=>record(item)&&deviceID(item.device_id)&&fieldID(item.field_id)&&item.type==='number'&&descriptorText(item.name,1,64)&&descriptorText(item.unit,0,24)&&physical(item.value)).map(item=>({...item,device_id:deviceID(item.device_id),device_name:typeof item.device_name==='string'?item.device_name:item.device_id})):[];render();}}
+ try{const value=validRead(await command('display_profile.get',{},options));if(current!==generation||pending||options.current&&!options.current())return;setConfig(value,!editing);
+  if(window.getDeviceSensorSources){const result=await window.getDeviceSensorSources('display');if(current===generation&&!pending&&(!options.current||options.current())){candidates=Array.isArray(result)?result.filter(item=>record(item)&&deviceID(item.device_id)&&fieldID(item.field_id)&&item.type==='number'&&descriptorText(item.name,1,64)&&descriptorText(item.unit,0,24)&&physical(item.value)).map(item=>({...item,device_id:deviceID(item.device_id),device_name:typeof item.device_name==='string'?item.device_name:item.device_id})):[];render();}}
  }finally{loading=false;}
 }
 async function saveConfig(){
