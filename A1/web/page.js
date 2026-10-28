@@ -324,7 +324,7 @@ async function showLinkage(options={}){
 async function showFanRules(fresh,page,options={},binding=bindingStatus){
  const m=await (fresh?command('fresh_air.linkage.get',{},options):api('/linkage/config',undefined,options));
  const modern=UI.caps?.actions?.includes('fan.mode.set');
- const supportsMetric=bit=>{const available=binding.average?.fields;return available?!!available[({1:'pm25',2:'formaldehyde',4:'co2'})[bit]]:bit===4?!!binding.average?.co2_valid:!!binding.average?.valid;};
+ const supportsMetric=bit=>{const current=page.isConnected?bindingStatus:binding,available=current.average?.fields;return available?!!available[({1:'pm25',2:'formaldehyde',4:'co2'})[bit]]:bit===4?!!current.average?.co2_valid:!!current.average?.valid;};
  const draw=()=>{
   const supportsCO2=Object.hasOwn(m,'target_co2')&&supportsMetric(4);
   const availableMask=[1,2,...(supportsCO2?[4]:[])].reduce((mask,bit)=>supportsMetric(bit)?mask|bit:mask,0);
