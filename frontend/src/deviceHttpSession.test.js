@@ -97,3 +97,9 @@ test('firmware and wire metadata changes replace discovery and retire the prior 
   await transport.probe('d');assert.equal(s.calls.filter(c=>c.url.endsWith('/info')).length,2,field);assert.equal(s.calls.filter(c=>c.url.endsWith('/auth/logout')).length,1,field);transport.stop();
  }
 });
+
+test('host raw upload decodes a MessagePack error without reading responseText or replaying',async()=>{
+ const s=server(),transport=createDeviceTransport({...s});transport.configure('d',{mac:id,model:'a1',version:'v2'},{mode:'auto',address:'192.168.1.10'},'adminfjr');assert(await transport.probe('d'));let sent=0;
+ class XHR{constructor(){this.upload={};}open(){}setRequestHeader(){}getResponseHeader(){return 'application/msgpack';}get responseText(){throw Error('binary responseText is unavailable');}send(){sent++;this.status=503;this.response=encodeWire({code:'busy',message:'Try again'}).buffer;this.onload();}}
+ assert.deepEqual(await transport.upload('d',new Blob(['firmware']),true,()=>{},XHR).promise,{status:503,text:'Try again'});assert.equal(sent,1);transport.stop();
+});

@@ -19,6 +19,7 @@ test.beforeAll(async()=>{
  server=createServer(async(req,res)=>{
   const headers={...cors,'Content-Type':'application/json'};
   if(req.method==='OPTIONS')return res.writeHead(204,headers).end();
+  if(req.url==='/api/v1/auth/login')return res.writeHead(404,headers).end(JSON.stringify({code:'not_found'}));
   if(req.headers.authorization!=='Basic '+Buffer.from('admin:'+secret).toString('base64'))return res.writeHead(401,headers).end(JSON.stringify({code:'unauthorized'}));
   let body='';for await(const chunk of req)body+=chunk;
   let data={device_id:mac,model:'m1',api_version:1,version:'1.0',ip,pm25:10,temperature:25,humidity:60,mqtt_connected:false};

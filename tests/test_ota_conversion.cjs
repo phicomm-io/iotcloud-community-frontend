@@ -44,7 +44,7 @@ test('conversion requires a signed file and confirmation; ordinary and unsigned 
   f.choice.confirm=false;f.submit();assert.equal(f.uploads.length,before,'cancel does not upload');
   assert.match(f.confirmations.at(-1),/Wi-Fi, MQTT and the web password will be kept/);assert.match(f.confirmations.at(-1),/local HTTP/);
   f.choice.confirm=true;f.submit();assert.equal(f.uploads.length,before+1);assert.equal(f.uploads.at(-1).path,'/api/v1/ota/convert');
-  assert.deepEqual(f.uploads.at(-1).headers,{'Content-Type':'application/octet-stream','X-IoTCloud-Target-Variant':'hub','X-IoTCloud-Confirm':'full-to-hub'});
+  assert.deepEqual(f.uploads.at(-1).headers,{Accept:'application/json','Content-Type':'application/octet-stream','X-IoTCloud-Target-Variant':'hub','X-IoTCloud-Confirm':'full-to-hub'});
   f.selectConversion(false);assert.equal(f.d.querySelector('#unsignedRescue').disabled,false);assert.equal(f.d.querySelector('#firmware').accept,'.bin,.raw,.signed');assert.deepEqual(f.missing,[]);
  }finally{f.dom.window.close();}
 });
@@ -53,6 +53,6 @@ test('unset web password permits signed conversion with explicit confirmation',a
   f.selectConversion(true);f.selectFile('hub.ota.bin.signed');assert.equal(f.d.querySelector('#hubConversionPassword'),null);
   f.choice.confirm=false;f.submit();assert.equal(f.uploads.length,0);assert.equal(f.confirmations.length,1);
   f.choice.confirm=true;f.submit();assert.equal(f.uploads.length,1);assert.equal(f.uploads[0].path,'/api/v1/ota/convert');
-  assert.deepEqual(f.uploads[0].headers,{'Content-Type':'application/octet-stream','X-IoTCloud-Target-Variant':'hub','X-IoTCloud-Confirm':'full-to-hub'});assert.deepEqual(f.missing,[]);
+  assert.deepEqual(f.uploads[0].headers,{Accept:'application/json','Content-Type':'application/octet-stream','X-IoTCloud-Target-Variant':'hub','X-IoTCloud-Confirm':'full-to-hub'});assert.deepEqual(f.missing,[]);
  }finally{f.dom.window.close();}
 });

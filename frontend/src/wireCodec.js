@@ -13,16 +13,17 @@ function invalid(){throw Error('Invalid device wire payload');}
 function validText(text){
  if(text.includes('\0')||/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/u.test(text))invalid();
 }
-function checkValue(v,depth=0,budget={n:0}){
+function checkValue(v,depth=0,budget={n:0},allowBinary=true){
  if(depth>=12||++budget.n>8192)invalid();
  if(v===null||typeof v==='boolean')return;
+ if(asBytes(v)){if(!allowBinary)invalid();return;}
  if(typeof v==='number'){if(!Number.isFinite(v)||(Number.isInteger(v)&&!Number.isSafeInteger(v)))invalid();return;}
  if(typeof v==='string'){validText(v);return;}
  if(typeof v!=='object'||ArrayBuffer.isView(v)||v instanceof ArrayBuffer||(!Array.isArray(v)&&Object.getPrototypeOf(v)!==Object.prototype))invalid();
- for(const [key,item] of Object.entries(v)){validText(key);if(forbidden.has(key)||encoder.encode(key).length>=128)invalid();checkValue(item,depth+1,budget);}
+ for(const [key,item] of Object.entries(v)){validText(key);if(forbidden.has(key)||encoder.encode(key).length>=128)invalid();checkValue(item,depth+1,budget,allowBinary);}
 }
 export function encodeWire(value,format='msgpack'){
- checkValue(value);if(format==='json')return JSON.stringify(value);
+ checkValue(value,0,{n:0},format!=='json');if(format==='json')return JSON.stringify(value);
  if(format!=='msgpack')invalid();
  let output=null,pos=0;
  function bytes(b){if(output)output.set(b,pos);pos+=b.length;}
@@ -51,6 +52,7 @@ export function encodeWire(value,format='msgpack'){
    byte(0xcb);const b=new Uint8Array(8);new DataView(b.buffer).setFloat64(0,v);bytes(b);return;
   }
   if(typeof v==='string'){text(v);return;}
+  const raw=asBytes(v);if(raw){const width=raw.length<=255?1:raw.length<=65535?2:4;byte(width===1?0xc4:width===2?0xc5:0xc6);uint(raw.length,width);bytes(raw);return;}
   if(Array.isArray(v)){head(4,v.length);for(const item of v)write(item);return;}
   const entries=Object.entries(v);head(5,entries.length);for(const [key,item]of entries){text(key);write(item);}
  }
@@ -80,12 +82,14 @@ export function decodeWire(value,format=detectWire(value),{onNumber}={}){
     else if((c&240)===128){kind=5;n=c&15;}
     else if((c&240)===144){kind=4;n=c&15;}
     else if(c>=0xd9&&c<=0xdb){kind=3;n=uint(1<<(c-0xd9));}
+    else if(c>=0xc4&&c<=0xc6){kind=2;n=uint(1<<(c-0xc4));}
     else if(c===0xdc||c===0xdd){kind=4;n=uint(c===0xdc?2:4);}
     else if(c===0xde||c===0xdf){kind=5;n=uint(c===0xde?2:4);}
     else if(c>=0xcc&&c<=0xcf)return number(uint(1<<(c-0xcc)),true,path);
     else if(c>=0xd0&&c<=0xd3){const width=1<<(c-0xd0);return number(uint(width,!!(b[pos]&128)),true,path);}
     else if(c===0xca||c===0xcb)return number(floating(c===0xca?4:8),false,path);
     else invalid();
+   if(kind===2){const start=take(n);return b.slice(start,start+n);}
    if(kind===3){const start=take(n),text=decoder.decode(b.subarray(start,start+n));validText(text);return text;}
    if(n>8192)invalid();
    if(kind===4){const a=[];for(let i=0;i<n;i++)a.push(item(depth+1,onNumber?[...path,i]:path));return a;}
@@ -95,7 +99,7 @@ export function decodeWire(value,format=detectWire(value),{onNumber}={}){
   }
   out=item();if(pos!==b.length)invalid();
  }
- checkValue(out);if(!out||typeof out!=='object'||Array.isArray(out))invalid();return out;
+ checkValue(out);if(!out||typeof out!=='object'||Array.isArray(out)||asBytes(out))invalid();return out;
 }
 export async function decodeResponse(response){
  const type=response.headers?.get('Content-Type')?.split(';')[0];

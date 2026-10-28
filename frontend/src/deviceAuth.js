@@ -6,7 +6,7 @@ const authError=(code,status)=>Object.assign(Error(code==='unauthorized'?'Sign i
 const basic=password=>'Basic '+btoa(String.fromCharCode(...new TextEncoder().encode('admin:'+password)));
 // One page owns one session. Neither passwords nor tokens enter browser storage.
 export function createDeviceAuth({fetcher=globalThis.fetch,origin='',onRequired=()=>{},allowLegacy=true,wire=fixedDeviceWire({fetcher,origin})}={}){
- let token='',legacy='',legacyReady=false,blocked=false,pending=null,generation=0,loginAbort=null,emptySession=false;
+ let token='',legacy='',legacyReady=false,blocked=false,pending=null,generation=0,loginAbort=null,emptySession=false,discovered=false;
  const headers=()=>token?{Authorization:'Bearer '+token}:legacy?{Authorization:legacy}:{};
  const reset=({requireLogin=true}={})=>{generation++;loginAbort?.abort();loginAbort=null;token=legacy='';legacyReady=false;emptySession=false;blocked=requireLogin;pending=null;};
  function required(){if(!blocked){blocked=true;onRequired();}}
@@ -18,7 +18,7 @@ export function createDeviceAuth({fetcher=globalThis.fetch,origin='',onRequired=
   pending=(async()=>{
    if(previous)await retire(previous);
    if(version!==generation)throw authError('cancelled',0);
-   await wire.discover({legacyPassword:password,signal:controller.signal});
+   await wire.discover({legacyPassword:password,signal:controller.signal,force:discovered});discovered=true;
    if(version!==generation)throw authError('cancelled',0);
    const response=await wire.request('/api/v1/auth/login',{method:'POST',signal:controller.signal,credentials:'omit',redirect:'error',cache:'no-store',value:{password}});
    if(version!==generation&&!response.ok)throw authError('cancelled',0);

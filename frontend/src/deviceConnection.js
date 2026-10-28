@@ -91,10 +91,14 @@ export function createDeviceTransport({fetcher=globalThis.fetch,records={},onSta
   }
   const xhr=new XMLHttpRequestClass(),controller={abort:()=>xhr.abort()};e.controllers.add(controller);
   const promise=new Promise(resolve=>{
-   xhr.open('POST',e.address+(target?'/api/v1/ota/convert':rescue?'/api/v1/ota/upload-unsigned':'/api/v1/ota/upload'));xhr.timeout=310000;xhr.withCredentials=false;xhr.setRequestHeader('Content-Type','application/octet-stream');const authorization=e.session.auth.headers().Authorization;if(authorization)xhr.setRequestHeader('Authorization',authorization);
+   xhr.open('POST',e.address+(target?'/api/v1/ota/convert':rescue?'/api/v1/ota/upload-unsigned':'/api/v1/ota/upload'));xhr.timeout=310000;xhr.withCredentials=false;xhr.responseType='arraybuffer';xhr.setRequestHeader('Accept',e.session.wire.headers().Accept);xhr.setRequestHeader('Content-Type','application/octet-stream');const authorization=e.session.auth.headers().Authorization;if(authorization)xhr.setRequestHeader('Authorization',authorization);
    if(target){xhr.setRequestHeader('X-IoTCloud-Target-Variant','hub');xhr.setRequestHeader('X-IoTCloud-Confirm','full-to-hub');}
    xhr.upload.onprogress=event=>{if(current(key,e)&&event.lengthComputable)onProgress(event.loaded,event.total);};
-   xhr.onload=()=>{e.session.auth.observe(xhr.status,authorization);resolve({status:xhr.status,text:xhr.responseText});};
+   xhr.onload=async()=>{
+    e.session.auth.observe(xhr.status,authorization);let text='';
+    try{if(xhr.response!==undefined&&xhr.response!==null){const reply=await e.session.wire.decodeResponse(new Response(xhr.response,{status:xhr.status,headers:{'Content-Type':xhr.getResponseHeader?.('Content-Type')||e.session.wire.headers().Accept}}));text=reply.message||reply.code||'';}else text=xhr.responseText||'';}catch{text='HTTP '+xhr.status;}
+    resolve({status:xhr.status,text});
+   };
    xhr.onerror=xhr.ontimeout=xhr.onabort=()=>resolve({status:0,text:t('p.404da89a85cb')});
    xhr.send(file);
   }).finally(()=>e.controllers.delete(controller));return {promise,abort:controller.abort};

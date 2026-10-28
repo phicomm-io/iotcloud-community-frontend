@@ -15,3 +15,7 @@ test('bounded profile rejects truncation, trailing bytes, unsafe numbers, duplic
 test('response MIME drives decode; busy admission text is not parsed as a binary download',async()=>{
  assert.deepEqual(await decodeResponse(new Response(encodeWire({code:'ok'}),{headers:{'Content-Type':'application/msgpack; charset=binary'}})),{code:'ok'});assert.deepEqual(await decodeResponse(new Response('busy',{status:503})),{code:'busy'});
 });
+
+test('MessagePack binary fields preserve opaque MCU bytes including NUL',()=>{
+ const bytes=encodeWire({frame:new Uint8Array([0,1,255])});assert.equal(hex(bytes),'81a56672616d65c4030001ff');assert.deepEqual([...decodeWire(bytes).frame],[0,1,255]);assert.throws(()=>encodeWire({frame:new Uint8Array([0])},'json'));
+});

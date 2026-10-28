@@ -28,6 +28,7 @@ export function applyDescriptorFeed(feeds,topic,message,{username='',retained=fa
    fields[id]={name:field.name,type:field.type,unit:field.unit};
   }
   const same=old?.boot===data.boot&&old.metadata?.revision===data.descriptor_revision;
+  if(same&&(Object.keys(fields).length!==Object.keys(old.metadata.fields).length||Object.entries(fields).some(([id,field])=>!Object.hasOwn(old.metadata.fields,id)||['name','type','unit'].some(key=>field[key]!==old.metadata.fields[id][key])))){feeds[key]={...old,sensors:{},metadata:null};return true;}
   feeds[key]={username,boot:data.boot,sequence:old?.boot===data.boot?old.sequence:0,receivedAt:same?old.receivedAt:now,sensors:same?old.sensors:{},retired:history,metadata:{revision:data.descriptor_revision,fields}};
   return true;
  }

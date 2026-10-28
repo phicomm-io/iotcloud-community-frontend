@@ -519,10 +519,14 @@ function firmwarePage(dev){
   if(rescue&&!window.confirm(t('fw.unsigned_confirm')))return;
   uploading=true;prog.value=0;
   const xhr=window.createDeviceUpload?window.createDeviceUpload():new XMLHttpRequest();xhr.open('POST',convert?'/api/v1/ota/convert':rescue?'/api/v1/ota/upload-unsigned':'/api/v1/ota/upload');
-  const authorization=globalThis.DeviceSession?.headers().Authorization;xhr.setRequestHeader('Content-Type','application/octet-stream');for(const [name,value] of Object.entries(globalThis.DeviceSession?.headers()||{}))xhr.setRequestHeader(name,value);xhr.timeout=310000;
+  const authorization=globalThis.DeviceSession?.headers().Authorization;xhr.setRequestHeader('Content-Type','application/octet-stream');for(const [name,value] of Object.entries(globalThis.DeviceSession?.headers()||{}))xhr.setRequestHeader(name,value);xhr.timeout=310000;if(globalThis.DeviceSession){xhr.responseType='arraybuffer';xhr.setRequestHeader('Accept',DeviceSession.wire.headers().Accept);}
   if(convert){xhr.setRequestHeader('X-IoTCloud-Target-Variant','hub');xhr.setRequestHeader('X-IoTCloud-Confirm','full-to-hub');}
   xhr.upload.onprogress=ev=>{if(ev.lengthComputable){prog.value=ev.loaded/ev.total*100;state.textContent=t('fw.uploading',{p:Math.round(ev.loaded/ev.total*100)});}};
-  xhr.onload=()=>{globalThis.DeviceSession?.observe(xhr.status,authorization);const ok=xhr.status===202;state.textContent=ok?t('fw.verify_ok'):t('fw.failed',{e:xhr.responseText});toast(state.textContent,!ok);};
+  xhr.onload=async()=>{
+   globalThis.DeviceSession?.observe(xhr.status,authorization);const ok=xhr.status===202;let detail='';
+   if(!ok)try{if(globalThis.DeviceSession&&xhr.response!==undefined&&xhr.response!==null){const reply=await DeviceSession.wire.decodeResponse(new Response(xhr.response,{status:xhr.status,headers:{'Content-Type':xhr.getResponseHeader?.('Content-Type')||DeviceSession.wire.headers().Accept}}));detail=reply.message||reply.code||'';}else detail=xhr.responseText||'';}catch{detail='HTTP '+xhr.status;}
+   state.textContent=ok?t('fw.verify_ok'):t('fw.failed',{e:detail});toast(state.textContent,!ok);
+  };
   xhr.onerror=()=>toast(t('fw.upload_lost'),true);
   xhr.ontimeout=()=>toast(t('fw.upload_timeout'),true);
   xhr.onloadend=()=>{uploading=false;};

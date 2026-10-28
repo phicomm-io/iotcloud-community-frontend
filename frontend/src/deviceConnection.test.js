@@ -59,14 +59,14 @@ test('signed hub conversion keeps explicit guards and authenticates only when a 
  }
  assert.equal((await t.upload('d',file,false,()=>{},XHR,target).promise).status,202);
  const conversion=requests.at(-1);assert.equal(conversion.url,'http://192.168.1.115/api/v1/ota/convert');assert.equal(conversion.file,file);assert.equal(conversion.withCredentials,false);
- assert.deepEqual(conversion.headers,{'Content-Type':'application/octet-stream',Authorization:'Basic '+Buffer.from('admin:web-secret').toString('base64'),'X-IoTCloud-Target-Variant':'hub','X-IoTCloud-Confirm':'full-to-hub'});
+ assert.deepEqual(conversion.headers,{Accept:'application/json','Content-Type':'application/octet-stream',Authorization:'Basic '+Buffer.from('admin:web-secret').toString('base64'),'X-IoTCloud-Target-Variant':'hub','X-IoTCloud-Confirm':'full-to-hub'});
  const count=requests.length;
  for(const invalid of [null,{}, {variant:'full',confirm:'hub-to-full'}, {variant:'hub',confirm:'wrong'}])assert.equal((await t.upload('d',file,false,()=>{},XHR,invalid).promise).status,0);
  assert.equal((await t.upload('d',file,true,()=>{},XHR,target).promise).status,0);
  assert.equal(requests.length,count,'failed conversion guards cannot send an upload');
  configure('');await t.probe('d');assert.equal((await t.upload('d',file,false,()=>{},XHR,target).promise).status,202);
  assert.equal(requests.at(-1).file,file);assert.equal(requests.at(-1).url,'http://192.168.1.115/api/v1/ota/convert');
- assert.deepEqual(requests.at(-1).headers,{'Content-Type':'application/octet-stream','X-IoTCloud-Target-Variant':'hub','X-IoTCloud-Confirm':'full-to-hub'});
+ assert.deepEqual(requests.at(-1).headers,{Accept:'application/json','Content-Type':'application/octet-stream','X-IoTCloud-Target-Variant':'hub','X-IoTCloud-Confirm':'full-to-hub'});
  t.configure('d',daikin,{mode:'mqtt',address:'http://192.168.1.115'},'web-secret');assert.equal((await t.upload('d',file,false,()=>{},XHR,target).promise).status,0);
  assert.equal(requests.length,count+1,'MQTT-only conversion cannot send an upload');t.stop();
  const a1=fixture(async url=>response(url.endsWith('/info')?info:status));await a1.t.probe('d');assert.equal((await a1.t.upload('d',file,false,()=>{},XHR,target).promise).status,0);a1.t.stop();assert.equal(requests.length,count+1);
