@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const esbuild = require('../frontend/node_modules/esbuild');
 const parser = require('../frontend/node_modules/@babel/parser');
 const terser = require('../frontend/node_modules/terser');
+const trimExports = require('./trim_device_exports.cjs');
 
 function packTranslations(html) {
   const strings = new Set();
@@ -45,7 +46,8 @@ function packTranslations(html) {
   return html.replace(source, () => packed);
 }
 
-async function minifyDevice(html) {
+async function minifyDevice(html, {trimDeviceExports=false}={}) {
+  if (trimDeviceExports) html = trimExports(html).html;
   html = packTranslations(html);
   for (const match of [...html.matchAll(/(<script\b[^>]*>)([\s\S]*?)(<\/script\s*>)/gi)]) {
     if (/\bsrc\s*=/i.test(match[1])) continue;
@@ -65,4 +67,4 @@ async function minifyDevice(html) {
 }
 module.exports = minifyDevice;
 module.exports.packTranslations = packTranslations;
-if (require.main === module) minifyDevice(fs.readFileSync(0,'utf8')).then(result=>process.stdout.write(result)).catch(error=>{console.error(error);process.exitCode=1;});
+if (require.main === module) minifyDevice(fs.readFileSync(0,'utf8'), {trimDeviceExports:process.argv.includes('--trim-device-exports')}).then(result=>process.stdout.write(result)).catch(error=>{console.error(error);process.exitCode=1;});

@@ -30,7 +30,11 @@ def render_page(path, *, minify=False):
     text = text.replace("</head>", script + "</head>", 1) if "</head>" in text else text.replace("</html>", script + "</html>")
     data = text.encode("utf-8")
     if minify:
-        data = subprocess.check_output(['node', str(ROOT / 'tools/minify_device.cjs')], input=data)
+        command = ['node', str(ROOT / 'tools/minify_device.cjs')]
+        # Specialize embedded A1/M1/TC1 only; cloud keeps common fragment sharing.
+        if any(part in ('A1', 'M1', 'TC1') for part in path.parts):
+            command.append('--trim-device-exports')
+        data = subprocess.check_output(command, input=data)
     return data
 if __name__ == "__main__":
     import argparse, sys

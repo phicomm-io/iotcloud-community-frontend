@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node --test src/*.test.js"
+    "test": "node --test src/*.test.js && npm run test:device-exports",
+    "test:device-exports": "cd .. && node --test tests/test_device_exports.cjs && WEB_TEST_MINIFIED=1 NODE_PATH=frontend/node_modules node --test tests/test_a1_fresh_air.cjs"
   },
   "dependencies": {
     "html5-qrcode": "^2.3.8",
