@@ -25,8 +25,9 @@ const ACTIONS={M1:['schedules.get','schedules.put','schedules.delete','schedules
   ota_progress:0,ota_state:'idle',socket_names:['one','two','three','four','five','six'],socket_states:[1,1,1,1,1,1],report_seconds:2,powerCoefficientX100:1710,free_memory:30000};
  const buttonItems=Array.from({length:30},(_,i)=>({key:0,clicks:i+1,seconds:0,action:model==='A1'?'fan.set':'outlet.set',params:{toggle:true}}));
  if(model!=='TC1')Object.assign(state,{reset_reason:'watchdog',reset_reason_raw:32,watchdog_enabled:true,watchdog_state:'healthy',watchdog_fault:''});
- const actions=['status.get','capabilities.get','config.get','config.set','logs.get','ota.start',...ACTIONS[model],...(process.env.WEB_TEST_OTA?['ota.sources.get','ota.check','ota.check.get','ota.notes','ota.notes.get','ota.install','ota.cancel']:[])];
- const fixtures={'status.get':state,'capabilities.get':{model:model.toLowerCase(),actions,button_keys:model==='A1'?['power','wifi','combination']:['function']},
+ const actions=['status.get','capabilities.get','config.get','config.set','logs.get','ota.start',...ACTIONS[model],...(model==='TC1'?[]:['diagnostics.get']),...(process.env.WEB_TEST_OTA?['ota.sources.get','ota.check','ota.check.get','ota.notes','ota.notes.get','ota.install','ota.cancel']:[])];
+ const fixtures={'status.get':state,'capabilities.get':{model:model.toLowerCase(),actions,...(model==='TC1'?{}:{diagnostics_schema:1,business_status:true}),button_keys:model==='A1'?['power','wifi','combination']:['function']},
+  'diagnostics.get':{schema:1,fields:[[2,123456],[56,3],[57,'i2c_timeout'],[9999,88],[55,null]]},
   'schedules.get':{items:[],capacity:model==='TC1'?128:8,count:0,next:8},'buttons.get':{items:[]},'time.get':{timezone_minutes:480},
   'night.get':{windows:[],revision:1},'logs.get':{records:[{sequence:1,event:'boot'},...(model==='TC1'?[]:[{sequence:2,module:'system',event:'watchdog'}])],next:model==='TC1'?1:2,latest:model==='TC1'?1:2},
   'power.get':{power_watts:0,energy_kwh:0,powers:[0]},'binding.get':{response_ids:[],peers:[],members:[],group:'',revision:1},
@@ -161,6 +162,18 @@ const ACTIONS={M1:['schedules.get','schedules.put','schedules.delete','schedules
   const text=d.querySelector('[data-settings-page="diagnostics"]').textContent;
   assert(text.includes('watchdog timeout')||text.includes('看门狗超时'), 'watchdog reset is explained in diagnostics');
   assert(text.includes('32'),'raw reset reason is visible');
+  assert(calls.some(r=>r.action==='diagnostics.get'),'capability-enabled diagnostics page reads diagnostics.get');
+  assert(!text.includes('9999'),'unknown diagnostic field IDs are ignored');
+  assert(!text.includes('scd40.serial'),'missing diagnostic values are omitted');
+  assert(text.includes('i2c_timeout'),'nested diagnostic field path is decoded');
+  assert.equal(w.UI.state.scd40,undefined,'diagnostic fields never contaminate business UI state');
+  assert(!JSON.stringify(w.UI.state).includes('123456'),'diagnostic-only uptime does not enter UI state');
+  const before=calls.length;await w.UI.reload();
+  assert.equal(calls.slice(before).filter(r=>['capabilities.get','config.get'].includes(r.action)).length,0,'business_status skips repeated capability/config reads');
+  if(model==='A1'){
+   await w.eval("command('fan.set',{speed:61})");const mutationAt=calls.length;await w.UI.reload();
+   assert.deepEqual(calls.slice(mutationAt).filter(r=>['capabilities.get','config.get'].includes(r.action)).map(r=>r.action),['capabilities.get','config.get'],'mutations refresh capabilities and config with the next full status');
+  }
  }else assert(!d.querySelector('[data-key="diag.g_watchdog"]'),'TC1 does not advertise the A1/M1 watchdog');
  // General settings must be reachable from the menu, not just a direct hash.
  const generalLink=d.querySelector('#side a[href="#settings/device"]');

@@ -202,11 +202,12 @@ function climateSettings(){
 }
 const climateEditor=climateSettings();
 $('indicator').onchange=()=>run($('indicator'),()=>UI.control('indicator.set',{enabled:$('indicator').checked},{indicator_enabled:$('indicator').checked}));
-UI.start({model:'DAIKIN BRY88AX151K',kindKey:'daikin.kind',icon:'air',factoryReset:true,mqttHostMax:127,interval:2000,
+UI.start({model:'DAIKIN BRY88AX151K',kindKey:'daikin.kind',icon:'air',factoryReset:true,mqttHostMax:127,interval:2000,diagnosticPages:['device'],
  otaName:'daikin_BRY88AX151K.ota.bin.signed',haHintKey:'daikin.ha',otaHintKey:'daikin.ota',buttonHintKey:'daikin.button',
  groups:[['grp.network',['network','mqtt']],['grp.device',['device','binding']],['grp.system',['firmware','diagnostics','maintenance']]],
  nav:{network:'nav.wifi',mqtt:'nav.mqtt',device:'nav.general',binding:'nav.permission',firmware:'nav.firmware',diagnostics:'nav.diagnostics',maintenance:'nav.maintenance'},
  pages:{device:{},binding:{show:async(options={})=>{const next=await api('/binding/status',undefined,options);if(options.current?.()===false)return;status=next;renderPeers();}}},
+ diagnosticStatus:(_business,diagnostic)=>co2Editor.status(diagnostic,Math.max(0,performance.now()-receivedAt)),
  diagGroups:[['diag.g_sensor',['sensors','co2_diagnostics','formaldehyde_present','pm_sensor','hardware_model']]],onStatus:render});
 I18N.onChange(()=>{if(snapshot)render(snapshot);renderPeers();});
 setInterval(()=>{if(snapshot)render(snapshot);},1000);

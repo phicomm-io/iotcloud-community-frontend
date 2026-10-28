@@ -166,7 +166,25 @@ UI.acceptStatus=(s,partial=false)=>{
  if(partial&&s.scd40&&UI.confirmed?.scd40)merged.scd40={...UI.confirmed.scd40,...s.scd40};
  UI.confirmed=merged;UI.state=pendingControl?{...merged,...pendingControl}:merged;return UI.state;
 };
-let fullGeneration=1,loadedGeneration=0,lastFullAt=0;
+function diagnosticSnapshot(reply){
+ if(!reply||reply.schema!==diagnosticSchema||!Array.isArray(reply.fields))return {};
+ const out={};
+ for(const pair of reply.fields){
+  if(!Array.isArray(pair)||pair.length!==2)continue;
+  const path=diagnosticFields[String(pair[0])];
+  if(!path||pair[1]===undefined)continue;
+  const keys=path.split('.');let cursor=out;
+  for(const key of keys.slice(0,-1))cursor=cursor[key]||(cursor[key]={});
+  cursor[keys.at(-1)]=pair[1];
+ }
+ return out;
+}
+function mergeDiagnostic(base,extra){
+ const out={...base};
+ for(const [key,value] of Object.entries(extra))out[key]=value&&typeof value==='object'&&!Array.isArray(value)?mergeDiagnostic(base[key]&&typeof base[key]==='object'?base[key]:{},value):value;
+ return out;
+}
+let fullGeneration=1,loadedGeneration=0,capabilityGeneration=0,lastFullAt=0;
 UI.invalidateStatus=()=>{fullGeneration++;};
 UI.activePage=()=>/^settings\/([a-z]+)$/.exec(UI.embeddedRoute??location.hash.slice(1))?.[1]||null;
 UI.statusParams=()=>{
@@ -678,11 +696,12 @@ async function load(){
   failures=0;lastSuccess=Date.now();unlockHome();
   if(!params.view&&!raw.ota_mode){lastFullAt=Date.now();loadedGeneration=generation;}
   if(raw.ota_active&&raw.ota_mode){UI.pages.firmware?.status(raw);return raw;}
-  if(!params.view||UI.caps?.config_recovery||resetPending){
+  if((!params.view&&(!UI.caps?.business_status||capabilityGeneration!==generation))||UI.caps?.config_recovery||resetPending){
    const caps=await command('capabilities.get'),config=await command('config.get');
    if(stopped||lifecycle!==pollGeneration||resetVersion!==resetGeneration)return null;
    const wasRecovery=!!UI.caps?.config_recovery;
    UI.acceptCapabilities(caps);
+   capabilityGeneration=generation;
    if(UI.identityChanged)return null;
    UI.caps.config_recovery=!!UI.caps.config_recovery||config.migration_state==='confirmation_required';
    if(resetPending&&raw.reboot_pending)resetSawPending=true;
@@ -699,8 +718,18 @@ async function load(){
   $('title').textContent=UI.device.model+' '+(s.name||'');
   renderChips(s);renderBanners(s,false);
   if(!initialized){for(const p of Object.values(UI.pages))if(p.init)p.init(s);initialized=true;}
-  for(const [key,p] of Object.entries(UI.pages))if(p.status&&(key===UI.activePage()||key.startsWith('slot_')&&UI.activePage()==='device'))p.status(s);
+  let diagnosticState=s;
+  if((UI.activePage()==='diagnostics'||UI.device.diagnosticPages?.includes(UI.activePage()))&&UI.caps?.actions?.includes('diagnostics.get')){
+   const routeGenerationAtRead=routeGeneration,signal=routeRead?.signal;
+   try{
+    const reply=await command('diagnostics.get',{},signal?{signal}:{});
+    if(stopped||lifecycle!==pollGeneration||routeGenerationAtRead!==routeGeneration)return null;
+    diagnosticState=mergeDiagnostic(s,diagnosticSnapshot(reply));
+   }catch(error){if(error?.name==='AbortError')return null;}
+  }
+  for(const [key,p] of Object.entries(UI.pages))if(p.status&&(key==='diagnostics'?key===UI.activePage():key===UI.activePage()||key.startsWith('slot_')&&UI.activePage()==='device'))p.status(key==='diagnostics'?diagnosticState:s);
   if(UI.device.onStatus)UI.device.onStatus(s);
+  if(diagnosticState!==s&&UI.device.diagnosticStatus)UI.device.diagnosticStatus(s,diagnosticState);
   return raw;
  }catch(e){if(!stopped&&lifecycle===pollGeneration&&++failures>=3&&(!lastSuccess||Date.now()-lastSuccess>=30000)){lockHome();renderBanners(null,true);}return null;}
 }
@@ -753,7 +782,7 @@ UI.start=async dev=>{
    h('a',{href:'#home','data-tab':'home'},icon('home'),h('span',{i18n:'nav.home'})),
    h('a',{href:'#settings/'+first,'data-tab':'settings'},icon('sliders'),h('span',{i18n:'nav.settings'}))),
   h('div',{id:'banners'}));
- UI.caps=await command('capabilities.get').catch(()=>({actions:[]}));
+ UI.caps=await command('capabilities.get').catch(()=>({actions:[]}));capabilityGeneration=fullGeneration;
  if(dev.capabilities)dev.capabilities(UI.caps);
  if(!UI.embedded&&UI.caps.model==='daikin'&&UI.caps.firmware_variant==='hub'){
   const tabs=document.querySelector('.tabs');tabs.classList.add('hub-tabs');
