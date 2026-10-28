@@ -81,10 +81,25 @@ test('same identity full caps replace omitted flags while preserving dirty DOM w
 });
 test('old in-flight command receipt cannot update a replacement firmware identity',async()=>{
  const f=await fixture();try{
-  const identity={device_id:'aabbccddeeff',model:'daikin',firmware_version:'rc4',variant:'full'};f.w.UI.acceptCapabilities({...f.w.UI.caps,...identity});
+  const identity={device_id:'aabbccddeeff',model:'daikin',firmware_version:'rc4',variant:'full'};Object.defineProperty(f.w.DeviceSession.wire,'identity',{value:identity,configurable:true});f.w.UI.acceptCapabilities({...f.w.UI.caps,...identity});
   f.choice.pendingAction='indicator.set';const pending=f.w.eval("command('indicator.set',{enabled:false})");
   for(let i=0;i<3;i++)await flush();assert(f.choice.finish);
   f.w.UI.acceptCapabilities({...identity,firmware_version:'rc5',actions:[]});f.choice.finish({ok:true,status:200,json:async()=>({code:'accepted',data:{}})});
   await assert.rejects(pending,{code:'identity_changed'});
+ }finally{f.dom.window.close();}
+});
+
+test('wire identity change cancels a waiting old write before new capabilities arrive',async()=>{
+ const f=await fixture();try{
+  const identity={device_id:'aabbccddeeff',model:'daikin',firmware_version:'rc4',variant:'full'};
+  Object.defineProperty(f.w.DeviceSession.wire,'identity',{value:identity,configurable:true});
+  f.w.UI.acceptCapabilities({...f.w.UI.caps,...identity});const draft=f.d.querySelector('#deviceName');draft.value='draft before login';
+  const original=f.w.DeviceSession.fetch;let continueSend;
+  f.w.DeviceSession.fetch=async(path,options)=>{await new Promise(resolve=>continueSend=resolve);options.beforeSend();return original(path,options);};
+  const pending=f.w.eval("command('indicator.set',{enabled:false})");assert(continueSend);
+  Object.defineProperty(f.w.DeviceSession.wire,'identity',{value:{...identity,firmware_version:'rc5'},configurable:true});continueSend();
+  await assert.rejects(pending,{code:'identity_changed'});
+  assert.equal(f.w.UI.identityChanged,true);assert.equal(f.w.UI.caps.firmware_version,'rc4','identity proof does not impersonate a complete new caps snapshot');
+  assert.equal(draft.value,'draft before login');assert(f.d.querySelector('#settingsPage').hasAttribute('inert'));
  }finally{f.dom.window.close();}
 });

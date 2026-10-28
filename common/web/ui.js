@@ -729,10 +729,9 @@ UI.reload=({full=false}={})=>{
  return fullReload;
 };
 document.addEventListener('visibilitychange',()=>{if(UI.device&&!document.hidden&&!stopped)UI.reload({full:true});});
-UI.acceptCapabilities=caps=>{
- const identity=value=>value?.device_id&&value?.model&&value?.firmware_version&&(value.variant||value.firmware_variant)?[value.device_id,value.model,value.firmware_version,value.variant||value.firmware_variant].join('/') : '';
- const previous=identity(UI.caps),next=identity(caps);UI.caps={...caps};
- UI.pages.firmware?.capabilities?.(UI.caps);
+const capabilityIdentity=value=>value?.device_id&&value?.model&&value?.firmware_version&&(value.variant||value.firmware_variant)?[value.device_id,value.model,value.firmware_version,value.variant||value.firmware_variant].join('/') : '';
+UI.invalidateIdentity=identity=>{
+ const previous=capabilityIdentity(UI.caps),next=capabilityIdentity(identity);
  if(previous&&next&&previous!==next&&!UI.identityChanged){
   UI.identityChanged=true;UI.identityGeneration=(UI.identityGeneration||0)+1;
   routeGeneration++;routeRead?.abort();pollGeneration++;
@@ -741,6 +740,7 @@ UI.acceptCapabilities=caps=>{
   $('banners').replaceChildren(h('div',{class:'banner warn',role:'alert'},h('p',{},en?'Device firmware changed. Unsaved contents are preserved. Refresh to load the new controls.':'设备固件已变更。未保存内容已保留，请刷新以加载新界面。'),h('button',{class:'btn',type:'button',onclick:()=>location.reload()},en?'Refresh page':'刷新页面')));
  }
 };
+UI.acceptCapabilities=caps=>{UI.invalidateIdentity(caps);UI.caps={...caps};UI.pages.firmware?.capabilities?.(UI.caps);};
 UI.showRoute=showRoute;
 UI.start=async dev=>{
  UI.device=dev;lockHome();
