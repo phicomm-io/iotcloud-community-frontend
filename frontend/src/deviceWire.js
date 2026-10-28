@@ -4,7 +4,7 @@ const failure=(code,status=0)=>Object.assign(Error(code),{code,status});
 const canonical=value=>String(value||'').replace(/[:-]/g,'').toLowerCase();
 export function fixedDeviceWire({fetcher=globalThis.fetch,origin='',format='json'}={}){
  return {discover:async()=>null,get format(){return format;},get identity(){return null;},headers:()=>({Accept:wireMime(format),'Content-Type':wireMime(format)}),encode:value=>encodeWire(value,format),decodeResponse,
- request(path,{value,...options}={}){return fetcher(origin+path,{...options,...(value===undefined?{}:{body:encodeWire(value,format)}),headers:{Accept:wireMime(format),...(value===undefined?{}:{'Content-Type':wireMime(format)}),...options.headers}});}};
+ request(path,{value,beforeSend,...options}={}){beforeSend?.();return fetcher(origin+path,{...options,...(value===undefined?{}:{body:encodeWire(value,format)}),headers:{Accept:wireMime(format),...(value===undefined?{}:{'Content-Type':wireMime(format)}),...options.headers}});}};
 }
 // A transport is scoped to one origin and one verified device/firmware identity.
 // Only public, read-only info discovers the format. Business requests never retry
@@ -40,7 +40,7 @@ export function createDeviceWire({fetcher=globalThis.fetch,origin='',expectedIde
   })();try{return await pending;}finally{pending=null;}
  }
  return {discover,get format(){return format;},get identity(){return identity;},setOnIdentityChange(callback){onIdentityChange=callback;},headers:()=>({Accept:wireMime(format),'Content-Type':wireMime(format)}),encode(value){if(!format)throw failure('Discovery required');return encodeWire(value,format);},decodeResponse,
- async request(path,{value,...options}={}){await discover({signal:options.signal});return fetcher(origin+path,{credentials:'omit',...options,redirect:'error',cache:'no-store',...(value===undefined?{}:{body:encodeWire(value,format)}),headers:{Accept:wireMime(format),...(value===undefined?{}:{'Content-Type':wireMime(format)}),...options.headers}});}};
+ async request(path,{value,beforeSend,...options}={}){await discover({signal:options.signal});beforeSend?.();return fetcher(origin+path,{credentials:'omit',...options,redirect:'error',cache:'no-store',...(value===undefined?{}:{body:encodeWire(value,format)}),headers:{Accept:wireMime(format),...(value===undefined?{}:{'Content-Type':wireMime(format)}),...options.headers}});}};
 }
 
 export function verifyCapabilities(data,identity){

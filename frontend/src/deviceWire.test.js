@@ -37,3 +37,10 @@ test('explicit login after verified firmware change rebinds before one token exc
  let firmware='rc4',logins=0;const fetcher=async p=>p.endsWith('/info')?reply({code:'ok',data:{...info,firmware_version:firmware}}):p.endsWith('/login')?(logins++,reply({code:'ok',data:{token}})):reply({code:'ok'});
  const wire=createDeviceWire({fetcher}),auth=createDeviceAuth({fetcher,wire});await auth.login('adminfjr');firmware='rc5';await auth.login('adminfjr');assert.equal(auth.authenticated,true);assert.equal(wire.identity.firmware_version,'rc5');assert.equal(logins,2,'rebind does not replay login');
 });
+
+test('final send guard runs after discovery and prevents an obsolete waiting write',async()=>{
+ const paths=[],wire=createDeviceWire({fetcher:async path=>{paths.push(path);return reply({code:'ok',data:info});}});
+ await wire.discover();let current=true;
+ const pending=wire.request('/api/v1/command',{method:'POST',value:{action:'fan.set'},beforeSend(){if(!current)throw Object.assign(Error('identity changed'),{code:'identity_changed'});}});
+ current=false;await assert.rejects(pending,{code:'identity_changed'});assert.deepEqual(paths,['/api/v1/info']);
+});

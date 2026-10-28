@@ -494,7 +494,7 @@ function firmwarePage(dev){
  const conversion=conversionSupported?switchRow('hubConversion','fw.convert_hub','fw.convert_hub_help'):null;
  const conversionInput=conversion?.querySelector('input'),unsignedInput=unsigned.querySelector('input');
  function conversionMode(){
-  const selected=!!conversionInput?.checked;
+  const selected=UI.caps?.ota_variant_conversion==='full-to-hub'&&!!conversionInput?.checked;
   if(selected)unsignedInput.checked=false;
   unsignedInput.disabled=selected;
   file.accept=selected?'.signed':'.bin,.raw,.signed';
@@ -510,8 +510,9 @@ function firmwarePage(dev){
  // Upload streams raw bytes; the request is synchronous up to send(), like the old page.
  let uploading=false;
  fileForm.addEventListener('submit',e=>{
-  e.preventDefault();const f=file.files&&file.files[0];if(!f||uploading)return;
+  e.preventDefault();if(UI.identityChanged){toast(I18N.lang==='en'?'Refresh this page before uploading.':'请刷新页面后再上传。',true);return;}const f=file.files&&file.files[0];if(!f||uploading)return;
   const rescue=unsignedInput.checked,convert=!!conversionInput?.checked;
+  if(convert&&UI.caps?.ota_variant_conversion!=='full-to-hub'){toast(t('error.unsupported'),true);return;}
   if(convert){
    if(rescue||!f.name?.endsWith('.signed')){toast(t('fw.convert_hub_signed'),true);return;}
    if(!window.confirm(t('fw.convert_hub_confirm')))return;
@@ -536,6 +537,7 @@ function firmwarePage(dev){
  const fileLabel=fileForm.querySelector('.field>span');I18N.onChange(()=>{fileLabel.textContent=t('fw.file',{m:dev.model});});
  return {el:h('div',{class:'stack'},pageHead('nav.firmware','fw.lead'),sum,...(mcu?[mcu.el]:[]),card('fw.compare_title',null,h('p',{class:'help',i18n:'fw.compare_help'}),comparison),online,
   card('fw.install',null,picker,h('div',{style:'margin-top:16px'},fileForm,urlForm),h('div',{class:'stack',style:'margin-top:20px'},prog,state,cancel),info(dev.otaHintKey))),
+  capabilities(caps){if(conversion&&caps.ota_variant_conversion!=='full-to-hub'){conversionInput.checked=false;conversion.remove();conversionMode();}online.hidden=!caps.actions?.includes('ota.sources.get');picker.hidden=!caps.actions?.includes('ota.start');},
   status(s){identity=s;comparisonLink();if(mcu)mcu.refresh().catch(()=>{});sum.replaceChildren(summary([['fw.version',h('span',{class:'num'},s.version||'—')],['fw.state',t('s.'+(s.ota_state||'idle'))],s.ota_error?['fw.error',h('span',{class:'badge bad'},s.ota_error)]:null]));
    cancel.hidden=!s.ota_active||s.ota_mode==='committing';
    if(s.ota_active){prog.value=s.ota_progress;state.textContent=t('fw.progress',{p:s.ota_progress});}}};
@@ -677,7 +679,8 @@ async function load(){
    const caps=await command('capabilities.get'),config=await command('config.get');
    if(stopped||lifecycle!==pollGeneration||resetVersion!==resetGeneration)return null;
    const wasRecovery=!!UI.caps?.config_recovery;
-   UI.caps={...UI.caps,...caps};
+   UI.acceptCapabilities(caps);
+   if(UI.identityChanged)return null;
    UI.caps.config_recovery=!!UI.caps.config_recovery||config.migration_state==='confirmation_required';
    if(resetPending&&raw.reboot_pending)resetSawPending=true;
    if(wasRecovery&&!UI.caps.config_recovery&&!raw.reboot_pending)initialized=false;
@@ -726,6 +729,18 @@ UI.reload=({full=false}={})=>{
  return fullReload;
 };
 document.addEventListener('visibilitychange',()=>{if(UI.device&&!document.hidden&&!stopped)UI.reload({full:true});});
+UI.acceptCapabilities=caps=>{
+ const identity=value=>value?.device_id&&value?.model&&value?.firmware_version&&(value.variant||value.firmware_variant)?[value.device_id,value.model,value.firmware_version,value.variant||value.firmware_variant].join('/') : '';
+ const previous=identity(UI.caps),next=identity(caps);UI.caps={...caps};
+ UI.pages.firmware?.capabilities?.(UI.caps);
+ if(previous&&next&&previous!==next&&!UI.identityChanged){
+  UI.identityChanged=true;UI.identityGeneration=(UI.identityGeneration||0)+1;
+  routeGeneration++;routeRead?.abort();pollGeneration++;
+  for(const id of ['homePage','settingsPage']){const box=$(id);if(box){box.inert=true;box.setAttribute('inert','');}}
+  const en=I18N.lang==='en';
+  $('banners').replaceChildren(h('div',{class:'banner warn',role:'alert'},h('p',{},en?'Device firmware changed. Unsaved contents are preserved. Refresh to load the new controls.':'设备固件已变更。未保存内容已保留，请刷新以加载新界面。'),h('button',{class:'btn',type:'button',onclick:()=>location.reload()},en?'Refresh page':'刷新页面')));
+ }
+};
 UI.showRoute=showRoute;
 UI.start=async dev=>{
  UI.device=dev;lockHome();
