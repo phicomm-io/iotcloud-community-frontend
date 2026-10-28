@@ -167,12 +167,14 @@ UI.acceptStatus=(s,partial=false)=>{
  UI.confirmed=merged;UI.state=pendingControl?{...merged,...pendingControl}:merged;return UI.state;
 };
 function diagnosticSnapshot(reply){
- if(!reply||reply.schema!==diagnosticSchema||!Array.isArray(reply.fields))return {};
- const out={};
+ if(!reply||reply.schema!==diagnosticSchema||!Array.isArray(reply.fields))throw Error('Invalid diagnostics schema');
+ const out={},seen=new Set();
  for(const pair of reply.fields){
-  if(!Array.isArray(pair)||pair.length!==2)continue;
+  if(!Array.isArray(pair)||pair.length!==2||!Number.isInteger(pair[0]))throw Error('Invalid diagnostics field');
   const path=diagnosticFields[String(pair[0])];
   if(!path||pair[1]===undefined)continue;
+  if(seen.has(pair[0]))throw Error('Duplicate diagnostics field');
+  seen.add(pair[0]);
   const keys=path.split('.');let cursor=out;
   for(const key of keys.slice(0,-1))cursor=cursor[key]||(cursor[key]={});
   cursor[keys.at(-1)]=pair[1];

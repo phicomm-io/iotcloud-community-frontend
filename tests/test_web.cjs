@@ -24,6 +24,7 @@ const ACTIONS={M1:['schedules.get','schedules.put','schedules.delete','schedules
   sensor_received:true,sensor_valid:true,age_ms:1000,temperature:25,humidity:50,formaldehyde:0.02,pm25:20,time_synced:true,timezone_minutes:480,ntp_host:'pool.ntp.org',ntp_status:'synced',ntp_synced:true,
   ota_progress:0,ota_state:'idle',socket_names:['one','two','three','four','five','six'],socket_states:[1,1,1,1,1,1],report_seconds:2,powerCoefficientX100:1710,free_memory:30000};
  const buttonItems=Array.from({length:30},(_,i)=>({key:0,clicks:i+1,seconds:0,action:model==='A1'?'fan.set':'outlet.set',params:{toggle:true}}));
+ let diagnosticsReply={schema:1,fields:[[2,123456],[56,3],[57,'i2c_timeout'],[9999,88],[55,null]]},holdDiagnostics=false,diagnosticsPending=[];
  if(model!=='TC1')Object.assign(state,{reset_reason:'watchdog',reset_reason_raw:32,watchdog_enabled:true,watchdog_state:'healthy',watchdog_fault:''});
  const actions=['status.get','capabilities.get','config.get','config.set','logs.get','ota.start',...ACTIONS[model],...(model==='TC1'?[]:['diagnostics.get']),...(process.env.WEB_TEST_OTA?['ota.sources.get','ota.check','ota.check.get','ota.notes','ota.notes.get','ota.install','ota.cancel']:[])];
  const fixtures={'status.get':state,'capabilities.get':{model:model.toLowerCase(),actions,...(model==='TC1'?{}:{diagnostics_schema:1,business_status:true}),button_keys:model==='A1'?['power','wifi','combination']:['function']},
@@ -46,12 +47,14 @@ const ACTIONS={M1:['schedules.get','schedules.put','schedules.delete','schedules
    if(holdOutlet)await holdOutlet(req);
    if(req.params.index===undefined)state.socket_states.fill(Number(req.params.on));else state.socket_states[req.params.index]=Number(req.params.on);
   }
-  let data=fixtures[req.action]||{};
+  if(req.action==='diagnostics.get'&&holdDiagnostics)return new Promise(resolve=>diagnosticsPending.push(()=>resolve({ok:true,status:200,json:async()=>({code:'ok',data:diagnosticsReply})})));
+  let data=fixtures[req.action]||{};if(req.action==='diagnostics.get')data=diagnosticsReply;
   if(req.action==='status.get'&&req.params.view==='live'){data={...state};delete data.ssid;delete data.free_memory;}
   return {ok:true,status:200,json:async()=>({code:req.action.endsWith('.get')?'ok':'accepted',data})};};
  require('./legacy_device_fixture.cjs')(w);
  for(const match of html.matchAll(/<script>([\s\S]*?)<\/script>/g))require('node:vm').runInContext(match[1],dom.getInternalVMContext());
  for(let i=0;i<12;i++)await flush();
+ if(model!=='TC1')assert.equal(calls.some(r=>r.action==='diagnostics.get'),false,'diagnostics are not polled while another view is active');
  if(process.env.WEB_TEST_VIEWS){
   const reads=()=>calls.filter(c=>c.action==='status.get');
   assert.deepEqual(reads()[0].params,{},'first read is full');
@@ -168,12 +171,32 @@ const ACTIONS={M1:['schedules.get','schedules.put','schedules.delete','schedules
   assert(text.includes('i2c_timeout'),'nested diagnostic field path is decoded');
   assert.equal(w.UI.state.scd40,undefined,'diagnostic fields never contaminate business UI state');
   assert(!JSON.stringify(w.UI.state).includes('123456'),'diagnostic-only uptime does not enter UI state');
+  diagnosticsReply={schema:2,fields:[[57,'invalid-version']]};await w.UI.reload();
+  let diagnosticRaw=d.querySelector('[data-settings-page="diagnostics"] pre').textContent;
+  assert(!diagnosticRaw.includes('invalid-version'),'unsupported schema version rejects the response');
+  diagnosticsReply={schema:1,fields:[[57,'first'],[57,'duplicate']]};await w.UI.reload();
+  diagnosticRaw=d.querySelector('[data-settings-page="diagnostics"] pre').textContent;
+  assert(!diagnosticRaw.includes('first')&&!diagnosticRaw.includes('duplicate'),'duplicate field IDs reject the whole response');
+  diagnosticsReply={schema:1,fields:[[57,'i2c_timeout'],[57,'crc_error']]};await w.UI.reload();
+  diagnosticRaw=d.querySelector('[data-settings-page="diagnostics"] pre').textContent;
+  assert(!diagnosticRaw.includes('crc_error')&&!diagnosticRaw.includes('i2c_timeout'),'duplicate IDs are not partially applied');
   const before=calls.length;await w.UI.reload();
   assert.equal(calls.slice(before).filter(r=>['capabilities.get','config.get'].includes(r.action)).length,0,'business_status skips repeated capability/config reads');
+  const fullAt=calls.length;await w.UI.reload({full:true});
+  assert.deepEqual(calls.slice(fullAt).filter(r=>['capabilities.get','config.get'].includes(r.action)).map(r=>r.action),['capabilities.get','config.get'],'explicit full reload refreshes capabilities and config');
   if(model==='A1'){
    await w.eval("command('fan.set',{speed:61})");const mutationAt=calls.length;await w.UI.reload();
    assert.deepEqual(calls.slice(mutationAt).filter(r=>['capabilities.get','config.get'].includes(r.action)).map(r=>r.action),['capabilities.get','config.get'],'mutations refresh capabilities and config with the next full status');
   }
+  holdDiagnostics=true;const pendingBefore=diagnosticsPending.length;const oldView=w.UI.reload();await flush();
+  assert.equal(diagnosticsPending.length,pendingBefore+1,'diagnostics view starts a deferred diagnostic read');
+  w.location.hash='settings/network';w.dispatchEvent(new w.Event('hashchange'));await flush();
+  diagnosticsReply={schema:1,fields:[[57,'stale-tab-response']]};diagnosticsPending.shift()();await flush();await oldView;
+  assert.equal(w.UI.state.scd40,undefined,'a late diagnostic reply after navigation cannot mutate business state');
+  holdDiagnostics=false;diagnosticsReply={schema:1,fields:[[57,'fresh-tab-response']]};
+  w.location.hash='settings/diagnostics';w.dispatchEvent(new w.Event('hashchange'));await flush();await w.UI.reload();
+  diagnosticRaw=d.querySelector('[data-settings-page="diagnostics"] pre').textContent;
+  assert(diagnosticRaw.includes('fresh-tab-response')&&!diagnosticRaw.includes('stale-tab-response'),'late diagnostics reply cannot replace the new tab snapshot');
  }else assert(!d.querySelector('[data-key="diag.g_watchdog"]'),'TC1 does not advertise the A1/M1 watchdog');
  // General settings must be reachable from the menu, not just a direct hash.
  const generalLink=d.querySelector('#side a[href="#settings/device"]');

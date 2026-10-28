@@ -43,8 +43,11 @@ test('capture tracking preserves segmented and metric edits that synchronously r
  assert.equal(box.dataset.dirty,'1');assert.equal(box.dataset.editVersion,'2');await f.go('binding');await f.go('linkage');assert.equal(f.reads.length,2);
  }finally{f.dom.window.close();}
 });
-test('hidden rings never accelerate status refresh; visible ramp/light retains previous cadence',()=>{
- const a1=readFileSync(new URL('../../A1/web/page.js',import.meta.url),'utf8');const source=a1.slice(a1.indexOf('function updateRingAnimation(){'),a1.indexOf('function effectLabel('));let callback,reads=0,homeHidden=true,lightHidden=true,hidden=false;
- const context=vm.createContext({clearInterval(){},setInterval(fn){callback=fn;},ringAnimationTimer:null,UI:{state:{applied_speed:10,percentage:20},reload(){reads++;return Promise.resolve();}},document:{get hidden(){return hidden;},querySelector:()=>({get hidden(){return lightHidden;}})},$:()=>({get hidden(){return homeHidden;}}),ringPolling:false,ringPolledAt:0,performance:{now:()=>1000},advanced:{effect:0},previewTarget:null,renderRing(){}});
- vm.runInContext(source+'updateRingAnimation();',context);callback();assert.equal(reads,0);homeHidden=false;callback();assert.equal(reads,1);context.ringPolling=false;homeHidden=true;lightHidden=false;hidden=true;callback();assert.equal(reads,1);
+test('ring animation redraws visible animated effects without polling status',()=>{
+ const a1=readFileSync(new URL('../../A1/web/page.js',import.meta.url),'utf8');const source=a1.slice(a1.indexOf('function ringVisible(){'),a1.indexOf('function effectLabel('));let callback,reads=0,renders=0,homeHidden=true,lightHidden=true,hidden=false;
+ const context=vm.createContext({window:{addEventListener(){}},clearInterval(){},setInterval(fn){callback=fn;},ringAnimationTimer:null,UI:{state:{applied_speed:10,percentage:20},reload(){reads++;return Promise.resolve();}},document:{get hidden(){return hidden;},querySelector:()=>({get hidden(){return lightHidden;}})},$:()=>({get hidden(){return homeHidden;}}),performance:{now:()=>1000},advanced:{effect:2},previewTarget:null,renderRing(){renders++;}});
+ vm.runInContext(source+'updateRingAnimation();',context);callback();assert.equal(reads,0);assert.equal(renders,0,'hidden ring does not redraw');
+ homeHidden=false;callback();assert.equal(reads,0,'visible ring never schedules status polling');assert.equal(renders,1,'visible animated ring redraws from the last accepted state');
+ context.advanced.effect=0;homeHidden=true;lightHidden=false;callback();assert.equal(reads,0);assert.equal(renders,1,'a static light settings view does not redraw');
+ hidden=true;lightHidden=true;callback();assert.equal(reads,0);assert.equal(renders,1);
 });
