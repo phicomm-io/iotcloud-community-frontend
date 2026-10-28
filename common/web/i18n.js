@@ -204,6 +204,7 @@ const D={
 'import.no_opener':['The platform window is unavailable. Keep it open and restart the transfer.','无法连接平台窗口，请保持平台页面打开并重新发起传递。'],
 'fw.cancel':['Cancel download','终止下载'],'fw.cancelling':['Cancelling; services will resume shortly.','正在终止，稍后恢复正常服务。'],'fw.online':['Online updates','在线更新'],'fw.check':['Check for updates','检查更新'],'fw.install_online':['Download and install','下载并安装'],'fw.notes':['Release notes','发布说明'],
 'fw.sources_help':['Choose a source to check its latest version.','选择更新来源，检查最新版本。'],'fw.source_github':['GitHub Pages (HTTPS)','GitHub Pages（HTTPS）'],'fw.source_cn':['China mirror (HTTP)','境内镜像（HTTP）'],'fw.source_global':['Global mirror (HTTP)','境外镜像（HTTP）'],
+'fw.version_path_help':['0.9.x must first update to stable 1.0.0. Later stable updates require 1.0.0 or newer. RC test channels are separate; older clients without version reporting remain pinned to 1.0.0.','0.9.x 必须先升级到稳定版 1.0.0，之后才能升级后续稳定版。RC 测试渠道单独管理；未上报当前版本的旧客户端固定提供 1.0.0。'],
 'fw.check_idle':['Choose a source and check','选择来源后检查更新'],'fw.check_checking':['Checking…','正在检查…'],'fw.check_available':['Update available','发现新版本'],'fw.check_up_to_date':['Already up to date','当前已是最新版本'],'fw.check_failed':['Update check failed; try another source','检查失败，请重试或切换来源'],'fw.confirm_online':['Install this signed update and restart the device?','安装此签名更新并重启设备？'],
 /* Application watchdog diagnostics (A1/M1). */
 'diag.g_watchdog':['Restart & watchdog','复位与看门狗'],

@@ -129,6 +129,7 @@ const ACTIONS={M1:['schedules.get','schedules.put','schedules.delete','schedules
   assert.equal(previewRing.dataset.feedbackSource,'pwm','release restores current PWM feedback');
  }
  if(process.env.WEB_TEST_OTA){
+  assert(d.querySelector('[data-i18n="fw.version_path_help"]'),'online OTA explains the 1.0.0 bridge');
   assert.deepEqual([...d.querySelectorAll('#otaSources button')].map(b=>b.dataset.source),['github','cn','global']);
   for(const source of ['github','cn','global']){
    const timers=[];w.setTimeout=(fn,ms)=>{if(ms===500)timers.push(fn);return 0;};
