@@ -202,7 +202,7 @@ function header(dev){
  theme.value=saved;apply(saved);theme.onchange=()=>{apply(theme.value);try{localStorage.setItem('phicomm.appearance',theme.value);}catch{}};
  return h('header',{class:'topbar'},
   h('div',{class:'brand'},h('div',{class:'logo'},icon(dev.icon)),h('div',{class:'grow'},h('div',{class:'kind','data-i18n':dev.kindKey},t(dev.kindKey)),h('h1',{id:'title'},dev.model))),
-  h('div',{class:'prefs'},lang,theme),
+  h('div',{class:'prefs'},lang,theme,globalThis.DeviceSession&&h('button',{type:'button',class:'btn',onclick:()=>DeviceSession.logout().catch(e=>toast(e.message,true))},I18N.lang==='en'?'Sign out':'退出登录')),
   h('div',{class:'chips',id:'chips'}));
 }
 function chip(dotCls,labelKey,value){return h('span',{class:'chip'},h('span',{class:'dot '+dotCls}),h('span',{i18n:labelKey}),value!=null&&h('b',{},value));}
@@ -412,7 +412,7 @@ function backupCard(){
  const download=h('button',{class:'btn',type:'button'},h('span',{i18n:full?'backup.download':'backup.public'}));
  download.onclick=()=>run(download,async()=>{
   if(!full){downloadFile(JSON.stringify({schema:1,partial:true,model:UI.caps.model,config:await command('config.get')},null,2),'phicomm-public-settings.json','application/json');return;}
-  const response=await fetch('/api/v1/config/backup',{cache:'no-store',credentials:'same-origin'});if(!response.ok)throw Error(t('backup.failed'));
+  const response=await deviceFetch('/api/v1/config/backup',{cache:'no-store',credentials:'same-origin'});if(!response.ok)throw Error(t('backup.failed'));
   downloadFile(await response.arrayBuffer(),'phicomm-'+String(UI.caps.model||'device').toLowerCase()+'-config.phcb');
  });
  const file=h('input',{type:'file',accept:'.phcb,.json',required:true});
@@ -420,7 +420,7 @@ function backupCard(){
  onSubmit(form,async()=>{
   if(!file.files?.[0]||file.files[0].size>16384)throw Error(t('backup.failed'));
   if(!await confirmDialog({title:t('backup.restore'),body:t('backup.confirm'),ok:t('backup.restore'),danger:true}))return;
-  const response=await fetch('/api/v1/config/restore',{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:await file.files[0].arrayBuffer(),credentials:'same-origin'});
+  const response=await deviceFetch('/api/v1/config/restore',{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:await file.files[0].arrayBuffer(),credentials:'same-origin'});
   if(response.status!==202)throw Error(t('backup.failed'));toast(t('backup.restoring'));
  });
  return card('backup.title',null,h('p',{class:'help',i18n:full?'backup.hint':'backup.partial'}),download,form);
@@ -519,10 +519,10 @@ function firmwarePage(dev){
   if(rescue&&!window.confirm(t('fw.unsigned_confirm')))return;
   uploading=true;prog.value=0;
   const xhr=window.createDeviceUpload?window.createDeviceUpload():new XMLHttpRequest();xhr.open('POST',convert?'/api/v1/ota/convert':rescue?'/api/v1/ota/upload-unsigned':'/api/v1/ota/upload');
-  xhr.setRequestHeader('Content-Type','application/octet-stream');xhr.timeout=310000;
+  const authorization=globalThis.DeviceSession?.headers().Authorization;xhr.setRequestHeader('Content-Type','application/octet-stream');for(const [name,value] of Object.entries(globalThis.DeviceSession?.headers()||{}))xhr.setRequestHeader(name,value);xhr.timeout=310000;
   if(convert){xhr.setRequestHeader('X-IoTCloud-Target-Variant','hub');xhr.setRequestHeader('X-IoTCloud-Confirm','full-to-hub');}
   xhr.upload.onprogress=ev=>{if(ev.lengthComputable){prog.value=ev.loaded/ev.total*100;state.textContent=t('fw.uploading',{p:Math.round(ev.loaded/ev.total*100)});}};
-  xhr.onload=()=>{const ok=xhr.status===202;state.textContent=ok?t('fw.verify_ok'):t('fw.failed',{e:xhr.responseText});toast(state.textContent,!ok);};
+  xhr.onload=()=>{globalThis.DeviceSession?.observe(xhr.status,authorization);const ok=xhr.status===202;state.textContent=ok?t('fw.verify_ok'):t('fw.failed',{e:xhr.responseText});toast(state.textContent,!ok);};
   xhr.onerror=()=>toast(t('fw.upload_lost'),true);
   xhr.ontimeout=()=>toast(t('fw.upload_timeout'),true);
   xhr.onloadend=()=>{uploading=false;};

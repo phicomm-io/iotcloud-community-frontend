@@ -7,6 +7,7 @@ const flush=()=>new Promise(r=>setImmediate(r));
  w.localStorage.setItem('phicomm.language','zh-CN');
  w.TextEncoder=TextEncoder;w.Response=Response;w.AbortController=AbortController;w.setTimeout=()=>0;
  w.fetch=async(url,options)=>{const req=JSON.parse(options.body);calls.push(req);if(fail&&req.params.section==='mqtt')return {ok:false,json:async()=>({code:'busy',message:'busy'})};return {ok:true,json:async()=>({code:'ok',data:req.action==='status.get'?{device_id:'aabbccddeeff',ssid:'old',mqtt_host:'broker',mqtt_port:1883,mqtt_user:'u',mqtt_protocol:'tmcp',ap_active:true}: {}})};};
+ require('./legacy_device_fixture.cjs')(w);
  for(const script of d.scripts)w.eval(script.textContent);await flush();
  d.querySelector('#ssid').value='new';d.querySelector('#wifiPassword').value='password123';d.querySelector('#adminPassword').value='admin1234';
  await d.querySelector('#setup').onsubmit({preventDefault(){}});

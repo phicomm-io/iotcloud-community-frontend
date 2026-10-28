@@ -5,6 +5,8 @@ const original={co2:[{threshold:1000,op:'gt',mode:'slow'},{threshold:1500,op:'gt
 let rules=structuredClone(original),writes=[];
 const state=()=>({model:'daikin',name:'Indicator test',hardware_model:'BRY88AX151K',indicator_enabled:true,indicator_rules_supported:true,indicator_rules_custom:true,indicator_rules:rules,system_indicator:'ready',wifi_connected:true,ssid:'Test',ip:'192.0.2.10',mqtt_connected:true,mqtt_host:'test.invalid',mqtt_protocol:'tmcp',sensors:Object.fromEntries([['pm25',60],['pm10',150],['co2',1600],['temperature',25],['humidity',50],['tvoc',400]].map(([key,value])=>[key,{valid:true,value,age_ms:0}]))});
 const server=http.createServer((req,res)=>{
+ // This business fixture represents legacy firmware without token endpoints.
+ if(req.url==='/api/v1/auth/login'){res.writeHead(404,{'Content-Type':'application/json'}).end(JSON.stringify({code:'not_found'}));return;}
  if(req.method==='GET'){res.setHeader('Content-Type','text/html');res.end(html);return;}
  let body='';req.on('data',chunk=>{body+=chunk;});req.on('end',()=>{
   const {action,params}=JSON.parse(body);let data={};

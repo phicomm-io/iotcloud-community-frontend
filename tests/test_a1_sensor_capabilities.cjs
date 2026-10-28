@@ -13,6 +13,7 @@ test('A1 automation is selected by fresh measurements, with absent values hidden
  else if(req.action==='light_effect.get')data={effect:0};
  else if(req.action==='linkage.set'){writes.push(req.params);data={revision:1};}
  return {ok:true,json:async()=>({code:'ok',data})};};
+ require('./legacy_device_fixture.cjs')(w);
  const scripts=[...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m=>m[1]);
  scripts.forEach((source,i)=>{if(i===scripts.length-1)w.UI.start=dev=>{w.UI.device=dev;w.UI.pages=dev.pages;};vm.runInContext(source,dom.getInternalVMContext());});
  w.UI.caps={actions:['fan.mode.set']};

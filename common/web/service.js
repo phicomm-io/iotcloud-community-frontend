@@ -1,3 +1,4 @@
+const deviceFetch=(...args)=>globalThis.DeviceSession?DeviceSession.fetch(...args):fetch(...args);
 // Share only overlapping reads, never completed values or mutations. Each
 // subscriber owns cancellation; an unrelated subscriber keeps the wire alive.
 const deviceReads=new Map();let deviceReadEpoch=0;
@@ -30,14 +31,15 @@ async function deviceCommand(action,params={},options={}){
  const abort=()=>controller.abort();options.signal?.addEventListener('abort',abort,{once:true});
  try{
  if(options.signal?.aborted)throw readAbort();
- const response=await fetch('/api/v1/command',{method:'POST',signal:controller.signal,headers:{'Content-Type':'application/json'},body:JSON.stringify(request),cache:'no-store'});
- const reply=await response.json();
+ const response=await deviceFetch('/api/v1/command',{method:'POST',signal:controller.signal,headers:{'Content-Type':'application/json'},body:JSON.stringify(request),cache:'no-store'});
+ let reply;try{reply=await response.json();}catch(error){if(response.status!==503)throw error;reply={code:'busy'};}
  if(!response.ok||!['ok','accepted'].includes(reply.code)){const key='error.'+reply.code;const error=Error(globalThis.I18N?.has(key)?I18N.t(key):reply.message||reply.code||('HTTP '+response.status));error.code=reply.code;throw error;}
  if(!action.endsWith('.get')){deviceReadEpoch++;globalThis.UI?.invalidateStatus?.();}
  return reply.data||{};
  }finally{clearTimeout(timer);options.signal?.removeEventListener('abort',abort);}
 }
 async function api(path,data,options={}){
+ if(path==='/auth/password'&&globalThis.DeviceSession){const reply=await DeviceSession.changePassword(data.password);deviceReadEpoch++;globalThis.UI?.invalidateStatus?.();return reply.data||{};}
  if(path==='/status')return command('status.get',{},options);
  if(path==='/sensors/average')return command('sensors.average.get',{},options);
  if(path==='/power')return command('power.get',{},options);

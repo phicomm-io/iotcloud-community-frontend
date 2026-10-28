@@ -19,6 +19,7 @@ async function fixture(capability='full-to-hub',password=true){
   setRequestHeader(name,value){this.headers[name]=value;}
   send(file){this.file=file;uploads.push(this);this.status=202;this.responseText='accepted';this.onload();this.onloadend();}
  };
+ require('./legacy_device_fixture.cjs')(w);
  for(const script of html.matchAll(/<script>([\s\S]*?)<\/script>/g))vm.runInContext(script[1],dom.getInternalVMContext());
  for(let i=0;i<12;i++)await flush();w.I18N.set('en');
  const selectFile=name=>Object.defineProperty(d.querySelector('#firmware'),'files',{value:[new w.File(['signed envelope'],name)],configurable:true});

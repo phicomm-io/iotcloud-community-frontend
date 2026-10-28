@@ -15,6 +15,8 @@ const original={mqtt_host:'original.example',mqtt_port:1884,mqtt_user:'original-
 const state={...original,name:'Isolated device',device_id:'020000000001',version:'simulated',ip:'127.0.0.1',wifi_connected:true,mqtt_connected:false,mqtt_status:'disconnected',socket_states:[0,0,0,0,0,0],socket_names:['1','2','3','4','5','6'],uptime_seconds:10,brightness_requested:3};
 const device=createServer(async(req,res)=>{
  requests.push({url:req.url,referer:req.headers.referer||'',method:req.method});
+ // The provisioning fixture models a pre-token firmware device.
+ if(req.url==='/api/v1/auth/login'){res.writeHead(404,{'Content-Type':'application/json'}).end(JSON.stringify({code:'not_found'}));return;}
  if(req.method==='GET'){res.setHeader('Content-Type','text/html; charset=utf-8');res.end(pages[model]);return;}
  let body='';for await(const chunk of req)body+=chunk;
  const request=JSON.parse(body);if(!request.action.endsWith('.get'))writes.push(request);

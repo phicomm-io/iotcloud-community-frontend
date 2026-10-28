@@ -17,6 +17,7 @@ async function setup(supported=true){
   if(req.action==='music.commit'){assert.equal(pending.length,expected);assert.equal(crc(pending),wanted);if(failCommit)code='storage_error';else song=pending;}
   if(req.action==='music.read')data={data:song.slice(p.offset,p.offset+p.length)};
   return {ok:true,json:async()=>({code,data})};};
+ require('./legacy_device_fixture.cjs')(w);
  const scripts=[...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(x=>x[1]);
  scripts.forEach((s,i)=>{if(i===scripts.length-1)w.UI.start=dev=>{w.UI.device=dev;dev.capabilities({actions:['wake_alarm.start','wake_alarm.get','wake_alarm.stop']});};vm.runInContext(s,dom.getInternalVMContext());});
  w.I18N.set('en');await settle();return {dom,w,calls,get:id=>w.document.getElementById(id),song:()=>song,setFail:v=>failCommit=v};

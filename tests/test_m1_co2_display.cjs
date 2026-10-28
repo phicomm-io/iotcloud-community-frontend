@@ -12,6 +12,7 @@ function fixture(reply){
   if(request.action==='binding.status.get')return {ok:true,status:200,json:async()=>({code:'ok',data:{peers:[],members:[]}})};
   calls.push(request);const body=await reply(request);return {ok:true,status:200,json:async()=>body};
  };
+ require('./legacy_device_fixture.cjs')(w);
  const scripts=[...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m=>m[1]);
  scripts.forEach((source,i)=>{
   if(i===scripts.length-1){w.UI.start=dev=>{w.UI.device=dev;};w.UI.reload=async()=>{render(w.UI.state.co2_display);return w.UI.state;};}

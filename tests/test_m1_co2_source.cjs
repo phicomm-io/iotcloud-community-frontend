@@ -16,6 +16,7 @@ async function setup(lang='en',supported=true){
   }
   return {ok:true,json:async()=>({code,data:req.action==='co2_source.set'||nullRead?null:{...config}})};
  };
+ require('./legacy_device_fixture.cjs')(w);
  const scripts=[...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m=>m[1]);
  scripts.forEach((source,i)=>{
   if(i===scripts.length-1){

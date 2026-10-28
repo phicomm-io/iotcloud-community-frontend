@@ -1,3 +1,4 @@
+from functools import lru_cache
 from pathlib import Path
 import subprocess
 ROOT = Path(__file__).resolve().parents[2]
@@ -7,6 +8,10 @@ def _source(path, name):
     if shared.is_file():
         return shared.read_text()
     return (path.parent / name).read_text()
+@lru_cache(maxsize=1)
+def _auth_bundle():
+    return subprocess.check_output(['node',str(ROOT/'tools/bundle_auth.cjs')],text=True)
+
 def render_page(path, *, minify=False):
     path = Path(path)
     text = path.read_text()
@@ -16,6 +21,7 @@ def render_page(path, *, minify=False):
         if "@include " + name not in text:
             continue
         content = _source(path, name)
+        if name=='service.js': content=_auth_bundle()+'\n'+(ROOT/'common/web/auth.js').read_text()+'\n'+content
         for marker in ("/* @include " + name + " */", "<!-- @include " + name + " -->"):
             text = text.replace(marker, content)
     # Apply the saved theme before first paint.
