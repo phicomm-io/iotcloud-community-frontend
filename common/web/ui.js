@@ -412,7 +412,7 @@ function backupCard(){
  const download=h('button',{class:'btn',type:'button'},h('span',{i18n:full?'backup.download':'backup.public'}));
  download.onclick=()=>run(download,async()=>{
   if(!full){downloadFile(JSON.stringify({schema:1,partial:true,model:UI.caps.model,config:await command('config.get')},null,2),'phicomm-public-settings.json','application/json');return;}
-  const response=await fetch('/api/v1/config/backup',{cache:'no-store',credentials:'same-origin'});if(!response.ok)throw Error(t('backup.failed'));
+  const response=await deviceFetch('/api/v1/config/backup',{cache:'no-store',credentials:'same-origin'});if(!response.ok)throw Error(t('backup.failed'));
   downloadFile(await response.arrayBuffer(),'phicomm-'+String(UI.caps.model||'device').toLowerCase()+'-config.phcb');
  });
  const file=h('input',{type:'file',accept:'.phcb,.json',required:true});
@@ -420,7 +420,7 @@ function backupCard(){
  onSubmit(form,async()=>{
   if(!file.files?.[0]||file.files[0].size>16384)throw Error(t('backup.failed'));
   if(!await confirmDialog({title:t('backup.restore'),body:t('backup.confirm'),ok:t('backup.restore'),danger:true}))return;
-  const response=await fetch('/api/v1/config/restore',{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:await file.files[0].arrayBuffer(),credentials:'same-origin'});
+  const response=await deviceFetch('/api/v1/config/restore',{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:await file.files[0].arrayBuffer(),credentials:'same-origin'});
   if(response.status!==202)throw Error(t('backup.failed'));toast(t('backup.restoring'));
  });
  return card('backup.title',null,h('p',{class:'help',i18n:full?'backup.hint':'backup.partial'}),download,form);
