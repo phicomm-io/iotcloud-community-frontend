@@ -41,10 +41,8 @@ const ICONS={
  plus:'<path d="M12 5v14M5 12h14"/>',
  link:'<path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/>',
  external:'<path d="M14 3h7v7M10 14 21 3M21 14v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h6"/>',
- copy:'<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
  info:'<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>',
  alert:'<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01"/>',
- moon:'<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>',
  clock:'<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
  auto:'<path d="M21 12a9 9 0 0 1-15 6.7L3 16M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M3 21v-5h5"/>'
 };
@@ -76,6 +74,7 @@ function confirmDialog({title,body,ok,danger}){
 }
 
 /* ---------- Controls ---------- */
+function fieldRow(titleKey,...controls){return h('label',{class:'field'},h('span',{i18n:titleKey}),...controls);}
 function switchRow(id,titleKey,descKey){
  return h('label',{class:'switch'},h('span',{class:'text'},h('b',{i18n:titleKey}),descKey&&h('span',{i18n:descKey})),h('input',{type:'checkbox',role:'switch',id}));
 }
@@ -154,7 +153,7 @@ function tzLabel(m){const sg=m<0?'−':'+',a=Math.abs(m);return 'UTC'+sg+String(
 
 /* ---------- Header, navigation, banners ---------- */
 let resetPending=false,resetAccepted=false,resetGeneration=0,resetUptime,resetSawPending=false;
-const UI=window.UI={$,h,saveDraft,icon,toast,run,onSubmit,confirm:confirmDialog,switchRow,seg,daysPicker,presetDays,daysText,hhmm,toMinutes,duration,summary,card,info,pageHead,saveBar,num,flag,slider,normalizeMac,prettyMac,clone,AIR,grade,airScale,tzLabel,state:null,caps:null,pages:{},device:null,clockCard,maintenancePage,scanNetworks};
+const UI=window.UI={$,h,fieldRow,saveDraft,icon,toast,run,onSubmit,confirm:confirmDialog,switchRow,seg,daysPicker,presetDays,daysText,hhmm,toMinutes,duration,summary,card,info,pageHead,saveBar,num,flag,slider,normalizeMac,prettyMac,clone,AIR,grade,airScale,tzLabel,state:null,caps:null,pages:{},device:null,clockCard,maintenancePage,scanNetworks};
 // Keep requested output visible until a fresh read confirms it. Polls may still
 // contain the pre-write state while the device applies an accepted command.
 let pendingControl=null;
@@ -282,8 +281,8 @@ function wifiPage(){
  const open=switchRow('openNetwork','wifi.open');
  const scanBtn=h('button',{type:'button',class:'btn',id:'scan'},icon('auto'),h('span',{i18n:'wifi.scan'}));
  const form=h('form',{id:'wifiForm',class:'stack'},
-  h('label',{class:'field'},h('span',{i18n:'wifi.ssid'}),h('div',{class:'row'},h('div',{class:'grow'},ssid),scanBtn)),list,
-  h('label',{class:'field'},h('span',{i18n:'wifi.password'}),pass),open,
+  fieldRow('wifi.ssid',h('div',{class:'row'},h('div',{class:'grow'},ssid),scanBtn)),list,
+  fieldRow('wifi.password',pass),open,
   h('div',{class:'form-actions'},h('button',{class:'btn primary',type:'submit'},h('span',{i18n:'wifi.save'}))),info('wifi.hint'));
  open.querySelector('input').onchange=e=>{pass.disabled=e.target.checked;};
  scanBtn.onclick=()=>run(scanBtn,()=>scanNetworks(net=>{
@@ -355,9 +354,9 @@ function mqttPage(dev){
  const imported=mqttImportPanel(dev,{host,port,user,pass,protocol,clear:clear.querySelector('input')});
  const form=h('form',{id:'mqttForm',class:'stack'},
   h('div',{class:'fields',style:'grid-template-columns:minmax(0,3fr) minmax(90px,1fr)'},
-   h('label',{class:'field'},h('span',{i18n:'mqtt.host'}),host),h('label',{class:'field'},h('span',{i18n:'mqtt.port'}),port)),
-  h('div',{class:'fields'},h('label',{class:'field'},h('span',{i18n:'mqtt.user'}),user),h('label',{class:'field'},h('span',{i18n:'mqtt.password'}),pass)),
-  h('details',{class:'more'},h('summary',{i18n:'common.advanced'}),...(protocol?[h('label',{class:'field'},h('span',{i18n:'mqtt.mode'}),protocol)]:[]),clear),info(dev.haHintKey),
+   fieldRow('mqtt.host',host),fieldRow('mqtt.port',port)),
+  h('div',{class:'fields'},fieldRow('mqtt.user',user),fieldRow('mqtt.password',pass)),
+  h('details',{class:'more'},h('summary',{i18n:'common.advanced'}),...(protocol?[fieldRow('mqtt.mode',protocol)]:[]),clear),info(dev.haHintKey),
   h('div',{class:'form-actions'},h('button',{class:'btn primary',type:'submit'},h('span',{i18n:'common.save'}))));
  onSubmit(form,()=>{
   imported.guard?.();
@@ -505,7 +504,7 @@ function firmwarePage(dev){
  const fileForm=h('form',{id:'fileForm',class:'stack'},h('label',{class:'field'},h('span',{},t('fw.file',{m:dev.model})),file),
   h('details',{class:'more'},h('summary',{i18n:'common.advanced'}),unsigned,...(conversion?[conversion]:[])),
   h('div',{class:'form-actions'},h('button',{class:'btn primary',type:'submit'},h('span',{i18n:'fw.upload'}))));
- const urlForm=h('form',{id:'urlForm',class:'stack',hidden:true},h('label',{class:'field'},h('span',{i18n:'fw.url'}),url),
+ const urlForm=h('form',{id:'urlForm',class:'stack',hidden:true},fieldRow('fw.url',url),
   h('div',{class:'form-actions'},h('button',{class:'btn primary',type:'submit'},h('span',{i18n:'fw.download'}))));
  const picker=seg([['file','fw.tab_file'],['url','fw.tab_url']],v=>{fileForm.hidden=v!=='file';urlForm.hidden=v!=='url';});picker.set('file');picker.hidden=!UI.caps?.actions?.includes('ota.start');
  // Upload streams raw bytes; the request is synchronous up to send(), like the old page.
@@ -625,19 +624,19 @@ function maintenancePage(dev){
 /* Slots shared by every "General" page. */
 function nameCard(){
  const input=h('input',{id:'deviceName',maxLength:63}),meta=h('div');
- const form=h('form',{id:'nameForm',class:'stack'},h('label',{class:'field'},h('span',{i18n:'gen.name'}),
+ const form=h('form',{id:'nameForm',class:'stack'},fieldRow('gen.name',
   h('div',{class:'row'},h('div',{class:'grow'},input),h('button',{class:'btn primary',type:'submit'},h('span',{i18n:'common.save'}))),
   h('button',{class:'btn ghost',type:'button',onclick:e=>run(e.currentTarget,async()=>{await api('/deviceName',{name:''});await UI.reload();input.value=UI.state?.name||'';},'common.saved')},h('span',{i18n:'gen.default_name'}))),meta);
  onSubmit(form,()=>{if(new TextEncoder().encode(input.value).length>63)throw Error(t('gen.name_long'));return api('/deviceName',{name:input.value});});
  const language=h('select',{id:'deviceLanguage'},h('option',{value:'zh-CN'},'简体中文'),h('option',{value:'en'},'English'));
- const languageForm=h('form',{class:'stack',hidden:!UI.caps?.device_language},h('label',{class:'field'},h('span',{i18n:'gen.language'}),language),info('gen.language_help'),h('button',{class:'btn',type:'submit'},h('span',{i18n:'common.save'})));
+ const languageForm=h('form',{class:'stack',hidden:!UI.caps?.device_language},fieldRow('gen.language',language),info('gen.language_help'),h('button',{class:'btn',type:'submit'},h('span',{i18n:'common.save'})));
  onSubmit(languageForm,()=>command('config.set',{section:'device',values:{language:language.value}}));
  return {el:card('gen.identity',null,form,languageForm),init(s){input.value=s.name||'';language.value=s.language||'zh-CN';},status(s){meta.replaceChildren(summary([['gen.device_id',h('span',{class:'num'},prettyMac(s.device_id))],['gen.uptime',duration(s.uptime_seconds||0)]]));}};
 }
 function authCard(){
  const input=h('input',{id:'webPassword',type:'password',maxLength:32,autocomplete:'new-password',placeholder:t('auth.ph')});
  const state=h('span',{class:'badge'});
- const form=h('form',{id:'authForm',class:'stack'},h('label',{class:'field'},h('span',{i18n:'auth.password'}),input,h('p',{class:'help',i18n:'auth.help'})),
+ const form=h('form',{id:'authForm',class:'stack'},fieldRow('auth.password',input,h('p',{class:'help',i18n:'auth.help'})),
   h('div',{class:'form-actions'},h('button',{class:'btn primary',type:'submit'},h('span',{i18n:'auth.set'}))));
  onSubmit(form,()=>{if(input.value&&!/^[\x20-\x7e]{8,32}$/.test(input.value))throw Error(t('auth.invalid'));return api('/auth/password',{password:input.value});});
  const c=card('auth.title','auth.lead',form);c.querySelector('.card-head').append(state);
@@ -647,7 +646,7 @@ function clockCard({load,save,status}){
  const sum=h('div'),tz=h('select'),ntp=h('input',{maxLength:63,required:true,placeholder:'ntp1.aliyun.com'});
  const fill=()=>{const v=tz.value;tz.replaceChildren(...TZ.map(m=>h('option',{value:m},tzLabel(m))));tz.value=v;};fill();I18N.onChange(fill);
  const form=h('form',{class:'stack'},h('div',{class:'fields'},
-   h('label',{class:'field'},h('span',{i18n:'clock.tz'}),tz),h('label',{class:'field'},h('span',{i18n:'clock.ntp'}),ntp)),
+   fieldRow('clock.tz',tz),fieldRow('clock.ntp',ntp)),
   info('clock.hint'),h('div',{class:'form-actions'},h('button',{class:'btn primary',type:'submit'},h('span',{i18n:'common.save'}))));
  onSubmit(form,()=>save({timezone_minutes:Number(tz.value),ntp_host:ntp.value.trim()}));
  return {el:card('clock.title',null,sum,h('div',{style:'margin-top:16px'},form)),

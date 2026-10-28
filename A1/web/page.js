@@ -3,7 +3,7 @@
 (()=>{
 'use strict';
 const {t}=I18N;
-const {$,h,icon,toast,run,onSubmit,confirm,switchRow,seg,summary,card,info,pageHead,saveBar,num,flag,slider,hhmm,toMinutes,normalizeMac,prettyMac,clone}=UI;
+const {$,h,fieldRow,icon,toast,run,onSubmit,confirm,switchRow,seg,summary,card,info,pageHead,saveBar,num,flag,slider,hhmm,toMinutes,normalizeMac,prettyMac,clone}=UI;
 
 let advanced={effect:0,segments:3,segment:[]},bindingStatus={peers:[],members:[],linkage_status:'disabled'};
 const refresh=()=>UI.reload();
@@ -235,8 +235,8 @@ async function showLight(options={}){
    h('div',{class:'row between'},h('span',{class:'label',i18n:'fx.count'}),seg([1,2,3,4].map(n=>[n,String(n)]),n=>{m.segments=n;draw();})),
    ...m.segment.slice(0,m.segments).map((sg,i)=>h('div',{class:'subcard stack'},h('h3',{},t('fx.segment',{n:i+1})),
     h('div',{class:'fields'},
-     h('label',{class:'field'},h('span',{i18n:'fx.source'}),h('select',{onchange:e=>sg.source=+e.target.value},[0,1,2,3,4,5].filter(sourceAvailable).map(v=>h('option',{value:v,selected:sg.source===v},t('fx.src.'+v))))),
-     h('label',{class:'field'},h('span',{i18n:'fx.display'}),h('select',{onchange:e=>sg.display=+e.target.value},[0,1,2].map(v=>h('option',{value:v,selected:sg.display===v},t('fx.disp.'+v)))))),
+     fieldRow('fx.source',h('select',{onchange:e=>sg.source=+e.target.value},[0,1,2,3,4,5].filter(sourceAvailable).map(v=>h('option',{value:v,selected:sg.source===v},t('fx.src.'+v))))),
+     fieldRow('fx.display',h('select',{onchange:e=>sg.display=+e.target.value},[0,1,2].map(v=>h('option',{value:v,selected:sg.display===v},t('fx.disp.'+v)))))),
     h('div',{class:'sentence',style:'margin-top:12px'},t('fx.range'),num(sg,'minimum'),'–',num(sg,'maximum'),h('span',{class:'help'},t('fx.comfort')),num(sg,'suitable_low'),'–',num(sg,'suitable_high')),
     h('div',{class:'row',style:'margin-top:12px'},['fx.low','fx.ok','fx.high'].map((k,j)=>h('label',{class:'row small'},h('input',{type:'color',value:hex(sg.colors[j]),oninput:e=>{const v=e.target.value;sg.colors[j]=[1,3,5].map(x=>parseInt(v.slice(x,x+2),16));}}),t(k)))))))
    :null;
@@ -255,8 +255,8 @@ async function showLight(options={}){
    h('section',{class:'card'},h('div',{class:'card-head'},h('h2',{i18n:'fx.effect'})),opts,...speedControls,
     h('div',{style:'margin-top:16px'},flag(m,'follow_fan','fx.follow','fx.follow_desc')),segs,
     h('details',{class:'more'},h('summary',{i18n:'common.advanced'}),h('p',{class:'help',i18n:'fx.quality_hint'}),
-     h('div',{class:'fields'},(!fields||fields.pm25)?h('label',{class:'field'},h('span',{i18n:'fx.quality_pm'}),num(m,'quality_pm',{unit:'µg/m³',step:0.01})):null,
-      (!fields||fields.formaldehyde)?h('label',{class:'field'},h('span',{i18n:'fx.quality_hcho'}),num(m,'quality_hcho',{unit:'mg/m³',step:0.001})):null)),
+     h('div',{class:'fields'},(!fields||fields.pm25)?fieldRow('fx.quality_pm',num(m,'quality_pm',{unit:'µg/m³',step:0.01})):null,
+      (!fields||fields.formaldehyde)?fieldRow('fx.quality_hcho',num(m,'quality_hcho',{unit:'mg/m³',step:0.001})):null)),
    saveBar(async()=>{const saved=await api('/light/advanced',m);m.revision=saved.revision;advanced=clone(m);updateRingAnimation();if(UI.state)renderLight(UI.state);})));
   if(UI.state)renderRing(UI.state);
  };
@@ -282,10 +282,10 @@ async function showBinding(options={}){
  const ip=h('input',{placeholder:t('bind.ip_ph'),maxLength:15});
  const opts={force_mqtt:false,recovery:true,timeout_ms:1000,recovery_seconds:60};
  const add=h('form',{class:'subcard stack'},h('h3',{i18n:'bind.add'}),
-  h('div',{class:'fields'},h('label',{class:'field'},h('span',{i18n:'bind.mac'}),mac),h('label',{class:'field'},h('span',{i18n:'bind.ip'}),ip)),
+  h('div',{class:'fields'},fieldRow('bind.mac',mac),fieldRow('bind.ip',ip)),
   h('details',{class:'more'},h('summary',{i18n:'common.advanced'}),flag(opts,'recovery','bind.recovery','bind.recovery_desc'),
-   h('div',{class:'fields'},h('label',{class:'field'},h('span',{i18n:'bind.timeout'}),num(opts,'timeout_ms',{unit:'ms',min:100})),
-    h('label',{class:'field'},h('span',{i18n:'bind.recovery_s'}),num(opts,'recovery_seconds',{unit:t('unit.s'),min:5})))),
+   h('div',{class:'fields'},fieldRow('bind.timeout',num(opts,'timeout_ms',{unit:'ms',min:100})),
+    fieldRow('bind.recovery_s',num(opts,'recovery_seconds',{unit:t('unit.s'),min:5})))),
   h('div',{class:'form-actions'},h('button',{class:'btn primary',type:'submit',disabled:m.peers.length>=capacity},icon('plus'),h('span',{},t('bind.add_btn')))));
  onSubmit(add,()=>{const id=normalizeMac(mac.value);if(!id)throw Error(t('bind.bad_mac'));
   if(m.peers.some(p=>p.mac===id))throw Error(t('bind.dup'));if(m.peers.length>=capacity)throw Error(t('common.max',{n:capacity}));
@@ -296,12 +296,12 @@ async function showBinding(options={}){
   h('button',{type:'button',class:'btn ghost icon','aria-label':t('common.delete'),onclick:()=>{m.members.splice(i,1);save();}},icon('trash')))));
  const gmac=h('input',{placeholder:'B0:F8:93:30:31:34',maxLength:17});
  const group=h('details',{class:'card more'},h('summary',{i18n:'bind.group'}),h('p',{class:'help',i18n:'bind.group_lead'}),
-  h('label',{class:'field'},h('span',{i18n:'bind.group_name'}),h('input',{value:m.group,maxLength:32,placeholder:t('bind.group_ph'),oninput:e=>m.group=e.target.value})),
+  fieldRow('bind.group_name',h('input',{value:m.group,maxLength:32,placeholder:t('bind.group_ph'),oninput:e=>m.group=e.target.value})),
   members,h('div',{class:'row'},h('div',{class:'grow'},gmac),
    h('button',{type:'button',class:'btn',onclick:()=>{const id=normalizeMac(gmac.value);if(!id){toast(t('bind.bad_mac'),true);return;}m.members.push({mac:id,ip:''});save();}},icon('plus'),h('span',{},t('bind.member_add')))),
   flag(m,'group_force_mqtt','bind.force','bind.force_desc'),flag(m,'group_recovery','bind.recovery','bind.recovery_desc'),
-  h('div',{class:'fields'},h('label',{class:'field'},h('span',{i18n:'bind.timeout'}),num(m,'group_timeout_ms',{unit:'ms'})),
-   h('label',{class:'field'},h('span',{i18n:'bind.recovery_s'}),num(m,'group_recovery_seconds',{unit:t('unit.s')}))),
+  h('div',{class:'fields'},fieldRow('bind.timeout',num(m,'group_timeout_ms',{unit:'ms'})),
+   fieldRow('bind.recovery_s',num(m,'group_recovery_seconds',{unit:t('unit.s')}))),
   saveBar(save));
  page.replaceChildren(pageHead('nav.binding','bind.lead'),
   h('section',{class:'card'},h('div',{class:'card-head'},h('h2',{i18n:'bind.sensors'}),h('span',{class:'badge'},m.peers.length+' / '+capacity)),
@@ -366,7 +366,7 @@ async function showFanRules(fresh,page,options={},binding=bindingStatus){
     availableMask&&(m.metrics&availableMask)!==m.metrics?h('button',{type:'button',class:'btn ghost',onclick:()=>{m.metrics=(m.metrics&availableMask)||availableMask;draw();}},t('auto.available_only')):null,modes,h('div',{class:'fields'},detail)),
    supportsGate?h('section',{class:'card stack'},h('h2',{i18n:'auto.hysteresis_title'}),h('div',{class:'fields'},gate)):null,
    h('section',{class:'card stack'},h('h2',{i18n:'common.advanced'}),
-    h('label',{class:'field'},h('span',{i18n:'link.statistic'}),h('select',{onchange:e=>m.statistic=+e.target.value},[0,1,2,3,4,5].map(v=>h('option',{value:v,selected:m.statistic===v},t('link.stat.'+v))))),
+    fieldRow('link.statistic',h('select',{onchange:e=>m.statistic=+e.target.value},[0,1,2,3,4,5].map(v=>h('option',{value:v,selected:m.statistic===v},t('link.stat.'+v))))),
     h('div',{class:'fields'},field('debounce_seconds','link.debounce',{min:0,max:3600,unit:t('unit.s')}),field('min_switch_seconds','link.min_switch',{min:0,max:3600,unit:t('unit.s')}))),
    saveBar(()=>{
     if(m.enabled&&[1,2,4].some(bit=>(m.metrics&bit)&&!supportsMetric(bit)))throw Error(t('auto.unavailable_metric'));
@@ -394,7 +394,7 @@ function renderFresh(s){
  // Do not replace a slider while the user is dragging it.
  if(freshCard.contains(document.activeElement)&&document.activeElement.type==='range')return;
  freshCard.replaceChildren(h('div',{class:'card-head'},h('h2',{i18n:'fresh.title'}),h('label',{class:'row'},h('span',{i18n:'fresh.enable'}),on)),mode,
-  h('label',{class:'field'},h('span',{i18n:'fresh.speed'}),input,value),
+  fieldRow('fresh.speed',input,value),
   h('p',{class:'help'},t('fresh.status',{target:s.fresh_air_target,applied:s.fresh_air_speed,duty:(s.fresh_air_pwm_milli/1000).toFixed(1),rpm:s.fresh_air_rpm})),
   h('p',{class:'help'},t('fresh.reason.'+(s.fresh_air_limit_reason||0))+(s.fresh_air_fallback?' · '+t('auto.no_sensor'):'')),
   h('div',{class:'row'},h('a',{class:'btn',href:'#settings/freshair'},t('fresh.settings')),h('a',{class:'btn',href:'#settings/linkage'},t('fresh.auto'))));

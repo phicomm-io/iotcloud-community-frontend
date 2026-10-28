@@ -3,7 +3,7 @@
 (()=>{
 'use strict';
 const {t}=I18N;
-const {$,h,icon,toast,run,confirm,summary,card,info,pageHead,seg,prettyMac,normalizeMac,clone}=UI;
+const {$,h,fieldRow,icon,toast,run,confirm,summary,card,info,pageHead,seg,prettyMac,normalizeMac,clone}=UI;
 const METRICS=['pm25','formaldehyde','temperature','humidity'];
 const STALE_MS=15000;
 const PRESSURE_STALE_MS=10000;
@@ -96,7 +96,7 @@ const displayLow=h('input',{id:'co2DisplayLow',type:'number',min:0,max:65535,ste
 const displayHigh=h('input',{id:'co2DisplayHigh',type:'number',min:0,max:65535,step:1,value:1500});
 let screenConfig=null,screenEditing=false;
 const screenForm=h('form',{class:'stack'},
- ...[[displayMode,'co2screen.mode'],[displaySlot,'co2screen.slot'],[displayInterval,'co2screen.interval'],[displayLow,'co2screen.low'],[displayHigh,'co2screen.high']].map(([input,key])=>h('label',{class:'field'},h('span',{i18n:key}),input)),
+ ...[[displayMode,'co2screen.mode'],[displaySlot,'co2screen.slot'],[displayInterval,'co2screen.interval'],[displayLow,'co2screen.low'],[displayHigh,'co2screen.high']].map(([input,key])=>fieldRow(key,input)),
  h('button',{class:'btn primary',type:'submit',i18n:'common.save'}));
 screenForm.addEventListener('input',()=>{screenEditing=true;});
 UI.onSubmit(screenForm,async()=>{
@@ -121,9 +121,9 @@ const sourceCandidates=h('datalist',{id:'co2SourceCandidates'});
 const doubleClick=h('select',{id:'co2DoubleClick'},h('option',{value:'none',i18n:'co2source.no_action'}),h('option',{value:'switch_display',i18n:'co2source.switch'}));
 const sourceHint=h('p',{class:'help'});
 const sourceForm=h('form',{class:'stack'},
- h('label',{class:'field'},h('span',{i18n:'co2source.source'}),sourceMode),
- h('label',{class:'field'},h('span',{i18n:'co2source.id'}),sourceID,sourceCandidates),
- h('label',{class:'field'},h('span',{i18n:'co2source.double_click'}),doubleClick),sourceHint,
+ fieldRow('co2source.source',sourceMode),
+ fieldRow('co2source.id',sourceID,sourceCandidates),
+ fieldRow('co2source.double_click',doubleClick),sourceHint,
  h('button',{class:'btn primary',type:'submit',i18n:'common.save'}));
 const sourceCard=h('section',{class:'card stack',id:'co2SourceConfig',hidden:true},h('h2',{i18n:'co2source.title'}),info('co2source.help'),sourceForm);
 document.querySelector('[data-settings-page="device"]').append(sourceCard);
@@ -219,7 +219,7 @@ for(const [sensor,key,defaults] of [['hcho','m.formaldehyde',[100,300]],['pm25',
  const save=h('button',{type:'submit',class:'btn primary',i18n:'common.save'});
  const reset=h('button',{type:'button',class:'btn ghost',i18n:'m1.threshold_restore',onclick:()=>run(null,()=>saveThresholds(sensor,true),'toast.accepted')});
  const form=h('form',{class:'stack','data-threshold-sensor':sensor},h('h3',{i18n:key}),
-  ...[[low,'m1.threshold_low'],[high,'m1.threshold_high']].map(([input,label])=>h('label',{class:'field'},h('span',{i18n:label}),input)),
+  ...[[low,'m1.threshold_low'],[high,'m1.threshold_high']].map(([input,label])=>fieldRow(label,input)),
   h('label',{class:'switch'},h('span',{class:'text'},h('b',{i18n:'m1.alarm_enabled'})),buzzer),actual,
   h('div',{class:'form-actions'},save,reset));
  thresholdRows[sensor]={low,high,buzzer,actual,save,reset,defaults,editing:false};
@@ -275,7 +275,7 @@ const musicPlay=h('button',{type:'button',class:'btn',id:'m1MusicPlay',i18n:'mus
 const musicStop=h('button',{type:'button',class:'btn',id:'m1MusicStop',i18n:'wake.stop',onclick:()=>run(null,async()=>{await command('wake_alarm.stop');await command('music.stop');},null)});
 const musicFile=h('input',{type:'file',accept:'.rtttl,.txt,text/plain',id:'m1MusicFile'});
 musicFile.addEventListener('change',()=>run(null,async()=>{const file=musicFile.files?.[0];if(file){if(file.size>1024)throw Error(t('music.invalid'));musicText.value=await file.text();}},null));
-musicCard.append(h('label',{class:'field'},h('span',{i18n:'music.file'}),musicFile),h('label',{class:'field'},h('span',{i18n:'music.text'}),musicText),musicProgress,
+musicCard.append(fieldRow('music.file',musicFile),fieldRow('music.text',musicText),musicProgress,
  h('div',{class:'form-actions'},musicSave,h('button',{type:'button',class:'btn ghost',id:'m1MusicRead',i18n:'music.read',onclick:()=>run(null,readMusic,null)}),musicPlay,musicStop));
 document.querySelector('[data-settings-page="device"]').append(musicCard);
 const RANK={ok:0,warn:1,bad:2};
