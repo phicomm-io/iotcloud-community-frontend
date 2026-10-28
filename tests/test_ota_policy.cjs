@@ -21,11 +21,11 @@ const flush=()=>new Promise(resolve=>setImmediate(resolve));
  assert(d.querySelector('[data-i18n="fw.version_path_help"]'));
  const check=d.querySelector('[data-source="cn"]');assert(check);
  const install=[...d.querySelectorAll('button')].find(button=>button.textContent===w.I18N.t('fw.install_online'));assert(install);
- for(const candidate of [{state:'available',version:'1.0.0',available:true},{state:'up_to_date',version:'1.0.0',available:false},{state:'failed',version:'1.0.1',available:true},{state:'available',version:'1.0.1',available:false}]){
+ for(const candidate of [{state:'available',version:'1.0.0',available:true},{state:'up_to_date',version:'1.0.0',available:false},{state:'failed',version:'1.0.1',available:true},{state:'available',version:'1.0.1',available:false},{state:'available',version:'',available:true}]){
   result=candidate;check.click();await flush();await flush();for(const fn of timers.splice(0))fn();for(let i=0;i<5;i++)await flush();
-  assert.equal(install.hidden,!(candidate.available&&candidate.state==='available'));
+  assert.equal(install.hidden,!(!!candidate.version&&candidate.available&&candidate.state==='available'));
   const before=installs;install.click();for(let i=0;i<3;i++)await flush();
-  assert.equal(installs-before,candidate.available&&candidate.state==='available'?1:0);
+  assert.equal(installs-before,!!candidate.version&&candidate.available&&candidate.state==='available'?1:0);
  }
  dom.window.close();console.log(model+': OTA bridge notice and available-only install PASS');
 }})().catch(error=>{console.error(error);process.exit(1);});
