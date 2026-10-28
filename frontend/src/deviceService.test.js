@@ -35,3 +35,14 @@ test('successful mutation separates pending read generations and unequal views n
  const write=call('fan.set',{speed:10});await tick();calls[2].resolve({});await write;
  const fresh=call('status.get');await tick();assert.equal(calls.length,4);calls[0].resolve({});calls[1].resolve({});calls[3].resolve({});await Promise.all([old,live,fresh]);
 });
+
+test('password changes retire the pending config read generation and invalidate status',async()=>{
+ const reads=[];let invalidations=0;
+ const session={fetch:async()=>new Promise(resolve=>reads.push(resolve)),changePassword:async password=>{assert.equal(password,'adminfjr');return {code:'ok',data:{saved:true}};}};
+ const {call,api}=new Function('DeviceSession','globalThis',source+'\nreturn {call:command,api};')(session,{DeviceSession:session,crypto:globalThis.crypto,UI:{invalidateStatus(){invalidations++;}}});
+ const old=call('config.get');await tick();assert.equal(reads.length,1);
+ assert.equal((await api('/auth/password',{password:'adminfjr'})).saved,true);assert.equal(invalidations,1);
+ const fresh=call('config.get');await tick();assert.equal(reads.length,2,'new read must not share the pre-password response');
+ reads[0](binary({code:'ok',data:{old:true}}));reads[1](binary({code:'ok',data:{fresh:true}}));
+ assert.deepEqual(await Promise.all([old,fresh]),[{old:true},{fresh:true}]);
+});

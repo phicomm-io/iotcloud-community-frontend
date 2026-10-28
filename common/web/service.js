@@ -39,7 +39,7 @@ async function deviceCommand(action,params={},options={}){
  }finally{clearTimeout(timer);options.signal?.removeEventListener('abort',abort);}
 }
 async function api(path,data,options={}){
- if(path==='/auth/password'&&globalThis.DeviceSession)return (await DeviceSession.changePassword(data.password)).data||{};
+ if(path==='/auth/password'&&globalThis.DeviceSession){const reply=await DeviceSession.changePassword(data.password);deviceReadEpoch++;globalThis.UI?.invalidateStatus?.();return reply.data||{};}
  if(path==='/status')return command('status.get',{},options);
  if(path==='/sensors/average')return command('sensors.average.get',{},options);
  if(path==='/power')return command('power.get',{},options);
