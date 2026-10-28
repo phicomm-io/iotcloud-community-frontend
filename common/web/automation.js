@@ -4,15 +4,23 @@
 (()=>{
 'use strict';
 const {t}=I18N;
+// null keeps the shared/cloud implementation; the native packer specializes
+// only the immutable product upper bound, never optional hardware capabilities.
+const PRODUCT=/* @device-product */null;
+const a1=PRODUCT===null||PRODUCT==='a1',m1=PRODUCT===null||PRODUCT==='m1',tc1=PRODUCT===null||PRODUCT==='tc1';
 const {h,fieldRow,icon,toast,run,switchRow,seg,daysPicker,presetDays,daysText,hhmm,toMinutes,info,card,pageHead,slider,clone}=UI;
 
 /* Action kinds a schedule or button event can run, keyed by action name. */
 const ACTIONS={
- 'fan.panel':'op.fan_panel','fan.mode.set':'auto.mode','fan.mode.toggle':'auto.toggle','outlet.set':'op.outlet','fan.set':'op.fan','light.set':'op.light',
- 'child_lock.set':'op.child_lock','indicator.set':'op.indicator',
- 'display.set':'op.display','system.reboot':'op.reboot','wake_alarm.start':'wake.title',
- 'light_effect.next':'op.effect_next','light_effect.select':'op.effect_select',
- 'filter.reset':'op.filter_reset','light_always.set':'op.light_always'};
+ ...(a1?{'fan.panel':'op.fan_panel','fan.mode.set':'auto.mode','fan.mode.toggle':'auto.toggle'}:{}),
+ ...(tc1?{'outlet.set':'op.outlet'}:{}),
+ ...(a1?{'fan.set':'op.fan','light.set':'op.light'}:{}),
+ ...(a1||tc1?{'child_lock.set':'op.child_lock'}:{}),
+ ...(tc1?{'indicator.set':'op.indicator'}:{}),
+ ...(m1?{'display.set':'op.display'}:{}),
+ 'system.reboot':'op.reboot',
+ ...(m1?{'wake_alarm.start':'wake.title'}:{}),
+ ...(a1?{'light_effect.next':'op.effect_next','light_effect.select':'op.effect_select','filter.reset':'op.filter_reset','light_always.set':'op.light_always'}:{})};
 const actKey=a=>ACTIONS[a]||'op.none';
 const sel=(parent,labelKey,options)=>{const s=h('select',{},options.map(([v,k])=>h('option',{value:v},typeof k==='function'?k():t(k))));parent.append(fieldRow(labelKey,s));return s;};
 
@@ -31,12 +39,12 @@ function actionEditor(host,{keys=false}={}){
   current=a;fields.replaceChildren();read=()=>({});
   if(a==='none'||!a)return;
   const parts=[];
-  if(a==='outlet.set'){
+  if(tc1&&a==='outlet.set'){
    const index=sel(fields,'op.target',[['all','op.all'],...[0,1,2,3,4,5].map(i=>[String(i),()=>t('tc1.socket_n',{n:i+1})])]);
    if(params.index!=null)index.value=String(params.index);
    parts.push(()=>index.value==='all'?{}:{index:Number(index.value)});
   }
-  if(a==='fan.mode.set'){const mode=sel(fields,'auto.mode',[['manual','auto.manual'],['auto','auto.auto']]);mode.value=params.mode||'manual';parts.push(()=>({mode:mode.value}));}
+  if(a1&&a==='fan.mode.set'){const mode=sel(fields,'auto.mode',[['manual','auto.manual'],['auto','auto.auto']]);mode.value=params.mode||'manual';parts.push(()=>({mode:mode.value}));}
   const switchable=['outlet.set','fan.set','light.set','child_lock.set','indicator.set','light_always.set'].includes(a);
   if(switchable){
    const values=keys&&(['outlet.set','fan.set'].includes(a)||caps.model==='a1')?['on','off','toggle']:['on','off'];
@@ -45,12 +53,12 @@ function actionEditor(host,{keys=false}={}){
    const field=['outlet.set','fan.set'].includes(a)?'on':'enabled';
    parts.push(()=>on.value==='toggle'?{toggle:true}:{[field]:on.value==='on'});
   }
-  if(a==='light_effect.select'){
+  if(a1&&a==='light_effect.select'){
    const effect=sel(fields,'op.effect_select',Array.from({length:5},(_,i)=>[String(i),'a1.effect.'+i]));
    effect.value=String(params.effect||0);parts.push(()=>({effect:Number(effect.value)}));
   }
-  if(a==='filter.reset')fields.append(info('filter.reset_hint'));
-  if(a==='wake_alarm.start'){
+  if(a1&&a==='filter.reset')fields.append(info('filter.reset_hint'));
+  if(m1&&a==='wake_alarm.start'){
    const duration=h('input',{type:'number',min:1,max:180,step:1,value:params.duration_seconds??60,required:true,'data-wake-duration':''});
    fields.append(fieldRow('wake.duration',duration),info('wake.hint'));
    parts.push(()=>{const n=Number(duration.value);if(!Number.isInteger(n)||n<1||n>180)throw Error(t('wake.invalid'));return {duration_seconds:n};});
@@ -73,12 +81,12 @@ function actionEditor(host,{keys=false}={}){
     return id?{tone:id}:{};
    });
   }
-  if(a==='fan.set'){
+  if(a1&&a==='fan.set'){
    const m={speed:params.speed||60},[out,range]=slider(m,'speed',{min:1});
    fields.append(h('div',{class:null},h('div',{class:'row between'},h('span',{class:'label',i18n:'op.speed'}),out)),range);
    parts.push(()=>({speed:Number(m.speed)}));
   }
-  if(a==='light.set'||a==='display.set'){
+  if(a1&&a==='light.set'||m1&&a==='display.set'){
    const step=a==='display.set'?25:1,m={brightness:params.brightness!=null?params.brightness:100};
    const [out,range]=slider(m,'brightness',{min:0,max:100,step,fmt:v=>v+'%'});
    fields.append(h('div',{class:null},h('div',{class:'row between'},h('span',{class:'label',i18n:'op.brightness'}),out)),range);
@@ -185,8 +193,8 @@ function schedulePage(dev){
 /* ---------- Custom button events ---------- */
 function buttonsPage(dev){
  const listBox=h('div',{class:'stack'}),keyHost=h('div',{class:'fields'});
- const keyIds=dev.model==='A1'?(UI.caps.button_keys?.includes('combination')?[0,1,2]:[0,1]):[0];
- const keyName=k=>t(dev.model==='A1'?['btn.key_power','btn.key_wifi','btn.key_both'][Number(k)]:'btn.key_fn');
+ const keyIds=(PRODUCT===null?dev.model==='A1':a1)?(UI.caps.button_keys?.includes('combination')?[0,1,2]:[0,1]):[0];
+ const keyName=k=>t((PRODUCT===null?dev.model==='A1':a1)?['btn.key_power','btn.key_wifi','btn.key_both'][Number(k)]:'btn.key_fn');
  const key=sel(keyHost,'btn.key',keyIds.map(k=>[String(k),()=>keyName(k)]));
  const count=h('input',{type:'number',min:1,max:30,value:1,required:true});
  const countLabel=h('span',{},t('btn.click_count'));
@@ -258,7 +266,7 @@ function buttonsPage(dev){
  });
  let filterStatus,filterHours;
  function filterCards(){
-  if(dev.model!=='A1'||!UI.caps.actions.includes('filter.get'))return [];
+  if(!a1||dev.model!=='A1'||!UI.caps.actions.includes('filter.get'))return [];
   filterStatus=h('p',{'data-filter-status':''});filterHours=h('input',{type:'number',min:1,max:20000,required:true,'data-filter-hours':''});
   const form=h('form',{class:'stack'},filterStatus,info('filter.hint'),fieldRow('filter.lifetime',filterHours),
    h('div',{class:'form-actions'},h('button',{type:'submit',class:'btn primary'},t('common.save')),
@@ -270,14 +278,14 @@ function buttonsPage(dev){
  preview();
  return {el:h('div',{class:'stack'},pageHead('nav.buttons','btn.lead'),card('btn.current',null,listBox),
   card('btn.recovery',null,h('div',{class:'button-mapping'},h('b',{},t('btn.hold_full',{n:5})),h('span',{},t('btn.reset_wifi'))),
-   h('div',{class:'button-mapping'},h('b',{},t('btn.hold_full',{n:10})),h('span',{},t('op.10'))),info(dev.model==='A1'?'btn.reset_note_a1':'btn.reset_note')),editorCard,...filterCards()),
+   h('div',{class:'button-mapping'},h('b',{},t('btn.hold_full',{n:10})),h('span',{},t('op.10'))),info((PRODUCT===null?dev.model==='A1':a1)?'btn.reset_note_a1':'btn.reset_note')),editorCard,...filterCards()),
   async show(options={}){await load(options);await loadFilter(options);if(!options.current||options.current())preview();}};
 }
 
 /* ---------- Night mode ---------- */
 function nightPage(dev){
  const modern=UI.caps?.actions?.includes('fan.mode.set');
- const isM1=dev.model==='M1',list=h('div',{class:'stack'});
+ const isM1=PRODUCT===null?dev.model==='M1':m1,list=h('div',{class:'stack'});
  let model=[];
  function window(cfg,i){
   const days=daysPicker('ndays'+i,cfg.days),start=h('input',{type:'time',value:hhmm(cfg.start)}),end=h('input',{type:'time',value:hhmm(cfg.end)});
@@ -323,7 +331,7 @@ window.automationPages=dev=>{
  const pages={};
  if(!caps.length||caps.includes('schedules.get'))pages.schedule=schedulePage(dev);
  if(caps.includes('buttons.set')&&dev.hasButtons)pages.buttons=buttonsPage(dev);
- if(caps.includes('night.get'))pages.night=nightPage(dev);
+ if((a1||m1)&&caps.includes('night.get'))pages.night=nightPage(dev);
  return pages;
 };
 })();
