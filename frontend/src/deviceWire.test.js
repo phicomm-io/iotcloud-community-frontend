@@ -33,3 +33,7 @@ test('explicit password may verify a Basic-protected legacy info endpoint but ne
   if(newer)await assert.rejects(wire.discover({legacyPassword:'adminfjr'}),/Invalid legacy discovery/);else {await wire.discover({legacyPassword:'adminfjr'});assert.equal(wire.format,'json');}assert.equal(calls,2);
  }
 });
+test('explicit login after verified firmware change rebinds before one token exchange',async()=>{
+ let firmware='rc4',logins=0;const fetcher=async p=>p.endsWith('/info')?reply({code:'ok',data:{...info,firmware_version:firmware}}):p.endsWith('/login')?(logins++,reply({code:'ok',data:{token}})):reply({code:'ok'});
+ const wire=createDeviceWire({fetcher}),auth=createDeviceAuth({fetcher,wire});await auth.login('adminfjr');firmware='rc5';await auth.login('adminfjr');assert.equal(auth.authenticated,true);assert.equal(wire.identity.firmware_version,'rc5');assert.equal(logins,2,'rebind does not replay login');
+});

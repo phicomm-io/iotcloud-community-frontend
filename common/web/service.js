@@ -34,6 +34,7 @@ async function deviceCommand(action,params={},options={}){
  const response=await deviceFetch('/api/v1/command',{method:'POST',signal:controller.signal,...(globalThis.DeviceSession?{value:request}:{headers:{'Content-Type':'application/json'},body:JSON.stringify(request)}),cache:'no-store'});
  let reply;try{reply=await (globalThis.DeviceAuth?DeviceAuth.decodeResponse(response):response.json());}catch(error){if(response.status!==503)throw error;reply={code:'busy'};}
  if(!response.ok||!['ok','accepted'].includes(reply.code)){const key='error.'+reply.code;const error=Error(globalThis.I18N?.has(key)?I18N.t(key):reply.message||reply.code||('HTTP '+response.status));error.code=reply.code;throw error;}
+ if(action==='capabilities.get'&&globalThis.DeviceSession?.wire.format==='msgpack')DeviceAuth.verifyCapabilities(reply.data,DeviceSession.wire.identity);
  if(!action.endsWith('.get')){deviceReadEpoch++;globalThis.UI?.invalidateStatus?.();}
  return reply.data||{};
  }finally{clearTimeout(timer);options.signal?.removeEventListener('abort',abort);}

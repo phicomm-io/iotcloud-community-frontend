@@ -1,12 +1,13 @@
 // Authentication shares the verified device wire contract.
 import {fixedDeviceWire,createDeviceWire,decodeResponse} from './deviceWire.js';
 export {createDeviceWire,decodeResponse};
+export {verifyCapabilities} from './deviceWire.js';
 
 const authError=(code,status)=>Object.assign(Error(code==='unauthorized'?'Sign in to this device':code==='busy'?'Device busy; try again':code),{code,status});
 const basic=password=>'Basic '+btoa(String.fromCharCode(...new TextEncoder().encode('admin:'+password)));
 // One page owns one session. Neither passwords nor tokens enter browser storage.
 export function createDeviceAuth({fetcher=globalThis.fetch,origin='',onRequired=()=>{},allowLegacy=true,wire=fixedDeviceWire({fetcher,origin})}={}){
- let token='',legacy='',legacyReady=false,blocked=false,pending=null,generation=0,loginAbort=null,emptySession=false,discovered=false;
+ let token='',legacy='',legacyReady=false,blocked=false,pending=null,generation=0,loginAbort=null,emptySession=false,discovered=false,rebindGeneration=-1;
  const headers=()=>token?{Authorization:'Bearer '+token}:legacy?{Authorization:legacy}:{};
  const reset=({requireLogin=true}={})=>{generation++;loginAbort?.abort();loginAbort=null;token=legacy='';legacyReady=false;emptySession=false;blocked=requireLogin;pending=null;};
  function required(){if(!blocked){blocked=true;onRequired();}}
@@ -14,11 +15,12 @@ export function createDeviceAuth({fetcher=globalThis.fetch,origin='',onRequired=
  async function login(password=''){
   if(pending)return pending;
   const previous=token;token=legacy='';legacyReady=false;emptySession=false;
-  const version=generation,controller=new AbortController(),timer=setTimeout(()=>controller.abort(),5000);loginAbort=controller;
+  let version=generation;const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),5000);loginAbort=controller;
   pending=(async()=>{
    if(previous)await retire(previous);
    if(version!==generation)throw authError('cancelled',0);
    await wire.discover({legacyPassword:password,signal:controller.signal,force:discovered});discovered=true;
+   if(rebindGeneration===generation&&version===generation-1)version=generation;
    if(version!==generation)throw authError('cancelled',0);
    const response=await wire.request('/api/v1/auth/login',{method:'POST',signal:controller.signal,credentials:'omit',redirect:'error',cache:'no-store',value:{password}});
    if(version!==generation&&!response.ok)throw authError('cancelled',0);
@@ -51,6 +53,6 @@ export function createDeviceAuth({fetcher=globalThis.fetch,origin='',onRequired=
   return previous?retire(previous):Promise.resolve();
  }
  async function changePassword(password,{relogin=false}={}){await ensure();const version=generation,authorization=headers().Authorization;const response=await request('/api/v1/command',{method:'POST',value:{action:'config.set',request_id:globalThis.crypto?.randomUUID?crypto.randomUUID():Date.now().toString(36)+'-'+Math.random().toString(36).slice(2),params:{section:'auth',values:{password}}}});if(!response.ok)throw authError(response.status===401?'unauthorized':response.status===503?'busy':'HTTP '+response.status,response.status);const reply=await decodeResponse(response);if(!['ok','accepted'].includes(reply?.code))throw authError(reply?.code||'Invalid device response',response.status);if(version!==generation||authorization!==headers().Authorization)return reply;reset({requireLogin:password!==''&&!relogin});if(relogin)await login(password);else if(password!=='')onRequired();return reply;}
- wire.setOnIdentityChange?.(()=>reset({requireLogin:false}));
+ wire.setOnIdentityChange?.(()=>{if(loginAbort){generation++;rebindGeneration=generation;token=legacy='';legacyReady=false;emptySession=false;blocked=false;}else reset({requireLogin:false});});
  return {wire,login,ensure,fetch:request,headers,observe,logout,release,changePassword,reset,setOnRequired(callback){onRequired=callback;},get authenticated(){return !!token||legacyReady;},get needsLogin(){return blocked;}};
 }

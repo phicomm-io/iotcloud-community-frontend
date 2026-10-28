@@ -1,6 +1,7 @@
 
 import {t} from './i18n.js';
 import {encodeWire,decodeWire,detectWire} from './wireCodec.js';
+import {verifyCapabilities} from './deviceWire.js';
 export const requestId = () => Array.from(crypto.getRandomValues(new Uint8Array(16)), b=>b.toString(16).padStart(2,"0")).join("");
 export const userKey = username => "u_" + [...new TextEncoder().encode(username)].map(b => b.toString(16).padStart(2,"0")).join("");
 export const deviceKey = d => d.namespace === "account" ? `account:${d.username}:${d.mqtt_username || d.username}:${d.mac}` : d.mac;
@@ -120,8 +121,8 @@ export function applyMessage(d, state, topic, message, now = Date.now()) {
   if(leaf === "availability") {state.available=String(message)==="online"; if(!state.available)state.sensorFresh=false;}
   else if(leaf === "state" && data) mergeStatus(state,data,now);
   else if(leaf === "sensor" && data) {merge(state,data);if(d.model==="tc1"){state.power_watts=Number(data.power);state.energy_kwh=Number(data.powerConsumption);}}
-  else if(leaf === "capabilities" && data) state.capabilities=data;
-  else if(leaf === "result" && data) {state.result=data; const payload=data.data; if(data.code==="ok" && state.pending?.[data.request_id]==="status.get" && payload && typeof payload==="object" && !Array.isArray(payload)) mergeStatus(state,payload,now);}
+  else if(leaf === "capabilities" && data) {try{if(commandFormat(d)==='msgpack')verifyCapabilities(data,{device_id:d.mac,model:d.model,firmware_version:d.firmware_version,variant:d.variant||d.firmware_variant});state.capabilities=data;}catch{delete state.capabilities;}}
+  else if(leaf === "result" && data) {if(data.code==='ok'&&state.pending?.[data.request_id]==='capabilities.get'&&commandFormat(d)==='msgpack'){try{verifyCapabilities(data.data,{device_id:d.mac,model:d.model,firmware_version:d.firmware_version,variant:d.variant||d.firmware_variant});}catch{data={...data,code:'identity_mismatch',data:{}};}}state.result=data; const payload=data.data; if(data.code==="ok" && state.pending?.[data.request_id]==="status.get" && payload && typeof payload==="object" && !Array.isArray(payload)) mergeStatus(state,payload,now);}
   return true;
  }
 

@@ -21,7 +21,7 @@ const server=http.createServer(async(req,res)=>{
   assert.equal(req.headers.authorization,'Bearer '+token);
   if(req.url==='/api/v1/auth/logout')return reply({code:'ok'});
   if(failStatus&&request.action==='status.get')return reply({code:'busy'},503);
-  const data=request.action==='status.get'?{...base,...(barometer?{barometer}:{})}:request.action==='capabilities.get'?{actions:['status.get']}:{};
+  const data=request.action==='status.get'?{...base,...(barometer?{barometer}:{})}:request.action==='capabilities.get'?{actions:['status.get'],device_id:base.device_id,model:'m1',firmware_version:'rc4',variant:'full'}:{};
   reply({code:'ok',data});
  }catch(error){reply({code:'bad_request',message:error.message},400);}
 });

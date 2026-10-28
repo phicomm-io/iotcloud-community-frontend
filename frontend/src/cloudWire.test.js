@@ -15,7 +15,12 @@ test('unknown scoped discovery cannot send a mutation; legacy JSON remains expli
 });
 test('MP MQTT complete state, capabilities and receipts decode directly from bytes',()=>{
  const d=deviceEntry({mac,...discoveryMessage(encodeWire(announcement),mac)}),state={pending:{id:'status.get'}};
- for(const [leaf,value] of [['state',{device_id:mac,percentage:0}],['capabilities',{actions:['fan.set']}],['result',{request_id:'id',code:'ok',data:{device_id:mac,percentage:42}}]])assert(applyMessage(d,state,baseTopic(d)+'/'+leaf,encodeWire(value)));
- assert.equal(state.percentage,42);assert.deepEqual(state.capabilities,{actions:['fan.set']});
+ for(const [leaf,value] of [['state',{device_id:mac,percentage:0}],['capabilities',{actions:['fan.set'],device_id:mac,model:'a1',firmware_version:'rc4',variant:'full'}],['result',{request_id:'id',code:'ok',data:{device_id:mac,percentage:42}}]])assert(applyMessage(d,state,baseTopic(d)+'/'+leaf,encodeWire(value)));
+ assert.equal(state.percentage,42);assert.equal(state.capabilities.firmware_version,'rc4');
  applyMessage(d,state,baseTopic(d)+'/state',JSON.stringify({percentage:99}));assert.equal(state.percentage,42,'mismatched format cannot override selected binary data');
+});
+test('retained and reply capabilities are rejected when their firmware binding differs',()=>{
+ const d=deviceEntry({mac,...discoveryMessage(encodeWire(announcement),mac)}),state={capabilities:{actions:['old']},pending:{read:'capabilities.get'}};
+ applyMessage(d,state,baseTopic(d)+'/capabilities',encodeWire({device_id:mac,model:'a1',firmware_version:'old',variant:'full',actions:['old']}));assert.equal(state.capabilities,undefined);
+ applyMessage(d,state,baseTopic(d)+'/result',encodeWire({request_id:'read',code:'ok',data:{device_id:mac,model:'a1',firmware_version:'old',variant:'full',actions:['old']}}));assert.equal(state.result.code,'identity_mismatch');
 });

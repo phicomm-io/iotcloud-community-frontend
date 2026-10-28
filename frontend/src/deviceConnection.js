@@ -1,3 +1,4 @@
+import {verifyCapabilities} from './deviceWire.js';
 
 import {t} from './i18n.js';
 import {normalizeMAC} from './deviceProtocol.js';
@@ -71,6 +72,7 @@ export function createDeviceTransport({fetcher=globalThis.fetch,records={},onSta
   try{
    const result=await request(e,'/api/v1/command',{method:'POST',value:requestData});
    if(!current(key,e))return {code:'offline',message:t('p.9b8764282633')};
+   if(requestData.action==='capabilities.get'&&result.code==='ok'&&e.session.wire.format==='msgpack')verifyCapabilities(result.data,e.session.wire.identity);
    if(requestData.action==='status.get'&&result.code==='ok')onStatus(key,result.data);
    return result;
   }catch(err){
