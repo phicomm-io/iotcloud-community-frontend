@@ -1,11 +1,11 @@
-// Authentication is independent of the business wire format.
-const encodeWire=value=>JSON.stringify(value);
-const decodeResponse=response=>response.json();
+// Authentication shares the verified device wire contract.
+import {fixedDeviceWire,createDeviceWire,decodeResponse} from './deviceWire.js';
+export {createDeviceWire,decodeResponse};
 
 const authError=(code,status)=>Object.assign(Error(code==='unauthorized'?'Sign in to this device':code==='busy'?'Device busy; try again':code),{code,status});
 const basic=password=>'Basic '+btoa(String.fromCharCode(...new TextEncoder().encode('admin:'+password)));
 // One page owns one session. Neither passwords nor tokens enter browser storage.
-export function createDeviceAuth({fetcher=globalThis.fetch,origin='',onRequired=()=>{},allowLegacy=true}={}){
+export function createDeviceAuth({fetcher=globalThis.fetch,origin='',onRequired=()=>{},allowLegacy=true,wire=fixedDeviceWire({fetcher,origin})}={}){
  let token='',legacy='',legacyReady=false,blocked=false,pending=null,generation=0,loginAbort=null,emptySession=false;
  const headers=()=>token?{Authorization:'Bearer '+token}:legacy?{Authorization:legacy}:{};
  const reset=({requireLogin=true}={})=>{generation++;loginAbort?.abort();loginAbort=null;token=legacy='';legacyReady=false;emptySession=false;blocked=requireLogin;pending=null;};
@@ -18,9 +18,11 @@ export function createDeviceAuth({fetcher=globalThis.fetch,origin='',onRequired=
   pending=(async()=>{
    if(previous)await retire(previous);
    if(version!==generation)throw authError('cancelled',0);
-   const response=await fetcher(origin+'/api/v1/auth/login',{method:'POST',signal:controller.signal,credentials:'omit',redirect:'error',cache:'no-store',headers:{Accept:'application/json','Content-Type':'application/json'},body:encodeWire({password})});
+   await wire.discover({legacyPassword:password,signal:controller.signal});
+   if(version!==generation)throw authError('cancelled',0);
+   const response=await wire.request('/api/v1/auth/login',{method:'POST',signal:controller.signal,credentials:'omit',redirect:'error',cache:'no-store',value:{password}});
    if(version!==generation&&!response.ok)throw authError('cancelled',0);
-   if(response.status===404&&allowLegacy){legacy=password?basic(password):'';legacyReady=true;emptySession=password==='';blocked=false;return;}
+   if(response.status===404&&allowLegacy&&wire.format==='json'){legacy=password?basic(password):'';legacyReady=true;emptySession=password==='';blocked=false;return;}
    if(response.status===401){token=legacy='';legacyReady=false;emptySession=false;required();throw authError('unauthorized',401);}
    if(!response.ok)throw authError(response.status===503?'busy':'HTTP '+response.status,response.status);
    const reply=await decodeResponse(response),next=reply?.data?.token;
@@ -34,20 +36,21 @@ export function createDeviceAuth({fetcher=globalThis.fetch,origin='',onRequired=
  async function request(path,options={}){
   await ensure();
   const version=generation,authorization=headers().Authorization;
-  const response=await fetcher(origin+path,{...options,credentials:'omit',redirect:'error',cache:'no-store',headers:{Accept:'application/json',...options.headers,...headers()}});
+  const response=await wire.request(path,{...options,credentials:'omit',redirect:'error',cache:'no-store',headers:{...options.headers,...headers()}});
   if(version===generation)await observe(response.status,authorization);
   return response; // Never replay a mutation, including after expiration.
  }
- async function logout(){const silent=emptySession,version=generation,authorization=headers().Authorization;try{if(token)await fetcher(origin+'/api/v1/auth/logout',{method:'POST',credentials:'omit',redirect:'error',cache:'no-store',headers:{Accept:'application/json','Content-Type':'application/json',Authorization:authorization},body:encodeWire({})});}finally{if(version===generation&&authorization===headers().Authorization){reset({requireLogin:!silent});if(!silent)onRequired();}}}
+ async function logout(){const silent=emptySession,version=generation,authorization=headers().Authorization;try{if(token)await wire.request('/api/v1/auth/logout',{method:'POST',credentials:'omit',redirect:'error',cache:'no-store',headers:{Authorization:authorization},value:{}});}finally{if(version===generation&&authorization===headers().Authorization){reset({requireLogin:!silent});if(!silent)onRequired();}}}
  function retire(value){
   // Only the exact token owned by this instance is retired; never reauthenticate.
   let timer;const deadline=new Promise(resolve=>{timer=setTimeout(resolve,2000);});
-  try{return Promise.race([deadline,Promise.resolve(fetcher(origin+'/api/v1/auth/logout',{method:'POST',keepalive:true,credentials:'omit',redirect:'error',cache:'no-store',headers:{Accept:'application/json','Content-Type':'application/json',Authorization:'Bearer '+value},body:encodeWire({})})).catch(()=>{})]).finally(()=>clearTimeout(timer));}catch{clearTimeout(timer);return Promise.resolve();}
+  try{return Promise.race([deadline,Promise.resolve(wire.request('/api/v1/auth/logout',{method:'POST',keepalive:true,credentials:'omit',redirect:'error',cache:'no-store',headers:{Authorization:'Bearer '+value},value:{}})).catch(()=>{})]).finally(()=>clearTimeout(timer));}catch{clearTimeout(timer);return Promise.resolve();}
  }
  function release(){
   const previous=token;reset({requireLogin:false});
   return previous?retire(previous):Promise.resolve();
  }
- async function changePassword(password){await ensure();const version=generation,authorization=headers().Authorization;const response=await request('/api/v1/command',{method:'POST',headers:{'Content-Type':'application/json'},body:encodeWire({action:'config.set',request_id:globalThis.crypto?.randomUUID?crypto.randomUUID():Date.now().toString(36)+'-'+Math.random().toString(36).slice(2),params:{section:'auth',values:{password}}})});if(!response.ok)throw authError(response.status===401?'unauthorized':response.status===503?'busy':'HTTP '+response.status,response.status);const reply=await decodeResponse(response);if(!['ok','accepted'].includes(reply?.code))throw authError(reply?.code||'Invalid device response',response.status);if(version!==generation||authorization!==headers().Authorization)return reply;reset({requireLogin:password!==''});if(password!=='')onRequired();return reply;}
- return {login,ensure,fetch:request,headers,observe,logout,release,changePassword,reset,setOnRequired(callback){onRequired=callback;},get authenticated(){return !!token||legacyReady;},get needsLogin(){return blocked;}};
+ async function changePassword(password){await ensure();const version=generation,authorization=headers().Authorization;const response=await request('/api/v1/command',{method:'POST',value:{action:'config.set',request_id:globalThis.crypto?.randomUUID?crypto.randomUUID():Date.now().toString(36)+'-'+Math.random().toString(36).slice(2),params:{section:'auth',values:{password}}}});if(!response.ok)throw authError(response.status===401?'unauthorized':response.status===503?'busy':'HTTP '+response.status,response.status);const reply=await decodeResponse(response);if(!['ok','accepted'].includes(reply?.code))throw authError(reply?.code||'Invalid device response',response.status);if(version!==generation||authorization!==headers().Authorization)return reply;reset({requireLogin:password!==''});if(password!=='')onRequired();return reply;}
+ wire.setOnIdentityChange?.(()=>reset({requireLogin:false}));
+ return {wire,login,ensure,fetch:request,headers,observe,logout,release,changePassword,reset,setOnRequired(callback){onRequired=callback;},get authenticated(){return !!token||legacyReady;},get needsLogin(){return blocked;}};
 }

@@ -4,7 +4,7 @@ const html=require('./render_page.cjs')('A1/web/index.html');
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 function setup(fetch){
  const dom=new JSDOM(html,{url:'http://device.local',runScripts:'outside-only',pretendToBeVisual:true}),w=dom.window;
- w.TextEncoder=TextEncoder;w.fetch=fetch;w.scrollTo=()=>{};
+ w.TextEncoder=TextEncoder;w.TextDecoder=TextDecoder;w.fetch=(url,options)=>url.endsWith('/api/v1/info')?Promise.resolve(response(200,{code:'ok',data:{api_version:1,device_id:'aabbccddeeff',model:'a1',version:'old'}})):fetch(url,options);w.scrollTo=()=>{};
  const scripts=[...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(match=>match[1]);
  for(const source of scripts.slice(0,-1))vm.runInContext(source,dom.getInternalVMContext());
  return {dom,w};

@@ -65,15 +65,11 @@ $('setup').onsubmit=async e=>{
  try{
   if(caps.device_language)await command('config.set',{section:'device',values:{language:$('deviceLanguage').value}});
   message(t('setup.ae49332c8b'));await command('config.set',{section:'mqtt',values:mqtt});$('mqttPassword').value='';received=false;importedOriginal=null;
-  if($('adminPassword').value){message(t('setup.5ea9986202'));const password=$('adminPassword').value;await command('config.set',{section:'auth',values:{password}});setPassword(password);$('adminPassword').value='';}
+  if($('adminPassword').value){message(t('setup.5ea9986202'));const password=$('adminPassword').value;await api('/auth/password',{password});await DeviceSession.login(password);$('adminPassword').value='';}
   message(t('setup.340b70ed88'));wifiStarted=true;await command('config.set',{section:'wifi',values:wifi});$('wifiPassword').value='';message(t('setup.673c7d6bfe'));
  }catch(e){message(wifiStarted?t('setup.6bf4396e1e'):e.message,'warn');}
  finally{saving=false;$('save').disabled=false;}
 };
-// Changing Basic credentials must also update subsequent same-page requests.
-const originalFetch=window.fetch.bind(window);let authorization='';
-function setPassword(password){authorization='Basic '+btoa(String.fromCharCode(...new TextEncoder().encode('admin:'+password)));}
-window.fetch=(url,options={})=>originalFetch(url,{...options,headers:{...options.headers,...(authorization?{Authorization:authorization}:{})}});
 try{ticket=IotProvision.readTicket(location.hash);if(ticket){history.replaceState(null,'',location.pathname+location.search);if(!window.opener)throw Error(t('setup.fbc2acb09e'));$('import').hidden=false;$('accept').disabled=!initialized;setTimeout(()=>{if(importedOriginal){for(const [id,value] of Object.entries(importedOriginal))$(id).value=value;$('mqttPassword').value='';}ticket=null;received=false;$('accept').disabled=true;},Math.max(0,ticket.expires-Date.now()));}}
 catch{ticket=null;message(t('setup.b8f77a99a1'),'warn');}
 $('accept').onclick=()=>{if(!ticket||Date.now()>=ticket.expires){message(t('setup.4d3a340da9'),'warn');return;}$('accept').disabled=true;window.opener.postMessage({type:'iotcloud.provision.ready',id:ticket.id},ticket.origin);};

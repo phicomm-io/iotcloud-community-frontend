@@ -40,7 +40,7 @@ test('logout and password change revoke local token without persisting it',async
 });
 test('page reload has no inherited token and stale in-flight login cannot restore one',async()=>{
  let release;const first=createDeviceAuth({fetcher:url=>url.endsWith('/logout')?Promise.resolve(reply({code:'ok'})):new Promise(resolve=>release=resolve)});
- const pending=first.login('');first.reset();release(logged());await assert.rejects(pending,{code:'cancelled'});assert.equal(first.authenticated,false);
+ const pending=first.login('');await new Promise(setImmediate);first.reset();release(logged());await assert.rejects(pending,{code:'cancelled'});assert.equal(first.authenticated,false);
  const second=createDeviceAuth({fetcher:async()=>logged(other)});assert.equal(second.authenticated,false);await second.login('');assert.deepEqual(second.headers(),{Authorization:'Bearer '+other});
 });
 test('only explicit not-found login permits legacy Basic; malformed success never does',async()=>{
