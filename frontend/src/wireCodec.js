@@ -58,7 +58,7 @@ export function encodeWire(value,format='msgpack'){
  }
  write(value);if(pos>1048576)invalid();output=new Uint8Array(pos);pos=0;write(value);return output;
 }
-export function decodeWire(value,format=detectWire(value),{onNumber}={}){
+export function decodeWire(value,format=detectWire(value),{onNumber,allowArray=false}={}){
  let out;
  if(format==='json')out=JSON.parse(typeof value==='string'?value:decoder.decode(asBytes(value)));
  else{
@@ -99,11 +99,11 @@ export function decodeWire(value,format=detectWire(value),{onNumber}={}){
   }
   out=item();if(pos!==b.length)invalid();
  }
- checkValue(out);if(!out||typeof out!=='object'||Array.isArray(out)||asBytes(out))invalid();return out;
+ checkValue(out);if(!out||typeof out!=='object'||(!allowArray&&Array.isArray(out))||asBytes(out))invalid();return out;
 }
-export async function decodeResponse(response){
+export async function decodeResponse(response,{allowArray=false}={}){
  const type=response.headers?.get('Content-Type')?.split(';')[0];
  // Admission can fail before the server can negotiate a wire format.
  if(response.status===503&&!['application/msgpack','application/json'].includes(type)){await response.arrayBuffer();return {code:'busy'};}
- return type==='application/msgpack'?decodeWire(await response.arrayBuffer(),'msgpack'):response.json();
+ return type==='application/msgpack'?decodeWire(await response.arrayBuffer(),'msgpack',{allowArray}):response.json();
 }

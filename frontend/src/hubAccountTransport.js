@@ -3,7 +3,7 @@ import {createDeviceWire} from './deviceWire.js';
 // structured wire envelope changes; cloud account requests never use this path.
 export function createHubAccountTransport({fetcher=globalThis.fetch,origin=''}={}){
  const wire=createDeviceWire({fetcher,origin,expectedIdentity:{model:'daikin'}});
- return {wire,decodeResponse:wire.decodeResponse,async request(path,{body,headers,...options}={}){
+ return {wire,decodeResponse:response=>wire.decodeResponse(response,{allowArray:true}),async request(path,{body,headers,...options}={}){
   await wire.discover();
   const structured=body===undefined?{}:{value:typeof body==='string'?JSON.parse(body):body};
   const clean=new Headers(headers);clean.delete('Content-Type');clean.delete('Accept');

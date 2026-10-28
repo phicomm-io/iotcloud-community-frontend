@@ -14,3 +14,10 @@ test('hub account changes only envelope and preserves its account token, without
  assert.deepEqual(decodeWire(options.body),{username:'owner',password:'adminfjr'});
  assert.equal(options.credentials,'include');
 });
+
+test('hub account device list preserves root arrays without relaxing device envelopes',async()=>{
+ const hub=createHubAccountTransport();const devices=[{device_id:'aabbccddeeff',model:'m1'}],bytes=encodeWire(devices);
+ assert.throws(()=>decodeWire(bytes));
+ assert.deepEqual(await hub.decodeResponse(new Response(bytes,{headers:{'Content-Type':'application/msgpack'}})),devices);
+ assert.deepEqual(await hub.decodeResponse(new Response(JSON.stringify(devices),{headers:{'Content-Type':'application/json'}})),devices);
+});
