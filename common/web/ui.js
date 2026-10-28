@@ -732,7 +732,7 @@ UI.reload=({full=false}={})=>{
  return fullReload;
 };
 document.addEventListener('visibilitychange',()=>{if(UI.device&&!document.hidden&&!stopped)UI.reload({full:true});});
-const capabilityIdentity=value=>value?.device_id&&value?.model&&value?.firmware_version&&(value.variant||value.firmware_variant)?[value.device_id,value.model,value.firmware_version,value.variant||value.firmware_variant].join('/') : '';
+const capabilityIdentity=value=>value?.device_id&&value?.model&&value?.firmware_version&&(value.variant||value.firmware_variant)?[String(value.device_id).replace(/[:-]/g,'').toLowerCase(),value.model,value.firmware_version,value.variant||value.firmware_variant].join('/') : '';
 UI.invalidateIdentity=identity=>{
  const previous=capabilityIdentity(UI.caps),next=capabilityIdentity(identity);
  if(previous&&next&&previous!==next&&!UI.identityChanged){
