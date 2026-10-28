@@ -2,6 +2,7 @@
 
 // Device service.js retains its HTTP-shaped API; transport is supplied by host.
 (()=>{
+window.deviceParentTransport=true;
 const bridgeMessages={"p.f9ce625a07fc": ["No receipt yet. Wait for a status update.", "暂未收到操作回执，请等待状态更新"], "p.85dade959621": ["Unsupported operation", "不支持的操作"], "p.bcce0d150ca6": ["Unsupported upload", "不支持的上传"]};
 const t=(id,args={})=>{if(globalThis.I18N){I18N.extend(bridgeMessages);return I18N.t(id,args);}return bridgeMessages[id][1].replace(/\{(\w+)\}/g,(_,key)=>args[key]??'');};
 

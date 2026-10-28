@@ -1,5 +1,7 @@
 
 import {t} from './i18n.js';
+import {encodeWire,decodeWire,detectWire} from './wireCodec.js';
+import {verifyCapabilities} from './deviceWire.js';
 export const requestId = () => Array.from(crypto.getRandomValues(new Uint8Array(16)), b=>b.toString(16).padStart(2,"0")).join("");
 export const userKey = username => "u_" + [...new TextEncoder().encode(username)].map(b => b.toString(16).padStart(2,"0")).join("");
 export const deviceKey = d => d.namespace === "account" ? `account:${d.username}:${d.mqtt_username || d.username}:${d.mac}` : d.mac;
@@ -27,7 +29,7 @@ export function deviceEntry(value) {
   )
     throw new Error(t('p.4baaf7d5f598'));
   if (d.namespace && (d.namespace !== "account" || !d.username)) throw new Error(t('p.c384a9d1db4f'));
-  return { mac, model, version, ...(d.self===true?{self:true}:{}), ...(['full','lite','hub'].includes(d.firmware_variant)?{firmware_variant:d.firmware_variant}:{}), ...(d.username ? {username:d.username} : {}), ...(d.namespace ? { namespace: d.namespace, username: d.username, ...(d.mqtt_username ? { mqtt_username: d.mqtt_username } : {}) } : {}), ...(d.status ? { status: d.status } : {}) };
+  return { mac, model, version, ...(d.self===true?{self:true}:{}), ...(['full','lite','hub'].includes(d.firmware_variant)?{firmware_variant:d.firmware_variant}:{}), ...(d.username ? {username:d.username} : {}), ...(d.namespace ? { namespace: d.namespace, username: d.username, ...(d.mqtt_username ? { mqtt_username: d.mqtt_username } : {}) } : {}), ...(Object.hasOwn(d,'wire_format')?{wire_format:['json','msgpack'].includes(d.wire_format)?d.wire_format:'',wire_version:d.wire_version,firmware_version:d.firmware_version,variant:d.variant||d.firmware_variant}:{}), ...(d.status ? { status: d.status } : {}) };
 }
 export function localDevices(storage = localStorage) {
   const list = JSON.parse(
@@ -114,12 +116,13 @@ export function statusSnapshot(data,now=Date.now()){
 export function applyMessage(d, state, topic, message, now = Date.now()) {
  if(d.version === "v2") {
   const base=baseTopic(d); if(!topic.startsWith(base+"/")) return false;
-  const leaf=topic.slice(base.length+1), data=json(String(message));
+  const leaf=topic.slice(base.length+1);let data=null;
+  try{if(leaf!=='availability')data=decodeWire(message,commandFormat(d));}catch{}
   if(leaf === "availability") {state.available=String(message)==="online"; if(!state.available)state.sensorFresh=false;}
   else if(leaf === "state" && data) mergeStatus(state,data,now);
   else if(leaf === "sensor" && data) {merge(state,data);if(d.model==="tc1"){state.power_watts=Number(data.power);state.energy_kwh=Number(data.powerConsumption);}}
-  else if(leaf === "capabilities" && data) state.capabilities=data;
-  else if(leaf === "result" && data) {state.result=data; const payload=data.data; if(data.code==="ok" && state.pending?.[data.request_id]==="status.get" && payload && typeof payload==="object" && !Array.isArray(payload)) mergeStatus(state,payload,now);}
+  else if(leaf === "capabilities" && data) {try{if(commandFormat(d)==='msgpack')verifyCapabilities(data,{device_id:d.mac,model:d.model,firmware_version:d.firmware_version,variant:d.variant||d.firmware_variant});state.capabilities=data;}catch{delete state.capabilities;}}
+  else if(leaf === "result" && data) {if(data.code==='ok'&&state.pending?.[data.request_id]==='capabilities.get'&&commandFormat(d)==='msgpack'){try{verifyCapabilities(data.data,{device_id:d.mac,model:d.model,firmware_version:d.firmware_version,variant:d.variant||d.firmware_variant});}catch{data={...data,code:'identity_mismatch',data:{}};}}state.result=data; const payload=data.data; if(data.code==="ok" && state.pending?.[data.request_id]==="status.get" && payload && typeof payload==="object" && !Array.isArray(payload)) mergeStatus(state,payload,now);}
   return true;
  }
 
@@ -154,7 +157,7 @@ export function applyMessage(d, state, topic, message, now = Date.now()) {
 export function command(d, cmd) {
  if(d.version === "v2") {
   if(!cmd.action || !/^[a-z_.]+$/.test(cmd.action)) throw new Error(t('p.6a9c930be875'));
-  return {topic:baseTopic(d)+"/command",payload:JSON.stringify({request_id:cmd.request_id || requestId(),action:cmd.action,params:cmd.params || {}})};
+  return {topic:baseTopic(d)+"/command",payload:encodeWire({request_id:cmd.request_id || requestId(),action:cmd.action,params:cmd.params || {}},commandFormat(d))};
  }
 
  if(d.legacyText){
@@ -167,4 +170,24 @@ export function command(d, cmd) {
   return {topic:`device/ztc1/${mac}/set`,payload:text};
  }
  return {topic:`device/ztc1/${d.mac}/set`,payload:JSON.stringify({...cmd,mac:d.mac})};
+}
+
+// Wire selection comes from a verified discovery/account record, never from an
+// unbound capability response or a failed command. Unknown new records wait for
+// discovery rather than trying a write in two formats.
+export function commandFormat(d){
+ if(!Object.hasOwn(d,'wire_format'))return 'json';
+ if(d.wire_format==='json')return 'json';
+ if(d.wire_format==='msgpack'&&d.wire_version===1&&typeof d.firmware_version==='string'&&d.firmware_version&&typeof(d.variant||d.firmware_variant)==='string'&&(d.variant||d.firmware_variant))return 'msgpack';
+ throw Object.assign(Error('Device discovery required'),{code:'discovery_required'});
+}
+export function discoveryMessage(message,device_id){
+ let data;try{data=decodeWire(message);}catch{return null;}
+ if(data.protocol!=='tmcp'||data.protocol_version!==2||data.version!=='v2'||!['a1','m1','tc1','daikin'].includes(data.model))return null;
+ if(data.schema===2){
+  if(data.device_id!==device_id||data.wire_version!==1||data.default_wire_format!=='msgpack'||!Array.isArray(data.wire_formats)||!data.wire_formats.includes('msgpack')||!data.firmware_version||!(data.variant||data.firmware_variant)||detectWire(message)!=='msgpack')return null;
+  return {...data,wire_format:'msgpack',variant:data.variant||data.firmware_variant};
+ }
+ if(data.schema===1&&detectWire(message)==='json')return {...data,device_id,wire_format:'json'};
+ return null;
 }

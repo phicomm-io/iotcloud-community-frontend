@@ -11,6 +11,7 @@ let fixture,calls=[],nullRead=false;
 const cases=[];
 const server=http.createServer(async(req,res)=>{
  // Existing business scenarios exercise firmware without token endpoints.
+ if(req.url==='/api/v1/info'){res.writeHead(200,{'Content-Type':'application/json'}).end(JSON.stringify({code:'ok',data:{api_version:1,device_id:'aabbccddeeff',model:'m1',version:'legacy'}}));return;}
  if(req.url==='/api/v1/auth/login'){res.writeHead(404,{'Content-Type':'application/json'}).end(JSON.stringify({code:'not_found'}));return;}
  try{
   if(req.method==='GET'){

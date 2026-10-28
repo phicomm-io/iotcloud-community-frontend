@@ -16,7 +16,7 @@ vm.runInNewContext(await readFile(resolve(source,'M1/web/display-format.js'),'ut
 vm.runInNewContext(await readFile(resolve(source,'common/web/demo.js'),'utf8'),sandbox);
 const target='http://192.168.1.18',origin='http://127.0.0.1:25181',mac='aabbccdd0110';
 const types={'.html':'text/html','.js':'text/javascript','.css':'text/css','.json':'application/json','.svg':'image/svg+xml','.png':'image/png','.webmanifest':'application/manifest+json'};
-const cors={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'Content-Type','Access-Control-Allow-Methods':'GET,POST,OPTIONS'};
+const cors={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'Content-Type, Authorization','Access-Control-Allow-Methods':'GET,POST,OPTIONS'};
 const results=[];
 await mkdir(evidence,{recursive:true});
 
@@ -48,6 +48,7 @@ async function fixture(browser,kind,language,width,profileSupported=true){
   if(url.origin===target){
    const reply=data=>route.fulfill({headers:cors,json:{code:'ok',data}});
    if(request.method()==='OPTIONS')return route.fulfill({status:204,headers:cors,body:''});
+   if(url.pathname==='/api/v1/auth/login')return route.fulfill({status:404,headers:cors,json:{code:'not_found'}});
    if(url.pathname==='/api/v1/info')return reply({device_id:mac,model:'m1',api_version:1});
    if(url.pathname==='/api/v1/status')return reply(device.state);
    assert.equal(url.pathname,'/api/v1/command');

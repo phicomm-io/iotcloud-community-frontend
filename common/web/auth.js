@@ -16,7 +16,8 @@
    if(box.showModal)box.showModal();else box.setAttribute('open','');input.focus();
   });return prompt;
  }
- const auth=DeviceAuth.createDeviceAuth({fetcher:window.fetch.bind(window),onRequired:()=>{signIn();}});
+ const fetcher=window.fetch.bind(window),wire=DeviceAuth.createDeviceWire({fetcher});
+ const auth=DeviceAuth.createDeviceAuth({fetcher,wire,onRequired:()=>{signIn();}});
  async function ready(){try{await auth.ensure();}catch(error){if(error.status!==401)throw error;await signIn();}}
  window.DeviceSession={...auth,ready,login:auth.login,async fetch(path,options){await ready();return auth.fetch(path,options);},async logout(){await auth.logout();},headers:auth.headers};
  window.addEventListener('pagehide',()=>auth.release());

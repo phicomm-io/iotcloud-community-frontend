@@ -1,4 +1,5 @@
-const deviceFetch=(...args)=>globalThis.DeviceSession?DeviceSession.fetch(...args):fetch(...args);
+const checkDeviceWrite=()=>{if(globalThis.DeviceSession?.wire?.identity)globalThis.UI?.invalidateIdentity?.(DeviceSession.wire.identity);if(globalThis.UI?.identityChanged)throw Object.assign(Error(I18N.lang==='en'?'Device firmware changed. Refresh this page before saving.':'设备固件已变更，请刷新页面后再保存。'),{code:'identity_changed'});};
+const deviceFetch=(path,options={})=>{const write=options.method&&!['GET','HEAD'].includes(options.method.toUpperCase()),check=()=>{if(write)checkDeviceWrite();};check();return globalThis.DeviceSession?DeviceSession.fetch(path,{...options,beforeSend:check}):fetch(path,options);};
 // Share only overlapping reads, never completed values or mutations. Each
 // subscriber owns cancellation; an unrelated subscriber keeps the wire alive.
 const deviceReads=new Map();let deviceReadEpoch=0;
@@ -25,21 +26,25 @@ function command(action,params={},options={}){
  });
 }
 async function deviceCommand(action,params={},options={}){
+ const identity=globalThis.UI?.identityGeneration||0;
  const request={action,params};
  if(!action.endsWith('.get'))request.request_id=globalThis.crypto?.randomUUID?crypto.randomUUID():Date.now().toString(36)+'-'+Math.random().toString(36).slice(2);
  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),20000);
  const abort=()=>controller.abort();options.signal?.addEventListener('abort',abort,{once:true});
  try{
  if(options.signal?.aborted)throw readAbort();
- const response=await deviceFetch('/api/v1/command',{method:'POST',signal:controller.signal,headers:{'Content-Type':'application/json'},body:JSON.stringify(request),cache:'no-store'});
- let reply;try{reply=await response.json();}catch(error){if(response.status!==503)throw error;reply={code:'busy'};}
+ const response=await deviceFetch('/api/v1/command',{method:'POST',signal:controller.signal,...(globalThis.DeviceSession?{value:request}:{headers:{'Content-Type':'application/json'},body:JSON.stringify(request)}),cache:'no-store'});
+ if(identity!==(globalThis.UI?.identityGeneration||0))throw Object.assign(Error('Device identity changed'),{code:'identity_changed'});
+ let reply;try{reply=await (globalThis.DeviceAuth?DeviceAuth.decodeResponse(response):response.json());}catch(error){if(response.status!==503)throw error;reply={code:'busy'};}
+ if(identity!==(globalThis.UI?.identityGeneration||0))throw Object.assign(Error('Device identity changed'),{code:'identity_changed'});
  if(!response.ok||!['ok','accepted'].includes(reply.code)){const key='error.'+reply.code;const error=Error(globalThis.I18N?.has(key)?I18N.t(key):reply.message||reply.code||('HTTP '+response.status));error.code=reply.code;throw error;}
+ if(action==='capabilities.get'&&globalThis.DeviceSession?.wire.format==='msgpack')DeviceAuth.verifyCapabilities(reply.data,DeviceSession.wire.identity);
  if(!action.endsWith('.get')){deviceReadEpoch++;globalThis.UI?.invalidateStatus?.();}
  return reply.data||{};
  }finally{clearTimeout(timer);options.signal?.removeEventListener('abort',abort);}
 }
 async function api(path,data,options={}){
- if(path==='/auth/password'&&globalThis.DeviceSession){const reply=await DeviceSession.changePassword(data.password);deviceReadEpoch++;globalThis.UI?.invalidateStatus?.();return reply.data||{};}
+ if(path==='/auth/password'&&globalThis.DeviceSession){checkDeviceWrite();const reply=await DeviceSession.changePassword(data.password,{beforeSend:checkDeviceWrite});deviceReadEpoch++;globalThis.UI?.invalidateStatus?.();return reply.data||{};}
  if(path==='/status')return command('status.get',{},options);
  if(path==='/sensors/average')return command('sensors.average.get',{},options);
  if(path==='/power')return command('power.get',{},options);

@@ -40,7 +40,7 @@ test('logout and password change revoke local token without persisting it',async
 });
 test('page reload has no inherited token and stale in-flight login cannot restore one',async()=>{
  let release;const first=createDeviceAuth({fetcher:url=>url.endsWith('/logout')?Promise.resolve(reply({code:'ok'})):new Promise(resolve=>release=resolve)});
- const pending=first.login('');first.reset();release(logged());await assert.rejects(pending,{code:'cancelled'});assert.equal(first.authenticated,false);
+ const pending=first.login('');await new Promise(setImmediate);first.reset();release(logged());await assert.rejects(pending,{code:'cancelled'});assert.equal(first.authenticated,false);
  const second=createDeviceAuth({fetcher:async()=>logged(other)});assert.equal(second.authenticated,false);await second.login('');assert.deepEqual(second.headers(),{Authorization:'Bearer '+other});
 });
 test('only explicit not-found login permits legacy Basic; malformed success never does',async()=>{
@@ -140,4 +140,20 @@ test('late unauthenticated legacy 401 cannot clear a replacement Basic identity'
  await auth.login('adminfjr');assert.equal(auth.headers().Authorization,authorization);
  finishOld();assert.equal((await old).status,401);assert.equal(auth.headers().Authorization,authorization);assert.equal(auth.authenticated,true);assert.equal(auth.needsLogin,false);assert.equal(required,0);
  assert.equal((await auth.fetch('/api/v1/command',{method:'POST',body:'{}'})).status,200);
+});
+test('release between ensure completion and request continuation cancels business work',async()=>{
+ const calls=[];const auth=createDeviceAuth({fetcher:async(url,options)=>{calls.push(url);return url.endsWith('/login')?logged():reply({code:'ok'});}});
+ await auth.login('adminfjr');
+ const ready=auth.ensure();ready.then(()=>auth.release());
+ await assert.rejects(auth.fetch('/api/v1/command',{method:'POST',value:{action:'fan.set'}}),{code:'cancelled'});
+ assert.equal(calls.filter(url=>url.endsWith('/login')).length,1);assert.equal(calls.filter(url=>url.endsWith('/command')).length,0);assert.equal(auth.authenticated,false);
+ await auth.login('adminfjr');assert.equal(auth.authenticated,true,'an explicit new login remains allowed');
+});
+test('release of a pending ensure retires a late token and never sends the waiting mutation',async()=>{
+ let finish;const calls=[];const auth=createDeviceAuth({fetcher:async(url,options)=>{
+  calls.push(url);if(url.endsWith('/login'))return new Promise(resolve=>{finish=()=>resolve(logged());});return reply({code:'ok'});
+ }});
+ const mutation=auth.fetch('/api/v1/command',{method:'POST',value:{action:'fan.set'}});await new Promise(setImmediate);
+ await auth.release();finish();await assert.rejects(mutation,{code:'cancelled'});await new Promise(setImmediate);
+ assert.equal(calls.filter(url=>url.endsWith('/login')).length,1);assert.equal(calls.filter(url=>url.endsWith('/command')).length,0);assert.equal(auth.authenticated,false);assert(calls.some(url=>url.endsWith('/logout')));
 });

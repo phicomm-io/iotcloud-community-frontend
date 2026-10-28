@@ -8,7 +8,7 @@ import {account,api,restoreAccount} from './account';
 import {server,scopeKey} from './serverConfig';
 import {track} from './analytics';
 import {autoConnect,setAutoConnect,rememberLogin,savedPassword,forgetLogin} from './connectionPreferences';
-import {userKey,requestId,deviceKey,deviceEntry,localDevices,topics,applyMessage,statusSnapshot,command} from './deviceProtocol';
+import {userKey,requestId,deviceKey,deviceEntry,localDevices,topics,applyMessage,statusSnapshot,command,discoveryMessage} from './deviceProtocol';
 import {createDeviceTransport,loadPreference,savePreference,localAddress} from './deviceConnection';
 import {deviceType} from './devicePresentation';
 import {saveDeviceName} from './deviceName';
@@ -18,7 +18,7 @@ import DevicePicker from './components/DevicePicker.vue';
 import AppIcon from './components/AppIcon.vue';
 import DeviceHome from './components/DeviceHome.vue';
 import {co2SourceCandidates} from './sensorSources.js';
-import {applyTypedSensorFeed,displaySourceCandidates,typedSensorTopic} from './sensorFeed.js';
+import {applyTypedSensorFeed,displaySourceCandidates,typedSensorTopic,sensorMetadataTopic} from './sensorFeed.js';
 import PlatformSettings from './components/PlatformSettings.vue';
 import ThemeToggle from './components/ThemeToggle.vue';
 import LocalConnect from './components/LocalConnect.vue';
@@ -86,7 +86,7 @@ async function deviceCommand(request,reply,target=active.value,options={}){
  if(scope!==preferenceScope)return reply({code:'offline',message:t('p.f807ec3022b9')});
  if(['ok','accepted'].includes(result.code)&&data.action==='config.set'&&data.params?.section==='auth'){
   const password=data.params.values?.password;
-  if(typeof password==='string'){webPasswords.set(key,password);transport.configure(key,captured,devicePreferences[key],password);transport.probe(key);}
+  if(typeof password==='string'){webPasswords.set(key,password);transport.configure(key,captured,devicePreferences[key],password,true);transport.probe(key);}
  }
  reply(result);
 }
@@ -124,10 +124,10 @@ async function mqttCommand(request,reply,target=active.value,{timeoutMs=20000}={
  const signature=JSON.stringify([deviceKey(target),request.action,request.params||{}]);
  if(request.action.endsWith('.get')){const existing=[...replies.values()].find(p=>p.signature===signature);if(existing){const previous=existing.reply;existing.reply=value=>{previous(value);reply(value);};return;}}
  const id=request.request_id||requestId(),d={...target};
+ let c;try{c=command(d,{...request,request_id:id});}catch(error){reply({code:error.code||'discovery_required',message:error.message});return;}
  const state=states[deviceKey(d)]||={};(state.pending||={})[id]=request.action;
  const timeout=setTimeout(()=>{const pending=replies.get(id);replies.delete(id);delete state.pending[id];pending?.reply({code:'timeout',message:t('p.f9ce625a07fc')});},timeoutMs);
  replies.set(id,{reply,timeout,key:deviceKey(d),signature});
- const c=command(d,{...request,request_id:id});
  client.publish(c.topic,c.payload,{qos:1,retain:false},e=>{if(e){clearTimeout(timeout);const pending=replies.get(id);replies.delete(id);delete state.pending[id];pending?.reply({code:'error',message:t('p.ac77953a1e06')});}});
 }
 const guestKey=()=>localMode?localListKey:'iotcloud.devices.'+encodeURIComponent(connection.host)+'/'+encodeURIComponent(connection.username);
@@ -137,13 +137,37 @@ const connectionOwner=()=>thirdParty.value?'guest:'+connection.host+':'+connecti
 function manualDisconnect(){setAutoConnect(connectionOwner(),false);disconnect();}
 function manualConnect(){setAutoConnect(connectionOwner(),true);connect();}
 function disconnect(){busy.value=false;for(const {reply,timeout} of replies.values()){clearTimeout(timeout);reply({code:'offline',message:t('p.d830845257a1')});}replies.clear();for(const key of Object.keys(sensorFeeds))delete sensorFeeds[key];client?.end(true);client=null;connected.value=false;}
-function subscribe(){if(demoMode)return;if(thirdParty.value)client?.subscribe(`phicomm/v2/${connection.username?userKey(connection.username):'local'}/discovery/+`,{qos:1});if(list.value.some(d=>d.model==='m1'&&d.version==='v2'))client?.subscribe(typedSensorTopic(connection.username),{qos:0});for(const d of list.value.filter(d=>!d.status||d.status==='active'))client?.subscribe(topics(d),{qos:1},(e,g)=>{if(e||g?.some(x=>x.qos===128))error.value=t('p.d5aa311ed18a');});}
+function subscribe(){
+ if(demoMode)return;
+ const owners=new Set([connection.username,...list.value.map(d=>d.mqtt_username||d.username||connection.username)]);
+ for(const owner of owners){client?.subscribe(`phicomm/v2/${owner?userKey(owner):'local'}/discovery/+`,{qos:1});if(list.value.some(d=>d.model==='m1'&&d.version==='v2')){client?.subscribe(typedSensorTopic(owner),{qos:0});client?.subscribe(sensorMetadataTopic(owner),{qos:1});}}
+ for(const d of list.value.filter(d=>!d.status||d.status==='active'))client?.subscribe(topics(d),{qos:1},(e,g)=>{if(e||g?.some(x=>x.qos===128))error.value=t('p.d5aa311ed18a');});
+}
+function receiveDeviceMessage(topic,payload,packet){
+ const owners=new Set([connection.username,...list.value.map(d=>d.mqtt_username||d.username||connection.username)]);
+ for(const owner of owners)if(applyTypedSensorFeed(sensorFeeds,topic,payload,{username:owner,retained:packet?.retain===true,deviceIds:list.value.filter(d=>d.version==='v2'&&(d.mqtt_username||d.username||connection.username)===owner).map(d=>d.mac)}))return;
+ for(const owner of owners){
+  const prefix=`phicomm/v2/${owner?userKey(owner):'local'}/discovery/`;
+  if(!topic.startsWith(prefix))continue;
+  const mac=topic.slice(prefix.length);if(!/^[0-9a-f]{12}$/.test(mac))return;
+  const announcement=discoveryMessage(payload,mac);if(!announcement)return;
+  let d=list.value.find(d=>d.mac===mac&&(d.mqtt_username||d.username||connection.username)===owner);
+  if(!d){if(!thirdParty.value||owner!==connection.username)return;d=deviceEntry({mac,model:announcement.model,version:'v2',username:owner});list.value.push(d);if(!selected.value)selected.value=deviceKey(d);subscribe();}
+  if(d.model!==announcement.model)return;
+  const changed=d.firmware_version!==announcement.firmware_version||d.variant!==announcement.variant||d.wire_format!==announcement.wire_format;
+  Object.assign(d,{wire_format:announcement.wire_format,wire_version:announcement.wire_version,firmware_version:announcement.firmware_version,variant:announcement.variant});
+  if(changed){const state=states[deviceKey(d)];if(state)delete state.capabilities;delete sensorFeeds[owner+':'+mac];if(sensorFeeds[mac]?.username===owner)delete sensorFeeds[mac];for(const [id,pending] of replies)if(pending.key===deviceKey(d)){clearTimeout(pending.timeout);replies.delete(id);pending.reply({code:'identity_changed',message:'Device firmware changed; refresh the page'});}}
+  updateConnections();if(thirdParty.value)localStorage.setItem(guestKey(),JSON.stringify(list.value));sendTo(d,'status.get');return;
+ }
+ for(const d of list.value){const state=states[deviceKey(d)] ||= {};if(!applyMessage(d,state,topic,payload))continue;if(state.ip)updateConnections();if(topic.endsWith('/result')){const pending=replies.get(state.result?.request_id);if(pending&&pending.key===deviceKey(d)){clearTimeout(pending.timeout);replies.delete(state.result.request_id);pending.reply(state.result);}delete state.pending?.[state.result?.request_id];}break;}
+}
+
 async function refresh(){try{list.value=(localMode?savedLocalDevices():thirdParty.value?localDevices(guestStorage).map(d=>({...d,username:connection.username})):await api('/devices')).map(deviceEntry);if(!list.value.some(d=>deviceKey(d)===selected.value))selected.value=list.value[0]?deviceKey(list.value[0]):'';if(connected.value)subscribe();listReady.value=true;updateConnections();}catch(e){error.value=e.message;}}
 function connect(){if(demoMode){connected.value=true;busy.value=false;for(const d of list.value)Object.assign(states[deviceKey(d)]||={},demoDevices[d.model].state);return;}if(!thirdParty.value&&connection.password)rememberLogin(account.username,connection.password);disconnect();error.value='';if(location.protocol==='https:'&&!connection.host.startsWith('wss://')){error.value=t('p.22211d965247');return;}if(!/^wss?:\/\//.test(connection.host)){error.value=t('p.5da207244bf4');return;}busy.value=true;
  client=mqtt.connect(connection.host,{username:connection.username,password:connection.password,clientId:'web_'+requestId(),connectTimeout:5000,reconnectPeriod:3000,clean:true});
  client.on('connect',()=>{connected.value=true;busy.value=false;subscribe();track('mqtt_connect',thirdParty.value?'/guest':'/');});
  client.on('close',()=>{connected.value=false;busy.value=false;});client.on('error',()=>{error.value=t('p.cc9962611a5b');busy.value=false;});
- client.on('message',(topic,payload,packet)=>{if(applyTypedSensorFeed(sensorFeeds,topic,payload.toString(),{username:connection.username,retained:packet?.retain===true,deviceIds:list.value.filter(d=>d.version==='v2').map(d=>d.mac)}))return;if(thirdParty.value && topic.startsWith(`phicomm/v2/${connection.username?userKey(connection.username):'local'}/discovery/`)){try{const a=JSON.parse(payload.toString());if(a.protocol!=='tmcp'||a.protocol_version!==2||a.version!=='v2')return;const d=deviceEntry({mac:topic.split('/')[4],model:a.model,version:'v2',username:connection.username});if(!list.value.some(x=>deviceKey(x)===deviceKey(d))){list.value.push(d);updateConnections();localStorage.setItem(guestKey(),JSON.stringify(list.value));if(!selected.value)selected.value=deviceKey(d);subscribe();sendTo(d,'status.get');}}catch{}return;}for(const d of list.value){const s=states[deviceKey(d)] ||= {};if(applyMessage(d,s,topic,payload.toString())){if(s.ip)updateConnections();if(topic.endsWith('/result')){const pending=replies.get(s.result?.request_id);if(pending&&pending.key===deviceKey(d)){clearTimeout(pending.timeout);replies.delete(s.result.request_id);pending.reply(s.result);}delete s.pending?.[s.result?.request_id];}break;}}});
+ client.on('message',receiveDeviceMessage);
  if(thirdParty.value)localStorage.setItem('tmcp_broker',JSON.stringify({host:connection.host,username:connection.username}));
 }
 function legacyRequest({action,params={}},reply,d){
@@ -180,7 +204,7 @@ async function localConnected(d){await refresh();selected.value=deviceKey(d);upd
 async function changeMode(){if(localMode){connection.host='';await refresh();return;}transport.retain([]);for(const k of Object.keys(lanStates))delete lanStates[k];for(const k of Object.keys(states))delete states[k];Object.assign(deviceBroker,{host:'',port:'',hub:false});disconnect();notice.value='';error.value='';if(thirdParty.value){Object.assign(connection,{host:`${location.protocol==='https:'?'wss':'ws'}://${location.host}/mqtt`,username:'',password:''},JSON.parse(localStorage.getItem('tmcp_broker')||'{}'));}else{const s=await api('/register/status');try{const u=new URL(s.mqtt_uri.includes('://')?s.mqtt_uri:'mqtt://'+s.mqtt_uri);if(u.protocol==='mqtt:'&&u.hostname&&!u.username&&!u.password)Object.assign(deviceBroker,{host:u.hostname,port:Number(u.port||1883),hub:s.hub===true&&u.hostname===location.hostname&&Number(u.port||1883)===1883});}catch{}Object.assign(connection,{host:server.mqttWS||s.mqtt_ws_uri||`${location.protocol==='https:'?'wss':'ws'}://${location.host}/mqtt`,username:account.mqttUsername||account.username,password:account.password||savedPassword(account.username)});}await refresh();if(demoMode||(autoConnect(connectionOwner())&&connection.password))connect();}
 async function add(){try{const d=deviceEntry({...addForm,version:addForm.model==='tc1'?addForm.version:'v2',...(thirdParty.value?{username:connection.username}:{})});if(thirdParty.value){if(list.value.some(x=>x.mac===d.mac))throw Error(t('p.bf5557c8f16a'));localStorage.setItem(guestKey(),JSON.stringify([...list.value,d]));}else await api('/devices',{method:'POST',body:JSON.stringify(d)});await refresh();addForm.mac='';}catch(e){error.value=e.message;}}
 async function remove(d){if(!confirm(t('p.4c8411974d35',{v0:(d.mac)})))return;try{client?.unsubscribe(topics(d));if(thirdParty.value)localStorage.setItem(guestKey(),JSON.stringify(list.value.filter(x=>deviceKey(x)!==deviceKey(d))));else await api(`/devices/${d.namespace?'scoped/':''}${d.mac}${d.namespace?'?mqtt_username='+encodeURIComponent(d.mqtt_username||d.username):''}`,{method:'DELETE'});await refresh();}catch(e){error.value=e.message;}}
-async function logout(){try{await api('/auth/logout',{method:'POST',body:'{}'});}catch(e){error.value=e.message;}account.username=null;account.mqttUsername=null;account.isAdmin=false;account.aliases=[];account.githubLogin='';account.password='';forgetLogin();disconnect();await router.replace('/login');}
+async function logout(){transport.retain([]);webPasswords.clear();try{await api('/auth/logout',{method:'POST',body:'{}'});}catch(e){error.value=e.message;}account.username=null;account.mqttUsername=null;account.isAdmin=false;account.aliases=[];account.githubLogin='';account.password='';forgetLogin();disconnect();await router.replace('/login');}
 async function changeMQTTPassword(values){try{await api('/auth/mqtt-password',{method:'POST',body:JSON.stringify({current_password:values.current,password:values.password})});account.password=values.password;rememberLogin(account.username,values.password);if(!thirdParty.value){connection.password=values.password;connect();}notice.value=t('p.14c896de34db');}catch(e){error.value=e.message;}}
 async function changePassword(values){try{await api('/auth/password',{method:'POST',body:JSON.stringify({current_password:values.current,password:values.password})});await logout();}catch(e){error.value=e.message;}}
 onMounted(async()=>{if(!localMode&&route.name!=='Guest')await restoreAccount();try{aliases.value=JSON.parse(localStorage.getItem('phicomm.names.'+scopeKey()+':'+(account.username||'guest'))||'{}');}catch{}await changeMode();if(route.query.github==='linked')notice.value=t('p.034b28c46590');else if(route.query.github==='login'&&!connection.password)notice.value=t('p.dfcf6ba14455');timer=setInterval(()=>now.value=Date.now(),1000);lanPoll=setInterval(()=>{if(!document.hidden)updateConnections();},30000);document.addEventListener('visibilitychange',visibilityProbe);poll=setInterval(()=>{if(!thirdParty.value&&!document.hidden)refresh();},5000);});

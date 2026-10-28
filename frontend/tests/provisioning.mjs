@@ -16,6 +16,7 @@ const state={...original,name:'Isolated device',device_id:'020000000001',version
 const device=createServer(async(req,res)=>{
  requests.push({url:req.url,referer:req.headers.referer||'',method:req.method});
  // The provisioning fixture models a pre-token firmware device.
+ if(req.url==='/api/v1/info'){res.writeHead(200,{'Content-Type':'application/json'}).end(JSON.stringify({code:'ok',data:{api_version:1,device_id:'aabbccddeeff',model:'tc1',version:'legacy'}}));return;}
  if(req.url==='/api/v1/auth/login'){res.writeHead(404,{'Content-Type':'application/json'}).end(JSON.stringify({code:'not_found'}));return;}
  if(req.method==='GET'){res.setHeader('Content-Type','text/html; charset=utf-8');res.end(pages[model]);return;}
  let body='';for await(const chunk of req)body+=chunk;

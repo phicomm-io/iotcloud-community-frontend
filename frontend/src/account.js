@@ -1,6 +1,8 @@
 
 import {language,errorMessage} from './i18n.js';
 import {apiURL, sessionToken} from './serverConfig';
+import {hubMode} from './deployment.js';
+import {createHubAccountTransport} from './hubAccountTransport.js';
 import { reactive } from "vue";
 import {forgetLogin} from "./connectionPreferences";
 export const account = reactive({
@@ -12,8 +14,9 @@ export const account = reactive({
   password: "",
   loaded: false,
 });
+const hubTransport=hubMode?createHubAccountTransport():null;
 export async function api(path, options = {}) {
-  const response = await fetch(apiURL(path), {
+  const response = await (hubTransport?hubTransport.request:fetch)(apiURL(path), {
     credentials: "include",
     ...options,
     headers: { "Content-Type": "application/json", "Accept-Language":language.value, ...(sessionToken()?{Authorization: `Bearer ${sessionToken()}`} : {}), ...options.headers },
@@ -21,7 +24,7 @@ export async function api(path, options = {}) {
   const token=response.headers.get('X-IotCloud-Session');
   if(token)sessionToken(token);
   if(path==='/auth/logout' || response.status===401)sessionToken('');
-  const data = await response.json().catch(() => ({}));
+  const data = await (hubTransport?hubTransport.decodeResponse(response):response.json()).catch(() => ({}));
   if (!response.ok) {
     if (response.status === 401 && !path.startsWith("/admin")) {
       account.username = null;
