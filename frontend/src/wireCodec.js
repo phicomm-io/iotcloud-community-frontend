@@ -1,7 +1,7 @@
 // Bounded JSON-compatible MessagePack. No DOM or network dependencies;
 // the same source is bundled into device pages and the cloud application.
 const encoder=new TextEncoder(),decoder=new TextDecoder('utf-8',{fatal:true});
-const forbidden=new Set(['__proto__','constructor','prototype']);
+const forbidden=new Set(['__proto__']);
 export const wireMime=format=>format==='msgpack'?'application/msgpack':'application/json';
 function asBytes(v){return v instanceof Uint8Array?v:v instanceof ArrayBuffer?new Uint8Array(v):ArrayBuffer.isView(v)?new Uint8Array(v.buffer,v.byteOffset,v.byteLength):null;}
 export function detectWire(value){
