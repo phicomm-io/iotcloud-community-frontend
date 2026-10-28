@@ -1,6 +1,6 @@
 (()=>{
 'use strict';
-const {$,h,run}=UI,{t}=I18N;
+const {$,h,fieldRow,run}=UI,{t}=I18N;
 const metrics=[['pm25','µg/m³'],['pm10','µg/m³'],['co2','ppm'],['temperature','°C'],['humidity','%'],['tvoc','ppb'],['formaldehyde','mg/m³']];
 const optional=key=>key==='formaldehyde'||key==='pm10';
 const tiles=Object.fromEntries(metrics.map(([key,unit])=>{const el=SensorUI.tile(key,unit);$('metrics').append(el.card);el.card.hidden=optional(key);return [key,el];}));
@@ -79,11 +79,11 @@ function indicatorSettings(){
   const list=h('div',{class:'indicator-rule-list'}),empty=h('p',{class:'help',i18n:'daikin.no_rules'});
   const add=h('button',{type:'button',class:'btn',i18n:'daikin.add_rule',onclick:()=>{append({threshold:0,op:'gte',mode:'on'});dirty=true;}});
   const group=h('section',{class:'indicator-rule-group','data-rule-metric':key},h('h3',{},h('span',{i18n:'m.'+(key==='pm'?pmSource.value:key)}),' · '+unit),
-   key==='pm'?h('label',{class:'field'},h('span',{i18n:'daikin.pm_source'}),pmSource):null,list,empty,add);
+   key==='pm'?fieldRow('daikin.pm_source',pmSource):null,list,empty,add);
   function update(){add.disabled=!supported||saving||list.children.length>=2;empty.hidden=list.children.length>0;}
   function append(rule){
    if(list.children.length>=2)return;
-   const label=(text,input)=>h('label',{class:'field'},h('span',{i18n:text}),input);
+   const label=fieldRow;
    const op=h('select',{'data-rule-op':true},[['gt','>'],['gte','≥'],['lt','<'],['lte','≤']].map(([value,text])=>h('option',{value},text)));op.value=rule.op;
    const threshold=h('input',{type:'number',required:true,min:0,max,step:'any',value:rule.threshold,'data-rule-threshold':true});
    const mode=h('select',{'data-rule-mode':true},['on','off','fast','slow'].map(value=>h('option',{value,i18n:'daikin.mode.'+value})));mode.value=rule.mode;
@@ -134,7 +134,7 @@ function co2Settings(){
  const stable=h('input',{id:'co2ReferenceStable',type:'checkbox',required:true});
  const button=h('button',{id:'co2Calibrate',type:'submit',class:'btn',i18n:'daikin.co2_calibrate',disabled:true});
  const form=h('form',{class:'stack',id:'co2CalibrationForm'},
-  h('label',{class:'field'},h('span',{i18n:'daikin.co2_reference'}),reference),
+  fieldRow('daikin.co2_reference',reference),
   h('label',{class:'switch'},h('span',{i18n:'daikin.co2_stable'}),stable),h('div',{class:'form-actions'},button));
  box.append(h('h2',{i18n:'daikin.co2_title'}),diagnostic,h('p',{class:'help',i18n:'daikin.co2_hint'}),form,result);
  let available=false,busy=false;
@@ -178,8 +178,8 @@ function climateSettings(){
  const restore=h('button',{id:'climateDefaults',type:'button',class:'btn',i18n:'daikin.climate_defaults'});
  const message=h('p',{class:'help',id:'climateResult','aria-live':'polite'});
  const form=h('form',{id:'climateForm',class:'stack'},
-  h('label',{class:'field'},h('span',{i18n:'daikin.climate_temperature'}),temp),
-  h('label',{class:'field'},h('span',{i18n:'daikin.climate_humidity'}),humidity),
+  fieldRow('daikin.climate_temperature',temp),
+  fieldRow('daikin.climate_humidity',humidity),
   h('div',{class:'form-actions'},save,restore));
  box.append(h('h2',{i18n:'daikin.climate_title'}),h('p',{class:'help',i18n:'daikin.climate_hint'}),form,message);
  temp.oninput=humidity.oninput=()=>{dirty=true;};

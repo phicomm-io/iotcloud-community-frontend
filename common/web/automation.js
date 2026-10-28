@@ -4,7 +4,7 @@
 (()=>{
 'use strict';
 const {t}=I18N;
-const {h,icon,toast,run,switchRow,seg,daysPicker,presetDays,daysText,hhmm,toMinutes,info,card,pageHead,slider,clone}=UI;
+const {h,fieldRow,icon,toast,run,switchRow,seg,daysPicker,presetDays,daysText,hhmm,toMinutes,info,card,pageHead,slider,clone}=UI;
 
 /* Action kinds a schedule or button event can run, keyed by action name. */
 const ACTIONS={
@@ -14,7 +14,7 @@ const ACTIONS={
  'light_effect.next':'op.effect_next','light_effect.select':'op.effect_select',
  'filter.reset':'op.filter_reset','light_always.set':'op.light_always'};
 const actKey=a=>ACTIONS[a]||'op.none';
-const sel=(parent,labelKey,options)=>{const s=h('select',{},options.map(([v,k])=>h('option',{value:v},typeof k==='function'?k():t(k))));parent.append(h('label',{class:'field'},h('span',{i18n:labelKey}),s));return s;};
+const sel=(parent,labelKey,options)=>{const s=h('select',{},options.map(([v,k])=>h('option',{value:v},typeof k==='function'?k():t(k))));parent.append(fieldRow(labelKey,s));return s;};
 
 /* Shared action editor: one control group per supported action. */
 function actionEditor(host,{keys=false}={}){
@@ -52,7 +52,7 @@ function actionEditor(host,{keys=false}={}){
   if(a==='filter.reset')fields.append(info('filter.reset_hint'));
   if(a==='wake_alarm.start'){
    const duration=h('input',{type:'number',min:1,max:180,step:1,value:params.duration_seconds??60,required:true,'data-wake-duration':''});
-   fields.append(h('label',{class:'field'},h('span',{i18n:'wake.duration'}),duration),info('wake.hint'));
+   fields.append(fieldRow('wake.duration',duration),info('wake.hint'));
    parts.push(()=>{const n=Number(duration.value);if(!Number.isInteger(n)||n<1||n>180)throw Error(t('wake.invalid'));return {duration_seconds:n};});
    const tone=h('select',{'data-wake-tone':''},...[0,1,2,3,4,5].map(id=>h('option',{value:id,i18n:'wake.tone.'+id})));
    tone.value=String(params.tone??0);
@@ -60,7 +60,7 @@ function actionEditor(host,{keys=false}={}){
     if(!UI.m1ToneSupported)throw Error(t('wake.tone_unavailable'));
     const id=Number(tone.value);if(id===5){if(!UI.m1MusicPresent)throw Error(t('wake.tone_unavailable'));return command('music.play');}return command('wake_alarm.start',id?{duration_seconds:1,tone:id}:{duration_seconds:3});
    },null)});
-   const toneField=h('div',{class:'stack','data-wake-tone-field':''},h('label',{class:'field'},h('span',{i18n:'wake.tone'}),tone),preview);
+   const toneField=h('div',{class:'stack','data-wake-tone-field':''},fieldRow('wake.tone',tone),preview);
    function updateTones(){toneField.hidden=UI.m1ToneSupported!==true;tone.querySelector('[value="5"]').hidden=UI.m1MusicPresent!==true;}
    updateTones();window.addEventListener('m1-tone-capability',updateTones);
    // Remove the listener when a different action replaces these fields.
@@ -113,10 +113,10 @@ function schedulePage(dev){
  const days=daysPicker('sdays',127),time=h('input',{type:'time',value:'08:00'}),at=h('input',{type:'datetime-local',value:timeValue()});
  const weekly=h('div',{class:'field'},h('div',{class:'row between'},h('span',{class:'label',i18n:'sch.repeat'}),presetDays(days)),days);
  const once=h('label',{class:'field',hidden:true},h('span',{i18n:'sch.when'}),at);
- const minute=h('label',{class:'field'},h('span',{i18n:'sch.time'}),time);
+ const minute=fieldRow('sch.time',time);
  const editorHost=h('div',{class:'stack'});
  const hours=h('input',{type:'number',min:0,max:24,step:1,value:0,'aria-label':t('sch.hours')}),minutes=h('input',{type:'number',min:0,max:59,step:1,value:30,'aria-label':t('sch.minutes')});
- const countdown=h('div',{class:'stack',hidden:true},h('div',{class:'fields'},h('label',{class:'field'},h('span',{i18n:'sch.hours'}),hours),h('label',{class:'field'},h('span',{i18n:'sch.minutes'}),minutes)),info('sch.countdown_hint'));
+ const countdown=h('div',{class:'stack',hidden:true},h('div',{class:'fields'},fieldRow('sch.hours',hours),fieldRow('sch.minutes',minutes)),info('sch.countdown_hint'));
  function syncTrigger(){const mode=trigger.value;weekly.hidden=mode!=='weekly';once.hidden=mode!=='once';minute.hidden=mode!=='weekly';countdown.hidden=mode!=='countdown';hours.disabled=minutes.disabled=mode!=='countdown';editorHost.hidden=mode==='countdown';}
 
  const editor=actionEditor(editorHost);
@@ -260,7 +260,7 @@ function buttonsPage(dev){
  function filterCards(){
   if(dev.model!=='A1'||!UI.caps.actions.includes('filter.get'))return [];
   filterStatus=h('p',{'data-filter-status':''});filterHours=h('input',{type:'number',min:1,max:20000,required:true,'data-filter-hours':''});
-  const form=h('form',{class:'stack'},filterStatus,info('filter.hint'),h('label',{class:'field'},h('span',{i18n:'filter.lifetime'}),filterHours),
+  const form=h('form',{class:'stack'},filterStatus,info('filter.hint'),fieldRow('filter.lifetime',filterHours),
    h('div',{class:'form-actions'},h('button',{type:'submit',class:'btn primary'},t('common.save')),
     h('button',{type:'button',class:'btn ghost',onclick:e=>run(e.currentTarget,async()=>{if(!window.confirm(t('filter.reset_confirm')))return;await command('filter.reset',{});await loadFilter();},null)},t('op.filter_reset'))));
   form.dataset.preserveDraft='1';form.addEventListener('submit',e=>{e.preventDefault();if(!form.reportValidity())return;run(null,UI.saveDraft(form,async()=>{await command('filter.set',{lifetime_hours:Number(filterHours.value)});await loadFilter();}),'common.saved');});
@@ -293,7 +293,7 @@ function nightPage(dev){
   const extra=isM1?[]:[fan,h('div',{class:'field'},h('div',{class:'row between'},h('span',{class:'label',i18n:'night.fan_max'}),fOut)),fRange,...(modern?automatic:[block])];
   const field=h('fieldset',{},h('legend',{},t('night.period',{n:i+1})),
    h('div',{class:'field'},h('div',{class:'row between'},h('span',{class:'label',i18n:'sch.repeat'}),presetDays(days)),days),
-   h('div',{class:'fields'},h('label',{class:'field'},h('span',{i18n:'night.start'}),start),h('label',{class:'field'},h('span',{i18n:'night.end'}),end)),
+   h('div',{class:'fields'},fieldRow('night.start',start),fieldRow('night.end',end)),
    dim,h('div',{class:'field'},h('div',{class:'row between'},h('span',{class:'label',i18n:'night.light_max'}),bOut)),bRange,...extra,
    h('div',{class:'form-actions'},h('button',{type:'button',class:'btn ghost',onclick:()=>{model.splice(i,1);draw();list.dispatchEvent(new Event('change',{bubbles:true}));}},icon('trash'),h('span',{i18n:'common.delete'}))));
   // One listener writes the whole window back, so no control can drift.
