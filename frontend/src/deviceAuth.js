@@ -10,7 +10,7 @@ export function createDeviceAuth({fetcher=globalThis.fetch,origin='',onRequired=
  const headers=()=>token?{Authorization:'Bearer '+token}:legacy?{Authorization:legacy}:{};
  const reset=({requireLogin=true}={})=>{generation++;loginAbort?.abort();loginAbort=null;token=legacy='';legacyReady=false;emptySession=false;blocked=requireLogin;pending=null;};
  function required(){if(!blocked){blocked=true;onRequired();}}
- function observe(status,authorization){if(authorization!==undefined&&authorization!==headers().Authorization)return;if(status===401){if(emptySession){reset({requireLogin:false});return login('').catch(()=>{});}token=legacy='';legacyReady=false;required();}}
+ function observe(status,authorization){if(authorization!==undefined&&authorization!==headers().Authorization)return;if(status===401){if(emptySession&&token){reset({requireLogin:false});return login('').catch(()=>{});}token=legacy='';legacyReady=false;required();}}
  async function login(password=''){
   if(pending)return pending;
   const previous=token;token=legacy='';legacyReady=false;emptySession=false;
@@ -48,6 +48,6 @@ export function createDeviceAuth({fetcher=globalThis.fetch,origin='',onRequired=
   const previous=token;reset({requireLogin:false});
   return previous?retire(previous):Promise.resolve();
  }
- async function changePassword(password){const response=await request('/api/v1/command',{method:'POST',headers:{'Content-Type':'application/json'},body:encodeWire({action:'config.set',request_id:globalThis.crypto?.randomUUID?crypto.randomUUID():Date.now().toString(36)+'-'+Math.random().toString(36).slice(2),params:{section:'auth',values:{password}}})});if(!response.ok)throw authError(response.status===401?'unauthorized':response.status===503?'busy':'HTTP '+response.status,response.status);const reply=await decodeResponse(response);if(!['ok','accepted'].includes(reply?.code))throw authError(reply?.code||'Invalid device response',response.status);reset({requireLogin:password!==''});if(password!=='')onRequired();return reply;}
+ async function changePassword(password){await ensure();const version=generation,authorization=headers().Authorization;const response=await request('/api/v1/command',{method:'POST',headers:{'Content-Type':'application/json'},body:encodeWire({action:'config.set',request_id:globalThis.crypto?.randomUUID?crypto.randomUUID():Date.now().toString(36)+'-'+Math.random().toString(36).slice(2),params:{section:'auth',values:{password}}})});if(!response.ok)throw authError(response.status===401?'unauthorized':response.status===503?'busy':'HTTP '+response.status,response.status);const reply=await decodeResponse(response);if(!['ok','accepted'].includes(reply?.code))throw authError(reply?.code||'Invalid device response',response.status);if(version!==generation||authorization!==headers().Authorization)return reply;reset({requireLogin:password!==''});if(password!=='')onRequired();return reply;}
  return {login,ensure,fetch:request,headers,observe,logout,release,changePassword,reset,setOnRequired(callback){onRequired=callback;},get authenticated(){return !!token||legacyReady;},get needsLogin(){return blocked;}};
 }

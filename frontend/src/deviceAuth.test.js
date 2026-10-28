@@ -75,3 +75,42 @@ test('full session pool blocks automatic repeated login attempts',async()=>{
  const auth=createDeviceAuth({fetcher:async()=>{attempts++;return reply({code:'unauthorized'},401);}});
  await assert.rejects(auth.ensure(),{status:401});await assert.rejects(auth.ensure(),{status:401});assert.equal(attempts,1);
 });
+
+test('legacy endpoint 404 followed by business 401 requests a password and accepts explicit Basic login',async()=>{
+ let required=0;const calls=[];
+ const authorization='Basic '+btoa('admin:adminfjr');
+ const auth=createDeviceAuth({onRequired:()=>required++,fetcher:async(url,options)=>{
+  calls.push({url,options});if(url.endsWith('/login'))return new Response('',{status:404});
+  return options.headers.Authorization===authorization?reply({code:'ok',data:{name:'legacy'}}):reply({code:'unauthorized'},401);
+ }});
+ assert.equal((await auth.fetch('/api/v1/command',{method:'POST',body:'{}'})).status,401);
+ assert.equal(required,1);assert.equal(auth.authenticated,false);assert.equal(auth.needsLogin,true);
+ assert.equal(calls.length,2,'legacy 401 must not silently repeat empty-password login');
+ await assert.rejects(auth.ensure(),{status:401});assert.equal(calls.length,2);
+ await auth.login('adminfjr');assert.equal(calls.length,3);assert.equal(auth.needsLogin,false);
+ const response=await auth.fetch('/api/v1/command',{method:'POST',body:'{}'});
+ assert.equal(response.status,200);assert.equal(calls.at(-1).options.headers.Authorization,authorization);assert.equal(required,1);
+});
+test('a real empty-password token 401 renews silently without replaying the original command',async()=>{
+ let required=0,logins=0,writes=0;
+ const auth=createDeviceAuth({onRequired:()=>required++,fetcher:async url=>{
+  if(url.endsWith('/login'))return logged(++logins===1?token:other);
+  writes++;return reply({code:'unauthorized'},401);
+ }});
+ assert.equal((await auth.fetch('/api/v1/command',{method:'POST',body:'{}'})).status,401);
+ assert.equal(logins,2);assert.equal(writes,1);assert.equal(required,0);assert.equal(auth.headers().Authorization,'Bearer '+other);
+});
+
+for(const retire of ['release','logout'])test(`late password-change reply after ${retire} cannot clear a new session`,async()=>{
+ let finishChange,required=0,logins=0;const retired=[];
+ const auth=createDeviceAuth({onRequired:()=>required++,fetcher:async(url,options)=>{
+  if(url.endsWith('/login'))return logged(++logins===1?token:other);
+  if(url.endsWith('/logout')){retired.push(options.headers.Authorization);return reply({code:'ok'});}
+  return new Promise(resolve=>finishChange=()=>resolve(reply({code:'ok',data:{saved:true}})));
+ }});
+ await auth.login('adminfjr');const change=auth.changePassword('adminfjr');await new Promise(setImmediate);
+ await auth[retire]();await auth.login('adminfjr');const previousRequired=required;
+ assert.deepEqual(retired,['Bearer '+token]);finishChange();assert.equal((await change).data.saved,true);
+ assert.equal(auth.headers().Authorization,'Bearer '+other);assert.equal(auth.authenticated,true);assert.equal(auth.needsLogin,false);assert.equal(required,previousRequired);
+ assert.deepEqual(retired,['Bearer '+token],'the late result must not revoke the replacement token');
+});
