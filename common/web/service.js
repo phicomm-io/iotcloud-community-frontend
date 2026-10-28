@@ -1,4 +1,4 @@
-const checkDeviceWrite=()=>{if(globalThis.DeviceSession?.wire.identity)globalThis.UI?.invalidateIdentity?.(DeviceSession.wire.identity);if(globalThis.UI?.identityChanged)throw Object.assign(Error(I18N.lang==='en'?'Device firmware changed. Refresh this page before saving.':'设备固件已变更，请刷新页面后再保存。'),{code:'identity_changed'});};
+const checkDeviceWrite=()=>{if(globalThis.DeviceSession?.wire?.identity)globalThis.UI?.invalidateIdentity?.(DeviceSession.wire.identity);if(globalThis.UI?.identityChanged)throw Object.assign(Error(I18N.lang==='en'?'Device firmware changed. Refresh this page before saving.':'设备固件已变更，请刷新页面后再保存。'),{code:'identity_changed'});};
 const deviceFetch=(path,options={})=>{const write=options.method&&!['GET','HEAD'].includes(options.method.toUpperCase()),check=()=>{if(write)checkDeviceWrite();};check();return globalThis.DeviceSession?DeviceSession.fetch(path,{...options,beforeSend:check}):fetch(path,options);};
 // Share only overlapping reads, never completed values or mutations. Each
 // subscriber owns cancellation; an unrelated subscriber keeps the wire alive.
