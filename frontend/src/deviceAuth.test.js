@@ -114,3 +114,17 @@ for(const retire of ['release','logout'])test(`late password-change reply after 
  assert.equal(auth.headers().Authorization,'Bearer '+other);assert.equal(auth.authenticated,true);assert.equal(auth.needsLogin,false);assert.equal(required,previousRequired);
  assert.deepEqual(retired,['Bearer '+token],'the late result must not revoke the replacement token');
 });
+
+test('late logout completion cannot clear or revoke a replacement session',async()=>{
+ let finishLogout,required=0,logins=0;const retired=[];
+ const auth=createDeviceAuth({onRequired:()=>required++,fetcher:async(url,options)=>{
+  if(url.endsWith('/login'))return logged(++logins===1?token:other);
+  retired.push(options.headers.Authorization);
+  if(retired.length===1)return new Promise(resolve=>finishLogout=()=>resolve(reply({code:'ok'})));
+  return reply({code:'ok'});
+ }});
+ await auth.login('adminfjr');const logout=auth.logout();await new Promise(setImmediate);
+ await auth.login('adminfjr');assert.equal(auth.headers().Authorization,'Bearer '+other);
+ finishLogout();await logout;assert.equal(auth.headers().Authorization,'Bearer '+other);assert.equal(auth.authenticated,true);assert.equal(auth.needsLogin,false);assert.equal(required,0);
+ assert.deepEqual(retired,['Bearer '+token,'Bearer '+token],'both logout requests target only the original session');
+});

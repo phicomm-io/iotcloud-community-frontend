@@ -38,7 +38,7 @@ export function createDeviceAuth({fetcher=globalThis.fetch,origin='',onRequired=
   if(version===generation)await observe(response.status,authorization);
   return response; // Never replay a mutation, including after expiration.
  }
- async function logout(){const silent=emptySession;try{if(token)await request('/api/v1/auth/logout',{method:'POST','headers':{'Content-Type':'application/json'},body:encodeWire({})});}finally{reset({requireLogin:!silent});if(!silent)onRequired();}}
+ async function logout(){const silent=emptySession,version=generation,authorization=headers().Authorization;try{if(token)await fetcher(origin+'/api/v1/auth/logout',{method:'POST',credentials:'omit',redirect:'error',cache:'no-store',headers:{Accept:'application/json','Content-Type':'application/json',Authorization:authorization},body:encodeWire({})});}finally{if(version===generation&&authorization===headers().Authorization){reset({requireLogin:!silent});if(!silent)onRequired();}}}
  function retire(value){
   // Only the exact token owned by this instance is retired; never reauthenticate.
   let timer;const deadline=new Promise(resolve=>{timer=setTimeout(resolve,2000);});
