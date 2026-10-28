@@ -21,10 +21,11 @@ async function fixture(model='m1',setup=false,recovery=true){
  const caps={model,config_recovery:recovery,status_views:['full','live'],actions:['status.get','capabilities.get','config.get','config.set','system.reset']};
  let online=true,confirmed=true,resetFailure='',readGate=null;
  w.localStorage.setItem('phicomm.language','zh-CN');
- w.TextEncoder=TextEncoder;w.setTimeout=()=>0;w.setInterval=()=>0;w.scrollTo=()=>{};w.confirm=()=>confirmed;
+ w.TextEncoder=TextEncoder;w.TextDecoder=TextDecoder;w.setTimeout=()=>0;w.setInterval=()=>0;w.scrollTo=()=>{};w.confirm=()=>confirmed;
  w.HTMLDialogElement.prototype.showModal=undefined;
  w.fetch=async(url,options)=>{
   // Existing firmware has no token endpoint; preserve its explicit legacy path.
+  if(url==='/api/v1/info')return {ok:true,status:200,json:async()=>({code:'ok',data:{api_version:1,device_id:'aabbccddeeff',model,version:'legacy'}})};
   if(url==='/api/v1/auth/login')return {ok:false,status:404};
   assert.equal(url,'/api/v1/command');assert.equal(options.method,'POST');
   const request=JSON.parse(options.body);calls.push(request);

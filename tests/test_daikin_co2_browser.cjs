@@ -7,6 +7,7 @@ const state=()=>({model:'daikin',name:'CO2 test',hardware_model:'BRY88AX151K',wi
  co2_diagnostics:{fresh:true,raw_ppm:946,status_raw:64,drift:true,age_ms:0,calibration_available:calibration==='never',cooldown_seconds:calibration==='never'?0:60,calibration:{state:calibration}}});
 const server=http.createServer((req,res)=>{
  // This business fixture represents legacy firmware without token endpoints.
+ if(req.url==='/api/v1/info'){res.writeHead(200,{'Content-Type':'application/json'}).end(JSON.stringify({code:'ok',data:{api_version:1,device_id:'aabbccddeeff',model:'daikin',version:'legacy'}}));return;}
  if(req.url==='/api/v1/auth/login'){res.writeHead(404,{'Content-Type':'application/json'}).end(JSON.stringify({code:'not_found'}));return;}
  if(req.method==='GET'){res.setHeader('Content-Type','text/html');res.end(html);return;}
  let body='';req.on('data',c=>body+=c);req.on('end',()=>{

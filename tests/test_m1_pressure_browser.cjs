@@ -11,6 +11,7 @@ const base={model:'m1',version:'test',device_id:'aabbccddeeff',name:'房间空�
  scd40:{serial:'test',ready:true,valid:true,age_ms:100,co2_ppm:646}};
 const server=http.createServer((req,res)=>{
  // Existing business scenarios exercise firmware without token endpoints.
+ if(req.url==='/api/v1/info'){res.writeHead(200,{'Content-Type':'application/json'}).end(JSON.stringify({code:'ok',data:{api_version:1,device_id:'aabbccddeeff',model:'m1',version:'legacy'}}));return;}
  if(req.url==='/api/v1/auth/login'){res.writeHead(404,{'Content-Type':'application/json'}).end(JSON.stringify({code:'not_found'}));return;}
  if(req.method==='GET'){res.setHeader('Content-Type','text/html');res.end(html);return;}
  let body='';req.on('data',chunk=>body+=chunk);req.on('end',()=>{

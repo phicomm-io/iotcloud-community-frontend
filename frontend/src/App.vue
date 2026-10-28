@@ -156,7 +156,7 @@ function receiveDeviceMessage(topic,payload,packet){
   if(d.model!==announcement.model)return;
   const changed=d.firmware_version!==announcement.firmware_version||d.variant!==announcement.variant||d.wire_format!==announcement.wire_format;
   Object.assign(d,{wire_format:announcement.wire_format,wire_version:announcement.wire_version,firmware_version:announcement.firmware_version,variant:announcement.variant});
-  if(changed){const state=states[deviceKey(d)];if(state)delete state.capabilities;delete sensorFeeds[owner+':'+mac];for(const [id,pending] of replies)if(pending.key===deviceKey(d)){clearTimeout(pending.timeout);replies.delete(id);pending.reply({code:'identity_changed',message:'Device firmware changed; refresh the page'});}}
+  if(changed){const state=states[deviceKey(d)];if(state)delete state.capabilities;delete sensorFeeds[owner+':'+mac];if(sensorFeeds[mac]?.username===owner)delete sensorFeeds[mac];for(const [id,pending] of replies)if(pending.key===deviceKey(d)){clearTimeout(pending.timeout);replies.delete(id);pending.reply({code:'identity_changed',message:'Device firmware changed; refresh the page'});}}
   updateConnections();if(thirdParty.value)localStorage.setItem(guestKey(),JSON.stringify(list.value));sendTo(d,'status.get');return;
  }
  for(const d of list.value){const state=states[deviceKey(d)] ||= {};if(!applyMessage(d,state,topic,payload))continue;if(state.ip)updateConnections();if(topic.endsWith('/result')){const pending=replies.get(state.result?.request_id);if(pending&&pending.key===deviceKey(d)){clearTimeout(pending.timeout);replies.delete(state.result.request_id);pending.reply(state.result);}delete state.pending?.[state.result?.request_id];}break;}
