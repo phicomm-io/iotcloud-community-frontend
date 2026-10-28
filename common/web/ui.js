@@ -61,7 +61,8 @@ async function run(button,fn,okKey='toast.accepted'){
  catch(e){toast(e.message||String(e),true);}
  finally{if(button){button.disabled=false;button.removeAttribute('aria-busy');}}
 }
-function onSubmit(form,fn,okKey){form.addEventListener('submit',e=>{e.preventDefault();run(form.querySelector('button[type=submit],button:not([type])'),fn,okKey);});}
+function saveDraft(node,fn){return async()=>{const box=node.closest?.('[data-settings-page]'),version=box?.dataset.editVersion;const result=await fn();if(box?.dataset.editVersion===version)delete node.dataset.dirty;return result;};}
+function onSubmit(form,fn,okKey){form.dataset.preserveDraft='1';form.addEventListener('submit',e=>{e.preventDefault();run(form.querySelector('button[type=submit],button:not([type])'),saveDraft(form,fn),okKey);});}
 function confirmDialog({title,body,ok,danger}){
  if(typeof document.body.append!=='function'||!document.createElement('dialog').showModal)return Promise.resolve(window.confirm(title+'\n'+body));
  return new Promise(resolve=>{
@@ -96,7 +97,7 @@ function daysPicker(name,mask=127){
  return box;
 }
 function presetDays(picker){
- return h('div',{class:'row small'},[[127,'day.every'],[31,'day.weekdays'],[96,'day.weekends']].map(([m,k])=>h('button',{type:'button',class:'btn ghost',style:'min-height:28px;padding:2px 8px',onclick:()=>picker.setMask(m)},h('span',{i18n:k}))));
+ return h('div',{class:'row small'},[[127,'day.every'],[31,'day.weekdays'],[96,'day.weekends']].map(([m,k])=>h('button',{type:'button',class:'btn ghost',style:'min-height:28px;padding:2px 8px',onclick:()=>{picker.setMask(m);picker.dispatchEvent(new Event('change',{bubbles:true}));}},h('span',{i18n:k}))));
 }
 function daysText(mask){
  if(!mask)return t('day.once');if(mask===127)return t('day.every');if(mask===31)return t('day.weekdays');if(mask===96)return t('day.weekends');
@@ -109,7 +110,7 @@ function summary(items){return h('dl',{class:'summary'},items.filter(Boolean).ma
 function card(titleKey,leadKey,...body){return h('section',{class:'card'},h('div',{class:'card-head'},h('div',{},h('h2',{i18n:titleKey}),leadKey&&h('p',{class:'help',i18n:leadKey}))),...body);}
 function info(key){return h('details',{class:'info'},h('summary',{},icon('info'),h('span',{i18n:'common.more_info'})),h('p',{i18n:key}));}
 function pageHead(titleKey,leadKey){return h('div',{},h('h2',{class:'page-title',i18n:titleKey}),h('p',{class:'page-lead',i18n:leadKey}));}
-function saveBar(fn,label='common.save'){const b=h('button',{type:'button',class:'btn primary'},h('span',{i18n:label}));b.onclick=()=>run(b,fn);return h('div',{class:'form-actions'},b);}
+function saveBar(fn,label='common.save'){const b=h('button',{type:'button',class:'btn primary'},h('span',{i18n:label}));b.onclick=()=>run(b,saveDraft(b.closest('[data-settings-page]')||b,fn));return h('div',{class:'form-actions'},b);}
 function num(model,key,{min,max,step='any',unit,width}={}){
  const input=h('input',{type:'number',value:model[key],min,max,step,style:width?'width:'+width:null,oninput:e=>{if(e.target.value!==''&&Number.isFinite(+e.target.value))model[key]=+e.target.value;}});
  return unit?h('span',{class:'input-unit'},input,h('em',{},unit)):input;
@@ -153,7 +154,7 @@ function tzLabel(m){const sg=m<0?'−':'+',a=Math.abs(m);return 'UTC'+sg+String(
 
 /* ---------- Header, navigation, banners ---------- */
 let resetPending=false,resetAccepted=false,resetGeneration=0,resetUptime,resetSawPending=false;
-const UI=window.UI={$,h,icon,toast,run,onSubmit,confirm:confirmDialog,switchRow,seg,daysPicker,presetDays,daysText,hhmm,toMinutes,duration,summary,card,info,pageHead,saveBar,num,flag,slider,normalizeMac,prettyMac,clone,AIR,grade,airScale,tzLabel,state:null,caps:null,pages:{},device:null,clockCard,maintenancePage,scanNetworks};
+const UI=window.UI={$,h,saveDraft,icon,toast,run,onSubmit,confirm:confirmDialog,switchRow,seg,daysPicker,presetDays,daysText,hhmm,toMinutes,duration,summary,card,info,pageHead,saveBar,num,flag,slider,normalizeMac,prettyMac,clone,AIR,grade,airScale,tzLabel,state:null,caps:null,pages:{},device:null,clockCard,maintenancePage,scanNetworks};
 // Keep requested output visible until a fresh read confirms it. Polls may still
 // contain the pre-write state while the device applies an accepted command.
 let pendingControl=null;
@@ -233,16 +234,20 @@ function buildNav(dev){
   for(const a of links)side.append(a);
  }
 }
+let routeGeneration=0;let routeRead=null;
 function showRoute(){
+ const generation=++routeGeneration;
+ routeRead?.abort();routeRead=new AbortController();
  const m=/^settings\/([a-z]+)$/.exec(UI.embeddedRoute??location.hash.slice(1));
  const page=m&&document.querySelector('[data-settings-page="'+m[1]+'"]')?m[1]:m?(UI.device.groups.flatMap(g=>g[1]).find(k=>UI.pages[k])||null):null;
  $('homePage').hidden=!!page;$('settingsPage').hidden=!page;
  document.querySelectorAll('[data-settings-page]').forEach(p=>{p.hidden=p.dataset.settingsPage!==page;});
  document.querySelectorAll('.tabs a').forEach(a=>{const on=a.dataset.tab===(page?'settings':'home');if(on)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');});
  document.querySelectorAll('.side a').forEach(a=>{if(a.hash==='#settings/'+page)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');});
- if(page)UI.reload({full:true}).then(()=>afterShow(page));else afterShow(page);
+ // A slow status refresh must not launch reads for tabs already left behind.
+ if(page)UI.reload().then(()=>{if(generation===routeGeneration)afterShow(page);});else afterShow(page);
 }
-const showingPages=new Set();
+const showingPages=new Map();
 async function afterShow(page){
  if(!page)return;
  const active=document.querySelector('.side a[aria-current]'),side=$('side');
@@ -252,10 +257,15 @@ async function afterShow(page){
   if(item.left<menu.left)side.scrollLeft+=item.left-menu.left;
   else if(item.right>menu.right)side.scrollLeft+=item.right-menu.right;
  }
- const p=UI.pages[page];if(!p?.show||showingPages.has(page))return;
+ const p=UI.pages[page],signal=routeRead?.signal;if(!p?.show||signal?.aborted||showingPages.get(page)===signal)return;
  const box=document.querySelector('[data-settings-page="'+page+'"]');
- box?.querySelector('.page-load-error')?.remove();showingPages.add(page);
- try{await p.show();}catch(e){const retry=h('button',{class:'btn',type:'button',onclick:()=>afterShow(page)},t('common.retry'));box?.prepend(h('div',{class:'banner warn page-load-error',role:'alert'},h('span',{},e.message),retry));}finally{showingPages.delete(page);}
+ if(box?.matches('[data-dirty="1"]')||box?.querySelector('[data-dirty="1"]'))return;
+ box?.querySelector('.page-load-error')?.remove();showingPages.set(page,signal);
+ if(['light','linkage','freshair','night'].includes(page))box.dataset.preserveDraft='1';
+ const edit=event=>{const draft=event.target.closest('[data-preserve-draft]');if(!draft)return;box.dataset.editVersion=String(1+Number(box.dataset.editVersion||0));draft.dataset.dirty='1';};
+ if(box&&!box.dataset.trackEdits){box.dataset.trackEdits='1';box.addEventListener('input',edit);box.addEventListener('change',edit);box.addEventListener('click',event=>{if(event.target.closest('.seg button'))edit(event);});}
+ const version=box?.dataset.editVersion;
+ try{await p.show({signal,current:()=>!signal?.aborted&&box?.dataset.editVersion===version});}catch(e){if(signal?.aborted||e.name==='AbortError')return;const retry=h('button',{class:'btn',type:'button',onclick:()=>afterShow(page)},t('common.retry'));box?.prepend(h('div',{class:'banner warn page-load-error',role:'alert'},h('span',{},e.message),retry));}finally{if(showingPages.get(page)===signal)showingPages.delete(page);}
 }
 /* Wi-Fi scan is shared: start, poll, and hand the sorted list to a callback. */
 async function scanNetworks(onList){
@@ -641,7 +651,7 @@ function clockCard({load,save,status}){
   info('clock.hint'),h('div',{class:'form-actions'},h('button',{class:'btn primary',type:'submit'},h('span',{i18n:'common.save'}))));
  onSubmit(form,()=>save({timezone_minutes:Number(tz.value),ntp_host:ntp.value.trim()}));
  return {el:card('clock.title',null,sum,h('div',{style:'margin-top:16px'},form)),
-  async show(){const c=await load();if(!c)return;tz.value=String(c.timezone_minutes||480);ntp.value=c.ntp_host||'';},
+  async show(options={}){const c=await load(options);if(!c||options.current&&!options.current())return;tz.value=String(c.timezone_minutes||480);ntp.value=c.ntp_host||'';},
   status(s){sum.replaceChildren(summary(status(s)));}};
 }
 
@@ -706,7 +716,7 @@ window.addEventListener('pageshow',()=>{
  stopped=false;UI.invalidateStatus();
  if(pollingStarted)refreshStatus(pollGeneration,true);
 });
-UI.reload=async({full=false}={})=>{if(full)UI.invalidateStatus();if(loading)await loading;return pollLoad();};
+UI.reload=async({full=false}={})=>{if(full)UI.invalidateStatus();if(loading&&!full)return loading;if(loading)await loading;return pollLoad();};
 document.addEventListener('visibilitychange',()=>{if(UI.device&&!document.hidden&&!stopped)UI.reload({full:true});});
 UI.showRoute=showRoute;
 UI.start=async dev=>{

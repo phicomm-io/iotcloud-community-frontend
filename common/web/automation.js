@@ -133,8 +133,8 @@ function schedulePage(dev){
     h('button',{type:'button',class:'btn ghost',onclick:ev=>run(ev.currentTarget,()=>command('schedules.enable',{id:x.id,enabled:!x.enabled}).then(load),null)},h('span',{i18n:x.trigger==='countdown'?(x.enabled?'sch.cancel':'sch.restart'):(x.enabled?'sch.disable':'sch.enable')})),
     h('button',{type:'button',class:'btn ghost icon','aria-label':t('common.delete'),onclick:ev=>run(ev.currentTarget,()=>command('schedules.delete',{id:x.id}).then(load),'common.deleted')},icon('trash'))));
  }
- async function load(){
-  const d=await command('schedules.get',{offset,limit:8});tasks=d.items.map(x=>({...x,received:performance.now()}));
+ async function load(options={}){
+  const d=await command('schedules.get',{offset,limit:8},options);if(options.current&&!options.current())return;tasks=d.items.map(x=>({...x,received:performance.now()}));
   listBox.replaceChildren(
    tasks.length?h('div',{class:'list'},tasks.map(row)):h('div',{class:'empty'},t('sch.empty')),
    h('div',{class:'row between'},h('span',{class:'help'},t('sch.used',{a:d.count,b:d.capacity})),
@@ -143,17 +143,18 @@ function schedulePage(dev){
      h('button',{type:'button',class:'btn ghost',onclick:()=>run(null,()=>{offset=d.next;return load();},null),disabled:offset+8>=d.count},h('span',{i18n:'common.next'})))));
   banner.hidden=!(UI.state&&UI.state.time_synced===false);
  }
- function reset(){editing=0;enabled.querySelector('input').checked=true;trigger.set('weekly');syncTrigger();days.setMask(127);time.value='08:00';at.value=timeValue();editor.set('none');hours.value=0;minutes.value=30;labelSave();}
+ function reset(){delete form.dataset.dirty;editing=0;enabled.querySelector('input').checked=true;trigger.set('weekly');syncTrigger();days.setMask(127);time.value='08:00';at.value=timeValue();editor.set('none');hours.value=0;minutes.value=30;labelSave();}
  function edit(x){
   editing=x.id;enabled.querySelector('input').checked=!!x.enabled;trigger.set(x.trigger);syncTrigger();
   days.setMask(x.days);time.value=hhmm(x.minute);at.value=x.trigger==='once'?atValue(x.at):timeValue();hours.value=Math.floor((x.seconds||0)/3600);minutes.value=Math.floor((x.seconds||0)%3600/60);editor.set(x.action,x.params);labelSave();
-  box.scrollIntoView({block:'start'});
+  form.dispatchEvent(new Event('change',{bubbles:true}));box.scrollIntoView({block:'start'});
  }
  const banner=h('div',{class:'banner warn',hidden:true},icon('clock'),h('span',{i18n:'sch.no_clock'}));
  const form=h('form',{class:'subcard stack'},h('h3',{i18n:'sch.new'}),trigger,weekly,once,minute,countdown,editorHost,enabled,
   h('div',{class:'form-actions'},save,
    h('button',{type:'button',class:'btn ghost',onclick:reset},h('span',{i18n:'sch.reset'}))));
- form.addEventListener('submit',e=>{e.preventDefault();run(save,async()=>{
+ form.dataset.preserveDraft='1';
+ form.addEventListener('submit',e=>{e.preventDefault();run(save,UI.saveDraft(form,async()=>{
   const a=trigger.value==='countdown'?{action:'fan.set',params:{on:false}}:editor.get();
   if(a.action==='none')throw Error(t('sch.pick_action'));
   const task={enabled:enabled.querySelector('input').checked,trigger:trigger.value,...a};
@@ -168,12 +169,13 @@ function schedulePage(dev){
    if(task.at<1577836800||task.at>2147483647)throw Error(t('sch.date_range'));
    if(task.at<=Math.floor(Date.now()/1000))throw Error(t('sch.future'));
   }
-  await command('schedules.put',task);reset();await load();toast(t('sch.added'));
- },null);});
+  const version=form.closest('[data-settings-page]')?.dataset.editVersion;
+  await command('schedules.put',task);if(form.closest('[data-settings-page]')?.dataset.editVersion===version)reset();await load();toast(t('sch.added'));
+ }),null);});
  enabled.querySelector('input').checked=true;trigger.set('weekly');syncTrigger();
  box.append(form,info('sch.hint'));
  return {el:h('div',{class:'stack'},pageHead(dev.nav?.schedule||'nav.schedule',dev.scheduleLead),banner,card('sch.list',null,listBox,box)),
-  async show(){if(!UI.state)await UI.reload();await load();},
+  async show(options={}){if(!UI.state)await UI.reload();await load(options);},
   status(){if(!box.isConnected||box.closest('[data-settings-page]')?.hidden)return;
    for(const x of tasks.filter(x=>x.trigger==='countdown')){const label=listBox.querySelector('[data-countdown-id="'+x.id+'"]');if(label)label.textContent=when(x);}
    if(tasks.some(x=>x.trigger==='countdown'&&x.enabled))run(null,load,null);
@@ -216,7 +218,7 @@ function buttonsPage(dev){
  function edit(v){
   key.value=String(v.key);kind.set(v.seconds?'seconds':'clicks');count.max=v.seconds?4:30;
   countLabel.textContent=t(v.seconds?'btn.hold_count':'btn.click_count');count.value=v.seconds||v.clicks;
-  editor.set(v.action,v.params);preview();editorCard.scrollIntoView({block:'nearest',behavior:'smooth'});count.focus();
+  editor.set(v.action,v.params);preview();editorCard.dispatchEvent(new Event('change',{bubbles:true}));editorCard.scrollIntoView({block:'nearest',behavior:'smooth'});count.focus();
  }
  function row(v){
   return h('div',{class:'button-mapping'},h('b',{class:'button-gesture'},gesture(v)),
@@ -226,9 +228,10 @@ function buttonsPage(dev){
      await command('buttons.set',{key:v.key,...(v.seconds?{seconds:v.seconds}:{clicks:v.clicks}),action:'none',params:{}});await load();
     },'common.deleted')},t('common.delete'))));
  }
- async function load(){
+ async function load(options={}){
   const items=[];let offset=0,capacity=68;
-  do{const page=await command('buttons.get',{offset,limit:8});items.push(...page.items);capacity=page.capacity||capacity;if(page.next==null||page.next<=offset)break;offset=page.next;}while(offset<capacity);
+  do{const page=await command('buttons.get',{offset,limit:8},options);items.push(...page.items);capacity=page.capacity||capacity;if(page.next==null||page.next<=offset)break;offset=page.next;}while(offset<capacity);
+  if(options.current&&!options.current())return;
   listBox.replaceChildren();
   for(const k of keyIds){
    const groups=[];
@@ -248,9 +251,10 @@ function buttonsPage(dev){
  const save=h('button',{type:'submit',class:'btn primary'},t('common.save'));
  editorCard.append(h('h2',{i18n:'btn.edit'}),keyHost,editorHost,previewBox,h('div',{class:'form-actions'},save));
  editorCard.addEventListener('input',preview);editorCard.addEventListener('change',preview);editorCard.addEventListener('click',()=>preview());
+ editorCard.dataset.preserveDraft='1';
  editorCard.addEventListener('submit',e=>{e.preventDefault();if(!editorCard.reportValidity())return;
-  run(save,async()=>{const a=editor.get();if(a.action==='none')throw Error(t('btn.pick_action'));
-   await command('buttons.set',{...selected(),...a});await load();},'common.saved');
+  run(save,UI.saveDraft(editorCard,async()=>{const a=editor.get();if(a.action==='none')throw Error(t('btn.pick_action'));
+   await command('buttons.set',{...selected(),...a});await load();}),'common.saved');
  });
  let filterStatus,filterHours;
  function filterCards(){
@@ -259,15 +263,15 @@ function buttonsPage(dev){
   const form=h('form',{class:'stack'},filterStatus,info('filter.hint'),h('label',{class:'field'},h('span',{i18n:'filter.lifetime'}),filterHours),
    h('div',{class:'form-actions'},h('button',{type:'submit',class:'btn primary'},t('common.save')),
     h('button',{type:'button',class:'btn ghost',onclick:e=>run(e.currentTarget,async()=>{if(!window.confirm(t('filter.reset_confirm')))return;await command('filter.reset',{});await loadFilter();},null)},t('op.filter_reset'))));
-  form.addEventListener('submit',e=>{e.preventDefault();if(!form.reportValidity())return;run(null,async()=>{await command('filter.set',{lifetime_hours:Number(filterHours.value)});await loadFilter();},'common.saved');});
+  form.dataset.preserveDraft='1';form.addEventListener('submit',e=>{e.preventDefault();if(!form.reportValidity())return;run(null,UI.saveDraft(form,async()=>{await command('filter.set',{lifetime_hours:Number(filterHours.value)});await loadFilter();}),'common.saved');});
   return [card('filter.title',null,form)];
  }
- async function loadFilter(){if(!filterStatus)return;const f=await command('filter.get');filterHours.value=f.lifetime_hours;filterStatus.textContent=t('filter.status',{used:(f.used_seconds/3600).toFixed(1),remaining:f.remaining_percent});}
+ async function loadFilter(options={}){if(!filterStatus)return;const f=await command('filter.get',{},options);if(options.current&&!options.current())return;filterHours.value=f.lifetime_hours;filterStatus.textContent=t('filter.status',{used:(f.used_seconds/3600).toFixed(1),remaining:f.remaining_percent});}
  preview();
  return {el:h('div',{class:'stack'},pageHead('nav.buttons','btn.lead'),card('btn.current',null,listBox),
   card('btn.recovery',null,h('div',{class:'button-mapping'},h('b',{},t('btn.hold_full',{n:5})),h('span',{},t('btn.reset_wifi'))),
    h('div',{class:'button-mapping'},h('b',{},t('btn.hold_full',{n:10})),h('span',{},t('op.10'))),info(dev.model==='A1'?'btn.reset_note_a1':'btn.reset_note')),editorCard,...filterCards()),
-  async show(){await load();await loadFilter();preview();}};
+  async show(options={}){await load(options);await loadFilter(options);if(!options.current||options.current())preview();}};
 }
 
 /* ---------- Night mode ---------- */
@@ -291,7 +295,7 @@ function nightPage(dev){
    h('div',{class:'field'},h('div',{class:'row between'},h('span',{class:'label',i18n:'sch.repeat'}),presetDays(days)),days),
    h('div',{class:'fields'},h('label',{class:'field'},h('span',{i18n:'night.start'}),start),h('label',{class:'field'},h('span',{i18n:'night.end'}),end)),
    dim,h('div',{class:'field'},h('div',{class:'row between'},h('span',{class:'label',i18n:'night.light_max'}),bOut)),bRange,...extra,
-   h('div',{class:'form-actions'},h('button',{type:'button',class:'btn ghost',onclick:()=>{model.splice(i,1);draw();}},icon('trash'),h('span',{i18n:'common.delete'}))));
+   h('div',{class:'form-actions'},h('button',{type:'button',class:'btn ghost',onclick:()=>{model.splice(i,1);draw();list.dispatchEvent(new Event('change',{bubbles:true}));}},icon('trash'),h('span',{i18n:'common.delete'}))));
   // One listener writes the whole window back, so no control can drift.
   const collect=()=>{
    cfg.days=days.mask();cfg.start=toMinutes(start.value);cfg.end=toMinutes(end.value);
@@ -306,12 +310,12 @@ function nightPage(dev){
  }
  const add=h('button',{type:'button',class:'btn'},icon('plus'),h('span',{i18n:'night.add_btn'}));
  add.onclick=()=>run(add,async()=>{if(model.length>=4)throw Error(t('common.max',{n:4}));
-  model.push({days:127,fan:isM1?0:1,light:1,max_speed:30,min_speed:0,fallback_speed:30,brightness:0,block_start:0,start:1320,end:420});draw();},null);
+  model.push({days:127,fan:isM1?0:1,light:1,max_speed:30,min_speed:0,fallback_speed:30,brightness:0,block_start:0,start:1320,end:420});draw();list.dispatchEvent(new Event('change',{bubbles:true}));},null);
  const save=h('button',{type:'button',class:'btn primary'},h('span',{i18n:'common.save'}));
- save.onclick=()=>run(save,async()=>{await command('night.set',{windows:model});toast(t('common.saved'));});
+ save.onclick=()=>run(save,UI.saveDraft(save.closest('[data-settings-page]')||save,async()=>{await command('night.set',{windows:model});toast(t('common.saved'));}));
  return {el:h('div',{class:'stack'},pageHead('nav.sleep','night.lead'),card('night.list',null,list,
   info('night.hint'),h('div',{class:'form-actions'},add,save))),
-  async show(){model=clone((await command('night.get')).windows||[]);draw();}};
+  async show(options={}){const value=await command('night.get',{},options);if(options.current&&!options.current())return;model=clone(value.windows||[]);draw();}};
 }
 
 window.automationPages=dev=>{
