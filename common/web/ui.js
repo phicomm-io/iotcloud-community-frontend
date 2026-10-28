@@ -245,7 +245,7 @@ function showRoute(){
  document.querySelectorAll('.tabs a').forEach(a=>{const on=a.dataset.tab===(page?'settings':'home');if(on)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');});
  document.querySelectorAll('.side a').forEach(a=>{if(a.hash==='#settings/'+page)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');});
  // A slow status refresh must not launch reads for tabs already left behind.
- if(page)UI.reload().then(()=>{if(generation===routeGeneration)afterShow(page);});else afterShow(page);
+ if(page)UI.reload({full:true}).then(()=>{if(generation===routeGeneration)afterShow(page);});else afterShow(page);
 }
 const showingPages=new Map();
 async function afterShow(page){
@@ -716,7 +716,12 @@ window.addEventListener('pageshow',()=>{
  stopped=false;UI.invalidateStatus();
  if(pollingStarted)refreshStatus(pollGeneration,true);
 });
-UI.reload=async({full=false}={})=>{if(full)UI.invalidateStatus();if(loading&&!full)return loading;if(loading)await loading;return pollLoad();};
+let fullReload=null;
+UI.reload=({full=false}={})=>{
+ if(!full)return loading||pollLoad();
+ if(!fullReload){UI.invalidateStatus();fullReload=(async()=>{if(loading)await loading;return pollLoad();})().finally(()=>{fullReload=null;});}
+ return fullReload;
+};
 document.addEventListener('visibilitychange',()=>{if(UI.device&&!document.hidden&&!stopped)UI.reload({full:true});});
 UI.showRoute=showRoute;
 UI.start=async dev=>{
