@@ -14,7 +14,7 @@ export function createDeviceWire({fetcher=globalThis.fetch,origin='',expectedIde
  function validate(data,responseFormat){
   if(!data||typeof data!=='object'||Array.isArray(data)||data.api_version!==1)throw failure('Invalid device discovery');
   const id=canonical(data.device_id),model=data.model;
-  if(!/^[a-f0-9]{12}$/.test(id)||!['a1','m1','tc1','daikin'].includes(model))throw failure('Invalid device identity');
+  if(!/^[a-f0-9]{12}$/.test(id)||!['a1','m1','tc1','daikin','s30-v1b'].includes(model))throw failure('Invalid device identity');
   if(expectedIdentity.device_id&&canonical(expectedIdentity.device_id)!==id||expectedIdentity.mac&&canonical(expectedIdentity.mac)!==id||expectedIdentity.model&&expectedIdentity.model!==model)throw failure('Device identity changed');
   const marked=['wire_version','wire_formats','default_wire_format'].some(key=>Object.hasOwn(data,key));
   let next='json';
