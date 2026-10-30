@@ -2,7 +2,7 @@
 import {t} from '../i18n.js';
 
 import {computed} from 'vue';
-import {socketStates,pressureReading} from '../devicePresentation';
+import {socketStates,pressureReading,meterReading} from '../devicePresentation';
 import AppIcon from './AppIcon.vue';
 const props=defineProps({device:Object,state:Object,name:String,connected:Boolean,now:Number});
 const live=computed(()=>(props.connected||props.state?.lan_connected)&&props.state?.available!==false);
@@ -29,7 +29,7 @@ function reading(v,digits=0){return live.value&&valid(v)?Number(v).toFixed(digit
  <span class="rack-head"><span class="presence-pill" :class="presence.tone" role="status">{{presence.label}}</span><b :title="name">{{name}}</b></span>
  <span v-if="['tc1','s30-v1b'].includes(device.model)" class="rack-body tc1-body">
   <span class="stat">{{reading(state?.power_watts??state?.power,1)}}<small>W</small></span>
-  <span class="socket-info"><span class="sockets" role="img" :aria-label="sockets.map((v,i)=>t('p.adb6a3f989a5',{v0:(i+1),v1:t(!live||v===undefined?'state.unknown':v?'state.on':'state.off')})).join('; ')"><i v-for="i in outletCount" :key="i" :class="{on:live&&sockets[i-1]===true,unknown:!live||sockets[i-1]===undefined}"/></span></span>
+  <span class="socket-info"><span class="sockets" role="img" :aria-label="sockets.map((v,i)=>t('p.adb6a3f989a5',{v0:(i+1),v1:t(!live||v===undefined?'state.unknown':v?'state.on':'state.off')})).join('; ')"><i v-for="i in outletCount" :key="i" :class="{on:live&&sockets[i-1]===true,unknown:!live||sockets[i-1]===undefined}"/></span><small v-if="device.model==='s30-v1b'" class="rack-detail meter-readings"><span>{{reading(meterReading(state,'voltage'),1)}} V</span><span>{{reading(meterReading(state,'current'),3)}} A</span></small></span>
  </span>
  <span v-else-if="['m1','daikin'].includes(device.model)" class="rack-body m1-body">
   <span class="ring-mini"><span>{{quality}}</span></span><span class="sensor-copy"><span class="stat">{{freshAir?Math.round(Number(pm)):'—'}}<small>μg/m³</small></span></span><small class="rack-detail sensor-details"><span>PM2.5</span><span v-if="co2!==null"> · CO₂ {{co2}} ppm</span><span v-if="pressure!==null" :title="state.barometer.model"> · {{pressure.toFixed(1)}} hPa</span></small>
@@ -42,5 +42,6 @@ function reading(v,digits=0){return live.value&&valid(v)?Number(v).toFixed(digit
 .presence-pill{flex-shrink:0;white-space:nowrap;display:inline-flex;align-items:center;justify-self:start;gap:5px;padding:2px 9px;border-radius:999px;font-size:11px;line-height:18px;font-weight:500;background:var(--surface-muted);color:var(--muted)}.presence-pill::before{content:'';width:6px;height:6px;border-radius:50%;background:currentColor}.presence-pill.online{background:var(--success-soft);color:var(--success)}.presence-pill.waiting{background:var(--warn-soft);color:var(--warn)}
 
 .tc1-body>.stat{flex:0 0 128px;text-align:right;white-space:nowrap}.tc1-body>.socket-info{flex:0 1 127px;min-width:0}
+.meter-readings{display:flex;flex-wrap:wrap;gap:0 8px}.meter-readings>span{white-space:nowrap}
 .sensor-copy{min-width:0}.m1-body{display:grid;grid-template-columns:52px minmax(0,1fr);gap:4px 12px}.sensor-details{grid-column:1/-1;display:flex;flex-wrap:wrap;column-gap:3px}.sensor-details>span{white-space:nowrap}.device-summary:has(.sensor-details){grid-template-rows:24px minmax(54px,auto)}
 </style>

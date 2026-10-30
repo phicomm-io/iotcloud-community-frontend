@@ -17,6 +17,11 @@ export function pressureReading(s={},now=Date.now()){
   Number.isFinite(elapsed)&&elapsed>=0&&b.age_ms+elapsed<10000?b.pressure_hpa:null;
 }
 const number=(v,digits=0)=>v!==null&&v!==undefined&&v!==''&&Number.isFinite(Number(v))?Number(v).toFixed(digits):'—';
+export function meterReading(s={},field){
+ const bit={voltage:1,current:2,active_power:4}[field],m=s?.metering,v=m?.[field];
+ return bit&&typeof v==='number'&&Number.isFinite(v)&&v>=0&&
+  (m.valid_fields===undefined||!!(m.valid_fields&bit))?v:null;
+}
 export function deviceSummary(d,s={},connected=false,now=Date.now()){
  if(!connected)return t('p.93ae902da0d3');
  if(s.available===false)return t('p.6e1e714df035');
@@ -25,7 +30,8 @@ export function deviceSummary(d,s={},connected=false,now=Date.now()){
   const known=sockets.every(x=>x!==undefined&&x!==null);
   const power=s.power_watts??s.power;
   if(!known&&power===undefined)return t('p.59b4aa3bd881');
-  return [power!==undefined?number(power,1)+' W':null,known?t('p.0f583152f409',{v0:(sockets.filter(Boolean).length),v1:(sockets.filter(x=>!x).length)}):null].filter(Boolean).join(' · ');
+  const meter=d.model==='s30-v1b'?['voltage','current'].map((field,i)=>{const v=meterReading(s,field);return v===null?null:number(v,i?3:1)+(i?' A':' V');}):[];
+  return [power!==undefined?number(power,1)+' W':null,...meter,known?t('p.0f583152f409',{v0:(sockets.filter(Boolean).length),v1:(sockets.filter(x=>!x).length)}):null].filter(Boolean).join(' · ');
  }
  if(d.model==='daikin'){
   const p=s.sensors?.pm25;return p?.valid&&typeof p.value==='number'&&now-s.sensorAt+(p.age_ms||0)<20000?'PM2.5 '+number(p.value)+' µg/m³':t('p.47b36dd03059');
