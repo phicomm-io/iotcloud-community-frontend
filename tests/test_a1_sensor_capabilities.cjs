@@ -6,7 +6,7 @@ test('A1 automation is selected by fresh measurements, with absent values hidden
  let fields={pm25:true,formaldehyde:false};const writes=[],timers=[];
  const saved={enabled:1,metrics:3,mode:1,min_speed:0,max_speed:100,fallback_speed:30,hysteresis_enabled:1,low_pm:10,high_pm:100,low_hcho:.01,high_hcho:.1,target_pm:15,on_pm:50,target_hcho:.01,on_hcho:.1,statistic:0};
  try{
- w.TextEncoder=TextEncoder;w.scrollTo=()=>{};w.setTimeout=(fn,ms)=>{if(ms===3000)timers.push(fn);return 0;};
+ w.TextEncoder=TextEncoder;w.scrollTo=()=>{};w.setTimeout=(fn,ms)=>{if(ms===5000&&fn.constructor.name==='AsyncFunction')timers.push(fn);return 0;};
  w.fetch=async(url,options)=>{const req=JSON.parse(options.body);let data={};
  if(req.action==='binding.status.get')data={peers:[{mac:'9c9c1ff76748',fresh:true}],average:{valid:true,fields,pm25:42,formaldehyde:null}};
  else if(req.action==='linkage.get')data={...saved};
