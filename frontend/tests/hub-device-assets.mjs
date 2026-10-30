@@ -134,6 +134,15 @@ test('cold root and embedded pages work locally with scoped token auth, typed co
     }
     if(model==='s30-v1b'){
      assert.equal(await view.locator('.tile').count(),1);
+     await view.locator('#coefForm').evaluate(el=>el.closest('details').open=true);
+     for(const [id,value] of [['voltageCoef','1.894288'],['currentCoef','1.0102'],['powerCoef','1.88835008906368']]){
+      await view.locator('#'+id).fill(value);
+      assert.equal(await view.locator('#'+id).evaluate(el=>el.checkValidity()),true,'Exact stock coefficient must be accepted');
+     }
+     await view.locator('#coefForm button').click();
+     await expect.poll(()=>writes.findLast(request=>request.action==='config.set'&&request.params.section==='meter')?.params.values).toEqual({
+      voltage_coefficient:1.894288,current_coefficient:1.0102,power_coefficient:1.88835008906368
+     });
      await body.evaluate(()=>{UI.embeddedRoute='settings/firmware';UI.showRoute();});
      await expect(view.locator('#fileForm')).toBeHidden();await expect(view.locator('#urlForm')).toBeVisible();
      assert.equal(await view.locator('#otaUrl').getAttribute('maxlength'),'127');
