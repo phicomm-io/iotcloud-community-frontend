@@ -7,7 +7,7 @@ import {readFile,mkdir} from 'node:fs/promises';
 import {chromium,expect} from '@playwright/test';
 import {decodeWire,encodeWire} from '../src/wireCodec.js';
 
-const root=resolve(process.env.HUB_LAN_DIST||'dist');
+const root=resolve(process.env.HUB_LAN_DIST||process.env.HUB_TEST_DIST||'dist');
 const evidence=resolve(process.env.HUB_LAN_EVIDENCE||'../../review/hub-lan-management');
 const token='fixture-hub-owner-token',peer='a1b2c3d4e5f6',ip='192.168.1.45';
 let browser,inventory,events,pairPolls,paired,pairPhase,registered;
@@ -63,7 +63,7 @@ async function fixture(language,width){
  const w=words[language];await page.getByRole('button',{name:w.settings,exact:true}).click();
  return {context,page,errors,w};
 }
-async function openLan(page,w){await page.getByRole('button',{name:new RegExp(w.devices)}).click();return page.getByRole('region',{name:w.lan,exact:true});}
+async function openLan(page,w){await page.locator('.settings-navigation').getByRole('button',{name:new RegExp(w.devices)}).click();return page.getByRole('region',{name:w.lan,exact:true});}
 async function checkNoBrokerUI(page){
  const text=await page.locator('body').innerText();
  assert(!/\b(local|internal|embedded) broker\b|内置 Broker|本地 Broker/i.test(text),'removed local broker must not be offered in the UI');
@@ -95,13 +95,13 @@ try{
     await expect(section.getByRole('button',{name:w.pair,exact:true})).toBeVisible();
     assert(events.some(e=>e.path==='/api/hub/lan/unpair'&&e.auth==='Bearer '+token));
    }
-   await page.getByRole('button',{name:new RegExp(w.services)}).click();
+   await page.locator('.settings-navigation').getByRole('button',{name:new RegExp(w.services)}).click();
    const services=page.locator('.settings-content');
    await expect(services.getByRole('heading',{name:'HomeKit',exact:true})).toBeVisible();
    await expect(services.getByLabel(language==='zh-CN'?'上游 MQTT 地址':'Upstream MQTT host')).toBeVisible();
    await expect(services.getByLabel(language==='zh-CN'?'上游 MQTT 地址':'Upstream MQTT host')).toHaveValue('broker.example.net');
    await checkNoBrokerUI(page);
-   await page.getByRole('button',{name:new RegExp(w.bemfa)}).click();
+   await page.locator('.settings-navigation').getByRole('button',{name:new RegExp(w.bemfa)}).click();
    await expect(page.locator('.bemfa-card h2')).toBeVisible();
    assert.deepEqual(errors,[]);console.log(`PASS Hub LAN ${language} ${width}: owner UI fixture, discovery isolation, upstream/Bemfa/HomeKit`);
   }finally{await context.close();}
