@@ -103,8 +103,10 @@ for(const setup of [true,false])test(`${setup?'setup':'full'}: external clear re
 for(const setup of [true,false])test(`${setup?'setup':'full'}: a read started before the reset cannot complete it`,async()=>{
  const f=await fixture('m1',setup);try{
   let release;f.holdRead(new Promise(resolve=>release=resolve));
-  const old=f.refresh();await settle();await f.clickReset();f.caps.config_recovery=false;
-  release();await old;assert.equal(f.reset().disabled,true);assert.doesNotMatch(f.text(),/配置已清空，可以重新配网/);
+  const old=f.refresh();await settle();const reset=f.clickReset();await settle();
+  assert.equal(f.writes().length,0,'reset waits for the in-flight read in the serial HTTP queue');
+  f.caps.config_recovery=false;release();await old;await reset;
+  assert.equal(f.writes().length,1);assert.equal(f.reset().disabled,true);assert.doesNotMatch(f.text(),/配置已清空，可以重新配网/);
   await f.refresh();assert.equal(f.reset().disabled,true);f.ready();await f.refresh();assert.equal(f.reset().disabled,false);
  }finally{f.dom.window.close();}
 });
