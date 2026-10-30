@@ -68,7 +68,10 @@ test.afterAll(async()=>{if(server)await new Promise(done=>server.close(done));})
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   local=true;
   await form.getByRole('button',{name:zh?'连接本地设备':'Connect local device',exact:true}).click();
-  await expect(page).toHaveURL(/#\/local$/);
+  // The connection itself keeps its five-second deadline. A fresh Vite server
+  // then compiles the lazy console route (including the shared device pages),
+  // which can exceed five seconds on CI before WebKit commits navigation.
+  await expect(page).toHaveURL(/#\/local$/,{timeout:15000});
   await expect(page.locator('.device-heading')).toContainText(zh?'内网已连接':'LAN connected');
   await expect(page.getByRole('link',{name:zh?'登录':'Sign in',exact:true})).toHaveCount(0);
   form=page.getByRole('region',{name:title});toggle=form.getByRole('button',{name:title,exact:true});
