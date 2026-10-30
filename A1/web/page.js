@@ -13,12 +13,12 @@ const power=$('power');power.append(icon('power'));
 const speed=$('speed');let dragging=false;
 const presets=seg([[20,()=>t('a1.p_quiet')+' 20%'],[40,()=>t('a1.p_low')+' 40%'],[60,()=>t('a1.p_mid')+' 60%'],[100,()=>t('a1.p_max')+' 100%']],v=>setSpeed(v),{full:true});
 $('presets').replaceWith(presets);
-const fanModes=seg([['manual','auto.manual'],['auto','auto.auto']],mode=>run(null,()=>UI.control('fan.mode.set',{mode},{fan_mode:mode}).then(()=>{startFanFeedback();return refresh();}),null),{full:true});
+const fanModes=seg([['manual','auto.manual'],['auto','auto.auto']],mode=>run(null,()=>UI.control('fan.mode.set',{mode},{fan_mode:mode}),null),{full:true});
 $('fanMode').append(fanModes);
-function setSpeed(v){speed.value=v;$('speedValue').textContent=v+'%';return run(null,()=>api('/fan/config',{speed:Number(v)}).then(()=>{startFanFeedback();return refresh();}),null);}
+function setSpeed(v){speed.value=v;$('speedValue').textContent=v+'%';return run(null,()=>UI.control('fan.set',{speed:Number(v)},{[UI.state.fan_mode==='auto'?'auto_max_speed':'requested_speed']:Number(v)}),null);}
 speed.addEventListener('input',()=>{dragging=true;$('speedValue').textContent=speed.value+'%';presets.set(Number(speed.value));});
 speed.addEventListener('change',()=>{dragging=false;setSpeed(speed.value);});
-power.onclick=()=>{const on=!UI.state.fan_on;power.setAttribute('aria-pressed',String(on));run(power,()=>UI.control('fan.set',{on},{fan_on:on}).then(startFanFeedback),null);};
+power.onclick=()=>{const on=!UI.state.fan_on;power.setAttribute('aria-pressed',String(on));run(power,()=>UI.control('fan.set',{on},{fan_on:on}),null);};
 for(const id of ['childLock','childLockDevice'])$(id).onchange=e=>run(null,()=>UI.control('child_lock.set',{enabled:e.target.checked},{child_lock:e.target.checked}),e.target.checked?'a1.lock_on':'a1.lock_off');
 function renderFan(s){
  const locked=s.ota_active||s.reboot_pending||UI.controlBusy;
@@ -199,22 +199,9 @@ function renderRing(s){
   svg.innerHTML=parts.join('')+'<text x="100" y="98" text-anchor="middle" class="ring-v">'+(enabled?(eff===0?feedbackSpeed:Math.round(brightness*100))+'%':t('state.off'))+'</text><text x="100" y="122" text-anchor="middle" class="ring-l">'+(eff===0?t(touching?'a1.feedback_target':'a1.feedback_pwm'):effectLabel(eff))+'</text>';
  }
 }
-// Animation uses the last accepted state. Only a successful user control opens
-// a bounded feedback window; a stale PWM value must never enable endless polls.
-let fanFeedbackTimer=null,fanFeedbackUntil=0,fanFeedbackReading=false;
+// Animation uses accepted state; network feedback belongs to the shared owner.
 function ringVisible(){const page=document.querySelector('[data-settings-page="light"]');return !document.hidden&&(!$('homePage').hidden||page&&!page.hidden);}
-function scheduleFanFeedback(){
- clearTimeout(fanFeedbackTimer);fanFeedbackTimer=null;
- if(fanFeedbackReading||performance.now()+500>fanFeedbackUntil)return;
- fanFeedbackTimer=setTimeout(async()=>{
-  fanFeedbackTimer=null;
-  if(!ringVisible()||performance.now()>fanFeedbackUntil)return;
-  fanFeedbackReading=true;
-  try{await UI.reload();}catch{/* Background feedback is best effort. */}finally{fanFeedbackReading=false;scheduleFanFeedback();}
- },500);
-}
-function startFanFeedback(){fanFeedbackUntil=performance.now()+4000;scheduleFanFeedback();}
-window.addEventListener('pagehide',()=>{fanFeedbackUntil=0;clearTimeout(fanFeedbackTimer);clearInterval(ringAnimationTimer);fanFeedbackTimer=ringAnimationTimer=null;});
+window.addEventListener('pagehide',()=>{clearInterval(ringAnimationTimer);ringAnimationTimer=null;});
 window.addEventListener('pageshow',()=>{if(ringAnimationTimer===null)updateRingAnimation();});
 function updateRingAnimation(){
  clearInterval(ringAnimationTimer);
@@ -258,7 +245,7 @@ async function showLight(options={}){
   if(hasSpeed&&[2,3,5].includes(m.effect)){const [out,range]=slider(m,'speed',{min:1,max:10,fmt:v=>(v/5).toFixed(1)+'×'});range.setAttribute('aria-label',t('fx.speed'));speedControls.push(h('div',{class:'stack',style:'margin-top:16px'},h('div',{class:'row between'},h('span',{class:'label',i18n:'fx.speed'}),out),range,h('div',{class:'row between help'},t('fx.slow'),t('fx.fast'))));}
   const previewSpeed=h('input',{id:'previewSpeed',type:'range',min:1,max:100,step:1,value:UI.state?.fan_on?UI.state.percentage:UI.state?.requested_speed||60,'aria-label':t('a1.speed'),
    oninput:e=>{previewTarget=Number(e.target.value);$('previewSpeedValue').textContent=e.target.value+'%';renderRing(UI.state);},
-   onchange:()=>run(previewSpeed,async()=>{try{await setSpeed(previewSpeed.value);}finally{previewTarget=null;renderRing(UI.state);}},null),
+   onchange:()=>{previewTarget=null;renderRing(UI.state);return run(previewSpeed,()=>setSpeed(previewSpeed.value),null);},
    onblur:()=>{previewTarget=null;if(UI.state)renderRing(UI.state);}});
   const previewRing=document.createElementNS('http://www.w3.org/2000/svg','svg');
   previewRing.setAttribute('class','ring ring-preview-svg');previewRing.setAttribute('viewBox','0 0 200 200');
@@ -445,7 +432,7 @@ UI.start({
  capabilities(caps){if(caps.fresh_air){this.groups[1][1].push('freshair');this.nav.freshair='fresh.settings';this.pages.freshair={show:showFresh};}},
  model:'A1',kindKey:'kind.a1',icon:'fan',mqttHostMax:127,factoryReset:true,
  otaName:'phicomm_a1.ota.bin.signed',haHintKey:'mqtt.ha_a1',otaHintKey:'fw.hint_a1',buttonHintKey:'sys.hint_a1',
- scheduleLead:'sch.lead_a1',interval:2000,hasButtons:true,
+ scheduleLead:'sch.lead_a1',hasButtons:true,
  groups:[['grp.network',['network','mqtt']],['grp.device',['device','light']],['grp.auto',['binding','linkage','schedule','buttons','night']],['grp.system',['firmware','diagnostics','logs','maintenance']]],
  nav:{network:'nav.wifi',mqtt:'nav.mqtt',device:'nav.general',light:'nav.light',binding:'nav.binding',linkage:'nav.linkage',schedule:'nav.schedule',buttons:'nav.buttons',night:'nav.sleep',firmware:'nav.firmware',diagnostics:'nav.diagnostics',logs:'nav.logs',maintenance:'nav.maintenance'},
  pages:{device:{show:clock.show,status:clock.status},light:{show:showLight},binding:{show:showBinding},linkage:{show:showLinkage}},
@@ -460,6 +447,6 @@ UI.start({
 });
 I18N.onChange(()=>{if(UI.state){renderAuto();UI.showRoute();}});
 // Keep the automatic-control summary fresh even while the home page is idle.
-(async function poll(){try{if(document.hidden||($('homePage').hidden&&UI.activePage()!=='binding'&&UI.activePage()!=='linkage'))return;const previous=JSON.stringify([bindingStatus.average?.fields,bindingStatus.average?.valid,bindingStatus.average?.co2_valid]);bindingStatus=await api('/binding/status');if(previous!==JSON.stringify([bindingStatus.average?.fields,bindingStatus.average?.valid,bindingStatus.average?.co2_valid])&&UI.activePage()==='linkage'&&!document.querySelector('[data-settings-page="linkage"] [data-dirty="1"], [data-settings-page="linkage"][data-dirty="1"]'))linkageDraws.forEach(draw=>draw());if(UI.state)renderFan(UI.state);renderAuto();}catch{}finally{setTimeout(poll,3000);}})();
+(async function poll(){try{if(document.hidden||($('homePage').hidden&&UI.activePage()!=='binding'&&UI.activePage()!=='linkage'))return;const previous=JSON.stringify([bindingStatus.average?.fields,bindingStatus.average?.valid,bindingStatus.average?.co2_valid]);bindingStatus=await api('/binding/status');if(previous!==JSON.stringify([bindingStatus.average?.fields,bindingStatus.average?.valid,bindingStatus.average?.co2_valid])&&UI.activePage()==='linkage'&&!document.querySelector('[data-settings-page="linkage"] [data-dirty="1"], [data-settings-page="linkage"][data-dirty="1"]'))linkageDraws.forEach(draw=>draw());if(UI.state)renderFan(UI.state);renderAuto();}catch{}finally{setTimeout(poll,5000);}})();
 api('/light/advanced').then(a=>{advanced=a;updateRingAnimation();if(UI.state)renderLight(UI.state);}).catch(e=>toast(e.message,true));
 })();
