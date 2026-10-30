@@ -28,7 +28,7 @@ import InstallApp from './components/InstallApp.vue';
 
 const iconURL=import.meta.env.BASE_URL+'icons/iotcloud.svg';
 const demoMode=import.meta.env.VITE_DEMO === '1';
-const demoDevices=demoMode?Object.fromEntries(['tc1','m1','a1','daikin'].map(m=>[m,window.PhicommDemo.create(m)])):null;
+const demoDevices=demoMode?Object.fromEntries(['tc1','m1','a1','daikin','s30-v1b'].map(m=>[m,window.PhicommDemo.create(m)])):null;
 const route=useRoute(),router=useRouter();
 const localMode=route.name==='Local';
 const installApp=ref(null),listReady=ref(false);
