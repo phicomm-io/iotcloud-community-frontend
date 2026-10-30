@@ -90,7 +90,9 @@ for(const model of ['M1','A1','TC1'])test(model+' restores one status polling ch
   await flush();assert.equal(reads.length,1);assert.equal(w.UI.state.name,'current');
   const onStatus=w.UI.device.onStatus;w.UI.device.onStatus=s=>{rendered.push(s.name);onStatus?.(s);};
   const interval=model==='TC1'?3000:5000;
-  const pending=()=>[...timers.values()].filter(t=>t.delay===interval&&t.fn.name==='refresh');
+  // Minification renames the refresh callback; auxiliary status pollers are
+  // async functions, while the home-chain timeout is an ordinary callback.
+  const pending=()=>[...timers.values()].filter(t=>t.delay===interval&&t.fn.constructor.name!=='AsyncFunction');
   const tick=async()=>{assert.equal(pending().length,1,'exactly one home status timer');const timer=pending()[0];timers.delete(timer.id);const result=timer.fn();await flush();return result;};
   assert.equal(pending().length,1);
   const oldTimer=pending()[0];
