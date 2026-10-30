@@ -18,15 +18,17 @@ const ACTIONS={M1:['schedules.get','schedules.put','schedules.delete','schedules
  const pollTimers=[];w.TextEncoder=require('node:util').TextEncoder;
  // Minification renames callbacks. Identify the status poll by its configured
  // interval rather than relying on a source-only function name.
- w.setTimeout=(fn,delay)=>{const page=w.UI?.activePage?.(),interval=page?(page==='diagnostics'?5000:10000):(w.UI?.device?.interval||2000);if(delay===interval)pollTimers.push(fn);return 0;};w.confirm=()=>true;w.scrollTo=()=>{};
+ w.setTimeout=(fn,delay)=>{if(delay===5000)pollTimers.push(fn);return 0;};w.confirm=()=>true;w.scrollTo=()=>{};
  const state={mqtt_topic_mode:model==='TC1'?'legacy':'tmcp',name:'test <img>',device_id:'aabbccddeeff',version:'test',ip:'1.2.3.4',ssid:'home',wifi_connected:true,mqtt_status:'ready',mqtt_host:'broker',mqtt_user:'user',mqtt_port:1883,
   brightness_requested:4,brightness:255,led_enabled:true,led_always_on:true,red:1,green:2,blue:3,speed:60,percentage:60,applied_speed:60,requested_speed:60,fan_on:true,fan_ready:true,panel_ready:true,
   sensor_received:true,sensor_valid:true,age_ms:1000,temperature:25,humidity:50,formaldehyde:0.02,pm25:20,time_synced:true,timezone_minutes:480,ntp_host:'pool.ntp.org',ntp_status:'synced',ntp_synced:true,
   ota_progress:0,ota_state:'idle',socket_names:['one','two','three','four','five','six'],socket_states:[1,1,1,1,1,1],report_seconds:2,powerCoefficientX100:1710,free_memory:30000};
  const buttonItems=Array.from({length:30},(_,i)=>({key:0,clicks:i+1,seconds:0,action:model==='A1'?'fan.set':'outlet.set',params:{toggle:true}}));
+ let diagnosticsReply={schema:1,fields:[[2,123456],[56,3],[57,'i2c_timeout'],[9999,88],[55,null]]},holdDiagnostics=false,diagnosticsPending=[];
  if(model!=='TC1')Object.assign(state,{reset_reason:'watchdog',reset_reason_raw:32,watchdog_enabled:true,watchdog_state:'healthy',watchdog_fault:''});
- const actions=['status.get','capabilities.get','config.get','config.set','logs.get','ota.start',...ACTIONS[model],...(process.env.WEB_TEST_OTA?['ota.sources.get','ota.check','ota.check.get','ota.notes','ota.notes.get','ota.install','ota.cancel']:[])];
- const fixtures={'status.get':state,'capabilities.get':{model:model.toLowerCase(),actions,button_keys:model==='A1'?['power','wifi','combination']:['function']},
+ const actions=['status.get','capabilities.get','config.get','config.set','logs.get','ota.start',...ACTIONS[model],...(model==='TC1'?[]:['diagnostics.get']),...(process.env.WEB_TEST_OTA?['ota.sources.get','ota.check','ota.check.get','ota.notes','ota.notes.get','ota.install','ota.cancel']:[])];
+ const fixtures={'status.get':state,'capabilities.get':{model:model.toLowerCase(),actions,...(model==='TC1'?{}:{diagnostics_schema:1,business_status:true}),button_keys:model==='A1'?['power','wifi','combination']:['function']},
+  'diagnostics.get':{schema:1,fields:[[2,123456],[56,3],[57,'i2c_timeout'],[9999,88],[55,null]]},
   'schedules.get':{items:[],capacity:model==='TC1'?128:8,count:0,next:8},'buttons.get':{items:[]},'time.get':{timezone_minutes:480},
   'night.get':{windows:[],revision:1},'logs.get':{records:[{sequence:1,event:'boot'},...(model==='TC1'?[]:[{sequence:2,module:'system',event:'watchdog'}])],next:model==='TC1'?1:2,latest:model==='TC1'?1:2},
   'power.get':{power_watts:0,energy_kwh:0,powers:[0]},'binding.get':{response_ids:[],peers:[],members:[],group:'',revision:1},
@@ -45,12 +47,14 @@ const ACTIONS={M1:['schedules.get','schedules.put','schedules.delete','schedules
    if(holdOutlet)await holdOutlet(req);
    if(req.params.index===undefined)state.socket_states.fill(Number(req.params.on));else state.socket_states[req.params.index]=Number(req.params.on);
   }
-  let data=fixtures[req.action]||{};
+  if(req.action==='diagnostics.get'&&holdDiagnostics)return new Promise(resolve=>diagnosticsPending.push(()=>resolve({ok:true,status:200,json:async()=>({code:'ok',data:diagnosticsReply})})));
+  let data=fixtures[req.action]||{};if(req.action==='diagnostics.get')data=diagnosticsReply;
   if(req.action==='status.get'&&req.params.view==='live'){data={...state};delete data.ssid;delete data.free_memory;}
   return {ok:true,status:200,json:async()=>({code:req.action.endsWith('.get')?'ok':'accepted',data})};};
  require('./legacy_device_fixture.cjs')(w);
  for(const match of html.matchAll(/<script>([\s\S]*?)<\/script>/g))require('node:vm').runInContext(match[1],dom.getInternalVMContext());
  for(let i=0;i<12;i++)await flush();
+ if(model!=='TC1')assert.equal(calls.some(r=>r.action==='diagnostics.get'),false,'diagnostics are not polled while another view is active');
  if(process.env.WEB_TEST_VIEWS){
   const reads=()=>calls.filter(c=>c.action==='status.get');
   assert.deepEqual(reads()[0].params,{},'first read is full');
@@ -161,6 +165,38 @@ const ACTIONS={M1:['schedules.get','schedules.put','schedules.delete','schedules
   const text=d.querySelector('[data-settings-page="diagnostics"]').textContent;
   assert(text.includes('watchdog timeout')||text.includes('看门狗超时'), 'watchdog reset is explained in diagnostics');
   assert(text.includes('32'),'raw reset reason is visible');
+  assert(calls.some(r=>r.action==='diagnostics.get'),'capability-enabled diagnostics page reads diagnostics.get');
+  assert(!text.includes('9999'),'unknown diagnostic field IDs are ignored');
+  assert(!text.includes('scd40.serial'),'missing diagnostic values are omitted');
+  assert(text.includes('i2c_timeout'),'nested diagnostic field path is decoded');
+  assert.equal(w.UI.state.scd40,undefined,'diagnostic fields never contaminate business UI state');
+  assert(!JSON.stringify(w.UI.state).includes('123456'),'diagnostic-only uptime does not enter UI state');
+  diagnosticsReply={schema:2,fields:[[57,'invalid-version']]};await w.UI.reload();
+  let diagnosticRaw=d.querySelector('[data-settings-page="diagnostics"] pre').textContent;
+  assert(!diagnosticRaw.includes('invalid-version'),'unsupported schema version rejects the response');
+  diagnosticsReply={schema:1,fields:[[57,'first'],[57,'duplicate']]};await w.UI.reload();
+  diagnosticRaw=d.querySelector('[data-settings-page="diagnostics"] pre').textContent;
+  assert(!diagnosticRaw.includes('first')&&!diagnosticRaw.includes('duplicate'),'duplicate field IDs reject the whole response');
+  diagnosticsReply={schema:1,fields:[[57,'i2c_timeout'],[57,'crc_error']]};await w.UI.reload();
+  diagnosticRaw=d.querySelector('[data-settings-page="diagnostics"] pre').textContent;
+  assert(!diagnosticRaw.includes('crc_error')&&!diagnosticRaw.includes('i2c_timeout'),'duplicate IDs are not partially applied');
+  const before=calls.length;await w.UI.reload();
+  assert.equal(calls.slice(before).filter(r=>['capabilities.get','config.get'].includes(r.action)).length,0,'business_status skips repeated capability/config reads');
+  const fullAt=calls.length;await w.UI.reload({full:true});
+  assert.deepEqual(calls.slice(fullAt).filter(r=>['capabilities.get','config.get'].includes(r.action)).map(r=>r.action),['capabilities.get','config.get'],'explicit full reload refreshes capabilities and config');
+  if(model==='A1'){
+   await w.eval("command('fan.set',{speed:61})");const mutationAt=calls.length;await w.UI.reload();
+   assert.deepEqual(calls.slice(mutationAt).filter(r=>['capabilities.get','config.get'].includes(r.action)).map(r=>r.action),['capabilities.get','config.get'],'mutations refresh capabilities and config with the next full status');
+  }
+  holdDiagnostics=true;const pendingBefore=diagnosticsPending.length;const oldView=w.UI.reload();await flush();
+  assert.equal(diagnosticsPending.length,pendingBefore+1,'diagnostics view starts a deferred diagnostic read');
+  w.location.hash='settings/network';w.dispatchEvent(new w.Event('hashchange'));await flush();
+  diagnosticsReply={schema:1,fields:[[57,'stale-tab-response']]};diagnosticsPending.shift()();await flush();await oldView;
+  assert.equal(w.UI.state.scd40,undefined,'a late diagnostic reply after navigation cannot mutate business state');
+  holdDiagnostics=false;diagnosticsReply={schema:1,fields:[[57,'fresh-tab-response']]};
+  w.location.hash='settings/diagnostics';w.dispatchEvent(new w.Event('hashchange'));await flush();await w.UI.reload();
+  diagnosticRaw=d.querySelector('[data-settings-page="diagnostics"] pre').textContent;
+  assert(diagnosticRaw.includes('fresh-tab-response')&&!diagnosticRaw.includes('stale-tab-response'),'late diagnostics reply cannot replace the new tab snapshot');
  }else assert(!d.querySelector('[data-key="diag.g_watchdog"]'),'TC1 does not advertise the A1/M1 watchdog');
  // General settings must be reachable from the menu, not just a direct hash.
  const generalLink=d.querySelector('#side a[href="#settings/device"]');
@@ -203,9 +239,9 @@ const ACTIONS={M1:['schedules.get','schedules.put','schedules.delete','schedules
   assert(calls.some(r=>r.action==='outlet.set'&&r.params.index===0&&r.params.on===false),'a socket tile must toggle one socket');
   assert.equal(d.querySelector('#socket1').disabled,false,'another socket stays usable while the first command is pending');
   d.querySelector('#socket1').click();await flush();
-  await w.UI.reload();
+  const queuedRefresh=w.UI.reload();await flush();
   for(const id of ['socket0','socket1'])assert.equal(d.querySelector('#'+id).getAttribute('aria-pressed'),'false','stale status must not overwrite pending socket output');
-  for(const release of releases)release();holdOutlet=null;
+  const released=[...releases];holdOutlet=null;for(const release of released)release();await queuedRefresh;
   for(let i=0;i<4;i++)await flush();
   for(const id of ['socket0','socket1'])assert.equal(d.querySelector('#'+id).disabled,false,'acknowledged sockets become usable again');
   w.location.hash='settings/buttons';w.dispatchEvent(new w.Event('hashchange'));await flush();

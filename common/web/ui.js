@@ -160,13 +160,36 @@ const UI=window.UI={$,h,fieldRow,saveDraft,icon,toast,run,onSubmit,confirm:confi
 // Keep requested output visible until a fresh read confirms it. Polls may still
 // contain the pre-write state while the device applies an accepted command.
 let pendingControl=null;
+const controlObservers=new Set();
 // Partial reads retain slow fields; null explicitly invalidates a measurement.
 UI.acceptStatus=(s,partial=false)=>{
  const merged=partial?{...UI.confirmed,...s}:s;
  if(partial&&s.scd40&&UI.confirmed?.scd40)merged.scd40={...UI.confirmed.scd40,...s.scd40};
- UI.confirmed=merged;UI.state=pendingControl?{...merged,...pendingControl}:merged;return UI.state;
+ UI.confirmed=merged;UI.state=pendingControl?{...merged,...pendingControl}:merged;
+ for(const observe of controlObservers)observe(merged);
+ return UI.state;
 };
-let fullGeneration=1,loadedGeneration=0,lastFullAt=0;
+function diagnosticSnapshot(reply){
+ if(!reply||reply.schema!==diagnosticSchema||!Array.isArray(reply.fields))throw Error('Invalid diagnostics schema');
+ const out={},seen=new Set();
+ for(const pair of reply.fields){
+  if(!Array.isArray(pair)||pair.length!==2||!Number.isInteger(pair[0]))throw Error('Invalid diagnostics field');
+  const path=diagnosticFields[String(pair[0])];
+  if(!path||pair[1]===undefined)continue;
+  if(seen.has(pair[0]))throw Error('Duplicate diagnostics field');
+  seen.add(pair[0]);
+  const keys=path.split('.');let cursor=out;
+  for(const key of keys.slice(0,-1))cursor=cursor[key]||(cursor[key]={});
+  cursor[keys.at(-1)]=pair[1];
+ }
+ return out;
+}
+function mergeDiagnostic(base,extra){
+ const out={...base};
+ for(const [key,value] of Object.entries(extra))out[key]=value&&typeof value==='object'&&!Array.isArray(value)?mergeDiagnostic(base[key]&&typeof base[key]==='object'?base[key]:{},value):value;
+ return out;
+}
+let fullGeneration=1,loadedGeneration=0,capabilityGeneration=0,lastFullAt=0;
 UI.invalidateStatus=()=>{fullGeneration++;};
 UI.activePage=()=>/^settings\/([a-z]+)$/.exec(UI.embeddedRoute??location.hash.slice(1))?.[1]||null;
 UI.statusParams=()=>{
@@ -174,6 +197,20 @@ UI.statusParams=()=>{
  const page=UI.activePage(),ttl=page==='diagnostics'?5000:['network','mqtt','device','firmware'].includes(page)?10000:30000;
  return UI.caps?.status_views?.includes('live')&&loadedGeneration===fullGeneration&&Date.now()-lastFullAt<ttl?{view:'live'}:{};
 };
+// Three additional reads at most. Slower application work can still be
+// confirmed by ordinary 5-second polling, without extending the read burst.
+UI.confirmStatus=matches=>new Promise(resolve=>{
+ let settled=false,reads=0,timer;
+ const stop=()=>finish(null);
+ const finish=value=>{if(settled)return;settled=true;clearTimeout(timer);clearTimeout(deadline);controlObservers.delete(observe);window.removeEventListener('pagehide',stop);resolve(value);};
+ const observe=s=>{if(matches(s))finish(s);};controlObservers.add(observe);
+ const deadline=setTimeout(stop,12000);window.addEventListener('pagehide',stop,{once:true});
+ async function read(){
+  await UI.reload({priority:1}).catch(()=>{});
+  if(!settled&&++reads<3)timer=setTimeout(read,reads===1?250:750);
+ }
+ read();
+});
 UI.control=async(action,params,patch)=>{
  if(!patch||typeof patch!=='object'||Array.isArray(patch)||!Object.keys(patch).length)throw Error(t('error.invalid_params'));
  if(pendingControl){UI.device.onStatus?.(UI.state);throw Error(t('control.pending'));}
@@ -184,12 +221,8 @@ UI.control=async(action,params,patch)=>{
  const matches=s=>s&&Object.entries(patch).every(([k,v])=>Object.hasOwn(s,k)&&(Array.isArray(v)?Array.isArray(s[k])&&v.length===s[k].length&&v.every((x,i)=>!!x===!!s[k][i]):typeof v==='boolean'?!!s[k]===v:s[k]===v));
  try{
   try{await command(action,params);}catch(e){sendError=e;if(e.code&&!['timeout','offline'].includes(e.code))throw e;}
-  const until=Date.now()+20000;
-  do{
-   last=await UI.reload();
-   if(matches(last))return last;
-   await new Promise(resolve=>setTimeout(resolve,750));
-  }while(Date.now()<until);
+  last=await UI.confirmStatus(matches);
+  if(last)return last;
   throw Error(t('control.unconfirmed')+(sendError?' · '+sendError.message:''));
  }finally{
   pendingControl=null;UI.controlBusy=false;UI.state=UI.confirmed||UI.state;render();
@@ -351,7 +384,7 @@ function mqttPage(dev){
  const host=h('input',{id:'mqttHost',maxLength:dev.mqttHostMax||127,placeholder:t('mqtt.host_ph')});
  const port=h('input',{id:'mqttPort',type:'number',min:1,max:65535,required:true,value:'1883'});
  const user=h('input',{id:'mqttUser',maxLength:63,autocomplete:'off'});
- const pass=h('input',{id:'mqttPassword',type:'password',maxLength:256,autocomplete:'new-password',placeholder:t('mqtt.pass_ph')});
+ const pass=h('input',{id:'mqttPassword',type:'password',maxLength:dev.mqttPasswordMax||256,autocomplete:'new-password',placeholder:t('mqtt.pass_ph')});
  const protocol=(PRODUCT===null||PRODUCT==='tc1')&&dev.model==='TC1'?h('select',{id:'mqttMode'},h('option',{value:'tmcp'},'TMCP (v2)'),h('option',{value:'legacy'},'Legacy (v1)')):null;
  const clear=switchRow('clearMqttPassword','mqtt.clear','mqtt.clear_desc');
  const imported=mqttImportPanel(dev,{host,port,user,pass,protocol,clear:clear.querySelector('input')});
@@ -503,13 +536,20 @@ function firmwarePage(dev){
   file.accept=selected?'.signed':'.bin,.raw,.signed';
  }
  conversionInput?.addEventListener('change',conversionMode);
- const url=h('input',{id:'otaUrl',type:'url',maxLength:499,required:true,placeholder:'https://…/'+dev.otaName});
+ const url=h('input',{id:'otaUrl',type:'url',maxLength:UI.caps?.ota_url_max||499,required:true,placeholder:'https://…/'+dev.otaName});
  const fileForm=h('form',{id:'fileForm',class:'stack'},h('label',{class:'field'},h('span',{},t('fw.file',{m:dev.model})),file),
   h('details',{class:'more'},h('summary',{i18n:'common.advanced'}),unsigned,...(conversion?[conversion]:[])),
   h('div',{class:'form-actions'},h('button',{class:'btn primary',type:'submit'},h('span',{i18n:'fw.upload'}))));
  const urlForm=h('form',{id:'urlForm',class:'stack',hidden:true},fieldRow('fw.url',url),
   h('div',{class:'form-actions'},h('button',{class:'btn primary',type:'submit'},h('span',{i18n:'fw.download'}))));
- const picker=seg([['file','fw.tab_file'],['url','fw.tab_url']],v=>{fileForm.hidden=v!=='file';urlForm.hidden=v!=='url';});picker.set('file');picker.hidden=!UI.caps?.actions?.includes('ota.start');
+ const picker=seg([['file','fw.tab_file'],['url','fw.tab_url']],v=>{fileForm.hidden=v!=='file';urlForm.hidden=v!=='url';});
+ function installCapabilities(caps){
+  const urlOnly=caps?.ota_upload===false;
+  picker.set(urlOnly?'url':'file');
+  fileForm.hidden=urlOnly;urlForm.hidden=!urlOnly;
+  picker.hidden=urlOnly||!caps?.actions?.includes('ota.start');
+ }
+ installCapabilities(UI.caps);
  // Upload streams raw bytes; the request is synchronous up to send(), like the old page.
  let uploading=false;
  fileForm.addEventListener('submit',e=>{
@@ -540,9 +580,9 @@ function firmwarePage(dev){
  const fileLabel=fileForm.querySelector('.field>span');I18N.onChange(()=>{fileLabel.textContent=t('fw.file',{m:dev.model});});
  return {el:h('div',{class:'stack'},pageHead('nav.firmware','fw.lead'),sum,...(mcu?[mcu.el]:[]),card('fw.compare_title',null,h('p',{class:'help',i18n:'fw.compare_help'}),comparison),online,
   card('fw.install',null,picker,h('div',{style:'margin-top:16px'},fileForm,urlForm),h('div',{class:'stack',style:'margin-top:20px'},prog,state,cancel),info(dev.otaHintKey))),
-  capabilities(caps){if(conversion&&caps.ota_variant_conversion!=='full-to-hub'){conversionInput.checked=false;conversion.remove();conversionMode();}online.hidden=!caps.actions?.includes('ota.sources.get');picker.hidden=!caps.actions?.includes('ota.start');},
+  capabilities(caps){if(conversion&&caps.ota_variant_conversion!=='full-to-hub'){conversionInput.checked=false;conversion.remove();conversionMode();}online.hidden=!caps.actions?.includes('ota.sources.get');installCapabilities(caps);},
   status(s){identity=s;comparisonLink();if(mcu)mcu.refresh().catch(()=>{});sum.replaceChildren(summary([['fw.version',h('span',{class:'num'},s.version||'—')],['fw.state',t('s.'+(s.ota_state||'idle'))],s.ota_error?['fw.error',h('span',{class:'badge bad'},s.ota_error)]:null]));
-   cancel.hidden=!s.ota_active||s.ota_mode==='committing';
+   cancel.hidden=!UI.caps?.actions?.includes('ota.cancel')||!s.ota_active||s.ota_mode==='committing';
    if(s.ota_active){prog.value=s.ota_progress;state.textContent=t('fw.progress',{p:s.ota_progress});}}};
 }
 function diagValue(k,v){
@@ -664,25 +704,26 @@ function clockCard({load,save,status}){
 }
 
 /* ---------- Boot ---------- */
-let initialized=false,failures=0,lastSuccess=0,loading=null;
+let initialized=false,failures=0,lastSuccess=0,loading=null,loadingGeneration=0;
 let stopped=false,pollingStarted=false,pollTimer=null,pollGeneration=0;
 const lockedControls=new Map();
-function lockHome(){if(!UI.embedded)return;for(const el of document.querySelectorAll('#homePage button,#homePage input,#homePage select')){if(!lockedControls.has(el))lockedControls.set(el,el.disabled);el.disabled=true;}}
-function unlockHome(){for(const [el,disabled] of lockedControls)el.disabled=disabled;lockedControls.clear();}
-async function load(){
+function lockHome(){if(!UI.embedded)return;const home=$('homePage');if(home)home.inert=true;for(const el of document.querySelectorAll('#homePage button,#homePage input,#homePage select')){if(!lockedControls.has(el))lockedControls.set(el,el.disabled);el.disabled=true;}}
+function unlockHome(){if(UI.embedded){const home=$('homePage');if(home)home.inert=false;}for(const [el,disabled] of lockedControls)el.disabled=disabled;lockedControls.clear();}
+async function load(priority){
  const lifecycle=pollGeneration,resetVersion=resetGeneration;
  try{
   const params=UI.statusParams(),generation=fullGeneration;
-  const raw=await command('status.get',params);
+  const raw=await command('status.get',params,{priority});
   if(stopped||lifecycle!==pollGeneration)return null;
   failures=0;lastSuccess=Date.now();unlockHome();
   if(!params.view&&!raw.ota_mode){lastFullAt=Date.now();loadedGeneration=generation;}
   if(raw.ota_active&&raw.ota_mode){UI.pages.firmware?.status(raw);return raw;}
-  if(!params.view||UI.caps?.config_recovery||resetPending){
-   const caps=await command('capabilities.get'),config=await command('config.get');
+  if((!params.view&&(!UI.caps?.business_status||capabilityGeneration!==generation))||UI.caps?.config_recovery||resetPending){
+   const caps=await command('capabilities.get',{}, {priority}),config=await command('config.get',{}, {priority});
    if(stopped||lifecycle!==pollGeneration||resetVersion!==resetGeneration)return null;
    const wasRecovery=!!UI.caps?.config_recovery;
    UI.acceptCapabilities(caps);
+   capabilityGeneration=generation;
    if(UI.identityChanged)return null;
    UI.caps.config_recovery=!!UI.caps.config_recovery||config.migration_state==='confirmation_required';
    if(resetPending&&raw.reboot_pending)resetSawPending=true;
@@ -694,17 +735,28 @@ async function load(){
     toast(t(UI.caps.config_recovery?'recovery.unconfirmed':'recovery.ready'),!!UI.caps.config_recovery);
    }
   }
+  if(generation!==fullGeneration)return null;
   const s=UI.acceptStatus(raw,params.view==='live');
   if(mayM1)readMcuVersion().catch(()=>{});
   $('title').textContent=UI.device.model+' '+(s.name||'');
   renderChips(s);renderBanners(s,false);
   if(!initialized){for(const p of Object.values(UI.pages))if(p.init)p.init(s);initialized=true;}
-  for(const [key,p] of Object.entries(UI.pages))if(p.status&&(key===UI.activePage()||key.startsWith('slot_')&&UI.activePage()==='device'))p.status(s);
+  let diagnosticState=s;
+  if((UI.activePage()==='diagnostics'||UI.device.diagnosticPages?.includes(UI.activePage()))&&UI.caps?.actions?.includes('diagnostics.get')){
+   const routeGenerationAtRead=routeGeneration,signal=routeRead?.signal;
+   try{
+    const reply=await command('diagnostics.get',{},signal?{signal}:{});
+    if(stopped||lifecycle!==pollGeneration||routeGenerationAtRead!==routeGeneration)return null;
+    diagnosticState=mergeDiagnostic(s,diagnosticSnapshot(reply));
+   }catch(error){if(error?.name==='AbortError')return null;}
+  }
+  for(const [key,p] of Object.entries(UI.pages))if(p.status&&(key==='diagnostics'?key===UI.activePage():key===UI.activePage()||key.startsWith('slot_')&&UI.activePage()==='device'))p.status(key==='diagnostics'?diagnosticState:s);
   if(UI.device.onStatus)UI.device.onStatus(s);
+  if(diagnosticState!==s&&UI.device.diagnosticStatus)UI.device.diagnosticStatus(s,diagnosticState);
   return raw;
  }catch(e){if(!stopped&&lifecycle===pollGeneration&&++failures>=3&&(!lastSuccess||Date.now()-lastSuccess>=30000)){lockHome();renderBanners(null,true);}return null;}
 }
-function pollLoad(){if(stopped)return Promise.resolve(null);if(!loading)loading=load().finally(()=>{loading=null;});return loading;}
+function pollLoad(priority=2){if(stopped)return Promise.resolve(null);if(!loading){loadingGeneration=fullGeneration;loading=load(priority).finally(()=>{loading=null;});}return loading;}
 window.addEventListener('pagehide',()=>{stopped=true;pollGeneration++;clearTimeout(pollTimer);pollTimer=null;});
 async function refreshStatus(generation=pollGeneration,resuming=false){
  if(stopped||generation!==pollGeneration)return;
@@ -718,7 +770,7 @@ async function refreshStatus(generation=pollGeneration,resuming=false){
  if(!stopped&&generation===pollGeneration)pollTimer=setTimeout(function refresh(){
   if(generation===pollGeneration)pollTimer=null;
   return refreshStatus(generation);
- },UI.activePage()?(UI.activePage()==='diagnostics'?5000:10000):(UI.device.interval||2000));
+ },UI.device.interval||5000);
 }
 window.addEventListener('pageshow',()=>{
  if(!stopped)return;
@@ -726,9 +778,10 @@ window.addEventListener('pageshow',()=>{
  if(pollingStarted)refreshStatus(pollGeneration,true);
 });
 let fullReload=null;
-UI.reload=({full=false}={})=>{
- if(!full)return loading||pollLoad();
- if(!fullReload){UI.invalidateStatus();fullReload=(async()=>{if(loading)await loading;return pollLoad();})().finally(()=>{fullReload=null;});}
+UI.reload=({full=false,priority=2}={})=>{
+ if(full)UI.invalidateStatus();
+ if(!loading||loadingGeneration===fullGeneration)return loading||pollLoad(priority);
+ if(!fullReload)fullReload=(async()=>{await loading;return pollLoad(priority);})().finally(()=>{fullReload=null;});
  return fullReload;
 };
 document.addEventListener('visibilitychange',()=>{if(UI.device&&!document.hidden&&!stopped)UI.reload({full:true});});
@@ -753,7 +806,7 @@ UI.start=async dev=>{
    h('a',{href:'#home','data-tab':'home'},icon('home'),h('span',{i18n:'nav.home'})),
    h('a',{href:'#settings/'+first,'data-tab':'settings'},icon('sliders'),h('span',{i18n:'nav.settings'}))),
   h('div',{id:'banners'}));
- UI.caps=await command('capabilities.get').catch(()=>({actions:[]}));
+ UI.caps=await command('capabilities.get').catch(()=>({actions:[]}));capabilityGeneration=fullGeneration;
  if(dev.capabilities)dev.capabilities(UI.caps);
  if(!UI.embedded&&UI.caps.model==='daikin'&&UI.caps.firmware_variant==='hub'){
   const tabs=document.querySelector('.tabs');tabs.classList.add('hub-tabs');

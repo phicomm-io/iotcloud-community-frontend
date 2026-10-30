@@ -17,7 +17,7 @@ const refs=html=>[...html.matchAll(/(?:src|href)="(\/iotcloud\/device-assets\/[^
 const evidence=resolve(sourceRoot,'../review/hub-device-assets');
 
 test('shared device assets keep all products and share the standalone DAIKIN code',()=>{
- assert.deepEqual(Object.keys(output.pages),['tc1','a1','m1','daikin']);
+ assert.deepEqual(Object.keys(output.pages),['tc1','a1','m1','daikin','s30-v1b']);
  for(const html of [...Object.values(output.pages),output.standalone]){
   assert(!/<style\b|<script\b[^>]*>[^<]+/i.test(html),'scripts and styles must use the local pool');
   assert(!/data-device-part|@include/.test(html));
@@ -93,7 +93,7 @@ test('cold root and embedded pages work locally with scoped token auth, typed co
   assert.equal((await fetch(origin)).status,200,'static root is public; device APIs own authentication');
   for(const engine of [chromium,webkit].filter(engine=>!process.env.BROWSER||engine.name()===process.env.BROWSER)){
    const browser=await engine.launch(engine===webkit&&process.env.PHICOMM_WEBKIT_EXECUTABLE_PATH?{executablePath:process.env.PHICOMM_WEBKIT_EXECUTABLE_PATH}:{});
-   try{for(const language of ['en','zh-CN'])for(const model of ['root','tc1','a1','m1','daikin']){
+   try{for(const language of ['en','zh-CN'])for(const model of ['root','tc1','a1','m1','daikin','s30-v1b']){
     reset();const errors=[],warnings=[],external=[];
     const context=await browser.newContext({viewport:{width:390,height:900},serviceWorkers:'block'});
     await context.route('**/*',route=>{if(new URL(route.request().url()).origin!==origin){external.push(route.request().url());return route.abort();}return route.continue();});
@@ -110,7 +110,7 @@ test('cold root and embedded pages work locally with scoped token auth, typed co
      await body.evaluate((node,value)=>I18N.set(value),selected);
      await expect(firmwareLink).toHaveText(selected==='en'?'Firmware repository':'固件仓库');await expect(websiteLink).toHaveText(selected==='en'?'Project website':'项目网站');
     }
-    if(model==='tc1'){
+    if(model==='tc1'||model==='s30-v1b'){
      await view.locator('#socket0').click();await expect.poll(()=>writes.length).toBe(1);
      assert.equal(writes[0].action,'outlet.set');assert.deepEqual(writes[0].params,{index:0,on:false});
     }else if(model==='a1'){
@@ -130,6 +130,22 @@ test('cold root and embedded pages work locally with scoped token auth, typed co
     }else{
      assert.equal(rootRequests.length,0,'embedded pages must send commands through the host bridge');
      assert(writes.every(request=>request.path==='/fixture/'+model));
+     await body.evaluate(()=>{UI.embeddedRoute='settings/device';UI.showRoute();});
+    }
+    if(model==='s30-v1b'){
+     assert.equal(await view.locator('.tile').count(),1);
+     await view.locator('#coefForm').evaluate(el=>el.closest('details').open=true);
+     for(const [id,value] of [['voltageCoef','1.894288'],['currentCoef','1.0102'],['powerCoef','1.88835008906368']]){
+      await view.locator('#'+id).fill(value);
+      assert.equal(await view.locator('#'+id).evaluate(el=>el.checkValidity()),true,'Exact stock coefficient must be accepted');
+     }
+     await view.locator('#coefForm button').click();
+     await expect.poll(()=>writes.findLast(request=>request.action==='config.set'&&request.params.section==='meter')?.params.values).toEqual({
+      voltage_coefficient:1.894288,current_coefficient:1.0102,power_coefficient:1.88835008906368
+     });
+     await body.evaluate(()=>{UI.embeddedRoute='settings/firmware';UI.showRoute();});
+     await expect(view.locator('#fileForm')).toBeHidden();await expect(view.locator('#urlForm')).toBeVisible();
+     assert.equal(await view.locator('#otaUrl').getAttribute('maxlength'),'127');
      await body.evaluate(()=>{UI.embeddedRoute='settings/device';UI.showRoute();});
     }
     await expect(view.locator('#deviceName')).toBeVisible();await expect(view.locator('#webPassword')).toBeVisible();

@@ -22,12 +22,16 @@ export function deviceEntry(value) {
   const model = d.model || "tc1";
   const version = d.version || "v2";
   if (
-    !["tc1", "m1", "a1", "daikin"].includes(model) ||
+    !["tc1", "m1", "a1", "daikin", "s30-v1b"].includes(model) ||
     !(model === "tc1"
       ? ["v1", "v2"].includes(version)
       : version === "v2")
   )
     throw new Error(t('p.4baaf7d5f598'));
+  // This model has always used binary business messages. A manual entry must
+  // wait for bound discovery instead of inheriting the legacy JSON default.
+  if(model==='s30-v1b'&&!Object.hasOwn(d,'wire_format'))return deviceEntry({...d,wire_format:''});
+  if(model==='s30-v1b'&&d.wire_format==='json')throw new Error(t('p.4baaf7d5f598'));
   if (d.namespace && (d.namespace !== "account" || !d.username)) throw new Error(t('p.c384a9d1db4f'));
   return { mac, model, version, ...(d.self===true?{self:true}:{}), ...(['full','lite','hub'].includes(d.firmware_variant)?{firmware_variant:d.firmware_variant}:{}), ...(d.username ? {username:d.username} : {}), ...(d.namespace ? { namespace: d.namespace, username: d.username, ...(d.mqtt_username ? { mqtt_username: d.mqtt_username } : {}) } : {}), ...(Object.hasOwn(d,'wire_format')?{wire_format:['json','msgpack'].includes(d.wire_format)?d.wire_format:'',wire_version:d.wire_version,firmware_version:d.firmware_version,variant:d.variant||d.firmware_variant}:{}), ...(d.status ? { status: d.status } : {}) };
 }
@@ -176,6 +180,7 @@ export function command(d, cmd) {
 // unbound capability response or a failed command. Unknown new records wait for
 // discovery rather than trying a write in two formats.
 export function commandFormat(d){
+ if(d.model==='s30-v1b'&&(!Object.hasOwn(d,'wire_format')||d.wire_format==='json'))throw Object.assign(Error('Device discovery required'),{code:'discovery_required'});
  if(!Object.hasOwn(d,'wire_format'))return 'json';
  if(d.wire_format==='json')return 'json';
  if(d.wire_format==='msgpack'&&d.wire_version===1&&typeof d.firmware_version==='string'&&d.firmware_version&&typeof(d.variant||d.firmware_variant)==='string'&&(d.variant||d.firmware_variant))return 'msgpack';
@@ -183,11 +188,12 @@ export function commandFormat(d){
 }
 export function discoveryMessage(message,device_id){
  let data;try{data=decodeWire(message);}catch{return null;}
- if(data.protocol!=='tmcp'||data.protocol_version!==2||data.version!=='v2'||!['a1','m1','tc1','daikin'].includes(data.model))return null;
+ const protocol=data.protocol==='tmcp'||data.protocol==='openiot'&&data.command_protocol==='tmcp';
+ if(!protocol||data.protocol_version!==2||data.version!=='v2'||!['a1','m1','tc1','daikin','s30-v1b'].includes(data.model))return null;
  if(data.schema===2){
   if(data.device_id!==device_id||data.wire_version!==1||data.default_wire_format!=='msgpack'||!Array.isArray(data.wire_formats)||!data.wire_formats.includes('msgpack')||!data.firmware_version||!(data.variant||data.firmware_variant)||detectWire(message)!=='msgpack')return null;
   return {...data,wire_format:'msgpack',variant:data.variant||data.firmware_variant};
  }
- if(data.schema===1&&detectWire(message)==='json')return {...data,device_id,wire_format:'json'};
+ if(data.schema===1&&data.model!=='s30-v1b'&&data.protocol==='tmcp'&&detectWire(message)==='json')return {...data,device_id,wire_format:'json'};
  return null;
 }

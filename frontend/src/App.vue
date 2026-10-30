@@ -19,6 +19,7 @@ import AppIcon from './components/AppIcon.vue';
 import DeviceHome from './components/DeviceHome.vue';
 import {co2SourceCandidates} from './sensorSources.js';
 import {applyTypedSensorFeed,displaySourceCandidates,typedSensorTopic,sensorMetadataTopic} from './sensorFeed.js';
+import {hubMode} from './deployment.js';
 import PlatformSettings from './components/PlatformSettings.vue';
 import ThemeToggle from './components/ThemeToggle.vue';
 import LocalConnect from './components/LocalConnect.vue';
@@ -27,7 +28,7 @@ import InstallApp from './components/InstallApp.vue';
 
 const iconURL=import.meta.env.BASE_URL+'icons/iotcloud.svg';
 const demoMode=import.meta.env.VITE_DEMO === '1';
-const demoDevices=demoMode?Object.fromEntries(['tc1','m1','a1','daikin'].map(m=>[m,window.PhicommDemo.create(m)])):null;
+const demoDevices=demoMode?Object.fromEntries(['tc1','m1','a1','daikin','s30-v1b'].map(m=>[m,window.PhicommDemo.create(m)])):null;
 const route=useRoute(),router=useRouter();
 const localMode=route.name==='Local';
 const installApp=ref(null),listReady=ref(false);
@@ -201,7 +202,7 @@ function legacyRequest({action,params={}},reply,d){
 }
 function sendTo(d,action,params={}){deviceCommand({action,params},r=>{if(!['ok','accepted'].includes(r.code))error.value=r.message||r.code;},d);}
 async function localConnected(d){await refresh();selected.value=deviceKey(d);updateConnections(true);page.value='home';}
-async function changeMode(){if(localMode){connection.host='';await refresh();return;}transport.retain([]);for(const k of Object.keys(lanStates))delete lanStates[k];for(const k of Object.keys(states))delete states[k];Object.assign(deviceBroker,{host:'',port:'',hub:false});disconnect();notice.value='';error.value='';if(thirdParty.value){Object.assign(connection,{host:`${location.protocol==='https:'?'wss':'ws'}://${location.host}/mqtt`,username:'',password:''},JSON.parse(localStorage.getItem('tmcp_broker')||'{}'));}else{const s=await api('/register/status');try{const u=new URL(s.mqtt_uri.includes('://')?s.mqtt_uri:'mqtt://'+s.mqtt_uri);if(u.protocol==='mqtt:'&&u.hostname&&!u.username&&!u.password)Object.assign(deviceBroker,{host:u.hostname,port:Number(u.port||1883),hub:s.hub===true&&u.hostname===location.hostname&&Number(u.port||1883)===1883});}catch{}Object.assign(connection,{host:server.mqttWS||s.mqtt_ws_uri||`${location.protocol==='https:'?'wss':'ws'}://${location.host}/mqtt`,username:account.mqttUsername||account.username,password:account.password||savedPassword(account.username)});}await refresh();if(demoMode||(autoConnect(connectionOwner())&&connection.password))connect();}
+async function changeMode(){if(localMode){connection.host='';await refresh();return;}transport.retain([]);for(const k of Object.keys(lanStates))delete lanStates[k];for(const k of Object.keys(states))delete states[k];Object.assign(deviceBroker,{host:'',port:'',hub:false});disconnect();notice.value='';error.value='';if(hubMode){Object.assign(connection,{host:'',username:'',password:''});await refresh();return;}if(thirdParty.value){Object.assign(connection,{host:`${location.protocol==='https:'?'wss':'ws'}://${location.host}/mqtt`,username:'',password:''},JSON.parse(localStorage.getItem('tmcp_broker')||'{}'));}else{const s=await api('/register/status');try{const u=new URL(s.mqtt_uri.includes('://')?s.mqtt_uri:'mqtt://'+s.mqtt_uri);if(u.protocol==='mqtt:'&&u.hostname&&!u.username&&!u.password)Object.assign(deviceBroker,{host:u.hostname,port:Number(u.port||1883),hub:s.hub===true&&u.hostname===location.hostname&&Number(u.port||1883)===1883});}catch{}Object.assign(connection,{host:server.mqttWS||s.mqtt_ws_uri||`${location.protocol==='https:'?'wss':'ws'}://${location.host}/mqtt`,username:account.mqttUsername||account.username,password:account.password||savedPassword(account.username)});}await refresh();if(demoMode||(autoConnect(connectionOwner())&&connection.password))connect();}
 async function add(){try{const d=deviceEntry({...addForm,version:addForm.model==='tc1'?addForm.version:'v2',...(thirdParty.value?{username:connection.username}:{})});if(thirdParty.value){if(list.value.some(x=>x.mac===d.mac))throw Error(t('p.bf5557c8f16a'));localStorage.setItem(guestKey(),JSON.stringify([...list.value,d]));}else await api('/devices',{method:'POST',body:JSON.stringify(d)});await refresh();addForm.mac='';}catch(e){error.value=e.message;}}
 async function remove(d){if(!confirm(t('p.4c8411974d35',{v0:(d.mac)})))return;try{client?.unsubscribe(topics(d));if(thirdParty.value)localStorage.setItem(guestKey(),JSON.stringify(list.value.filter(x=>deviceKey(x)!==deviceKey(d))));else await api(`/devices/${d.namespace?'scoped/':''}${d.mac}${d.namespace?'?mqtt_username='+encodeURIComponent(d.mqtt_username||d.username):''}`,{method:'DELETE'});await refresh();}catch(e){error.value=e.message;}}
 async function logout(){transport.retain([]);webPasswords.clear();try{await api('/auth/logout',{method:'POST',body:'{}'});}catch(e){error.value=e.message;}account.username=null;account.mqttUsername=null;account.isAdmin=false;account.aliases=[];account.githubLogin='';account.password='';forgetLogin();disconnect();await router.replace('/login');}

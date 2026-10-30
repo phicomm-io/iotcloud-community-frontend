@@ -29,6 +29,9 @@ export function createDeviceAuth({fetcher=globalThis.fetch,origin='',onRequired=
    if(!response.ok)throw authError(response.status===503?'busy':'HTTP '+response.status,response.status);
    const reply=await decodeResponse(response),next=reply?.data?.token;
    if(version!==generation){if(typeof next==='string'&&/^[a-f0-9]{32}$/.test(next))retire(next);throw authError('cancelled',0);}
+   if(reply.code==='ok'&&reply.data?.password_required===false&&next===''){
+    legacyReady=true;emptySession=true;blocked=false;return;
+   }
    if(reply.code!=='ok'||typeof next!=='string'||!/^[a-f0-9]{32}$/.test(next))throw authError('Invalid device session',response.status);
    token=next;legacy='';legacyReady=false;emptySession=password==='';blocked=false;
   })();

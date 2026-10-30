@@ -414,7 +414,7 @@ UI.start({
  },
  model:'M1',kindKey:'kind.m1',icon:'air',mqttHostMax:127,factoryReset:true,
  otaName:'phicomm_m1.ota.bin.signed',haHintKey:'mqtt.ha_m1',otaHintKey:'fw.hint_m1',buttonHintKey:'sys.hint_m1',
- scheduleLead:'sch.lead_a1',interval:1000,
+ scheduleLead:'sch.lead_a1',
  groups:[['grp.network',['network','mqtt']],['grp.device',['device']],['grp.auto',['binding','schedule','night']],['grp.system',['firmware','diagnostics','logs','maintenance']]],
  nav:{network:'nav.wifi',mqtt:'nav.mqtt',device:'nav.general',binding:'nav.permission',schedule:'nav.schedule',night:'nav.sleep',firmware:'nav.firmware',diagnostics:'nav.diagnostics',logs:'nav.logs',maintenance:'nav.maintenance'},
  pages:{device:{show:async(options={})=>{await Promise.all([clock.show(options),loadThresholds(options),loadMusic(options),loadCo2Source(options),UI.userDisplay.load(options)]);},status:clock.status},binding:{show:showBinding}},
@@ -428,6 +428,6 @@ UI.start({
 });
 I18N.onChange(()=>{renderPeers();renderThresholds();const p=document.querySelector('[data-settings-page="binding"]');if(p&&!p.hidden)showBinding();});
 // The linked list is small and changes rarely; refresh it with the status.
-(async function poll(){try{if(document.hidden||($('homePage').hidden&&UI.activePage()!=='binding'&&UI.activePage()!=='linkage'))return;bindingStatus=await api('/binding/status');renderPeers();}catch{}finally{setTimeout(poll,4000);}})();
+(async function poll(){try{if(document.hidden||($('homePage').hidden&&UI.activePage()!=='binding'&&UI.activePage()!=='linkage'))return;bindingStatus=await api('/binding/status');renderPeers();}catch{}finally{setTimeout(poll,5000);}})();
 renderPeers();
 })();

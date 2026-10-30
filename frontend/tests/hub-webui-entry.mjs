@@ -53,7 +53,8 @@ async function fixtureContext(browser,language,{variant='hub',owner=false,webPas
    else if(path==='/devices'){
     if(request.method()==='POST')records.push({...request.postDataJSON(),status:'active',username:'local'});
     data=[...(selfDevice?[{mac,model:'daikin',version:'v2',status:'active',username:'local',self:true}]:[]),...records];
-   }else if(path==='/hub/homekit')data={enabled:false,protocol:'hap',ready:false,paired:false,devices:0,code:'disabled'};
+   }else if(path==='/hub/lan')data={protocol:4,codec:'msgpack',discovery:'mdns',ready:true,devices:[{device_id:'aabbccddee01',model:'tc1',ip:'192.168.1.45',port:80,compatible:true,registered:true,paired:true,online:true,code:'ready'}]};
+   else if(path==='/hub/homekit')data={enabled:false,protocol:'hap',ready:false,paired:false,devices:0,code:'disabled'};
    else if(path==='/hub/bridge')data={enabled:false,mappings:[],mqtt:{host:'',port:1883,user:'',password_set:false}};
    else if(path==='/integrations/bemfa')data={enabled:false,key_set:false,mappings:[],max_mappings:8,status:'disabled'};
    else data={enabled:false,providers:[]};
@@ -73,8 +74,8 @@ async function passwordBounds(page,language,isHub,requests){
  const zh=language==='zh-CN';
  await page.getByRole('button',{name:zh?/账号安全/:/Account security/}).click();
  const forms=page.locator('.settings-content form').filter({has:page.locator('input[autocomplete="new-password"]')});
- await expect(forms).toHaveCount(2);
- for(let index=0;index<2;index++){
+ await expect(forms).toHaveCount(isHub?1:2);
+ for(let index=0;index<(isHub?1:2);index++){
   const form=forms.nth(index),input=form.locator('input[autocomplete="new-password"]');
   await form.locator('input[autocomplete="current-password"]').fill(secret);
   assert.equal(await input.getAttribute('minlength'),isHub?'8':'6');
@@ -130,23 +131,32 @@ for(const engine of [chromium,webkit].filter(engine=>!process.env.BROWSER||engin
   assert.equal(await ownerPassword.getAttribute('minlength'),'8');assert.equal(await ownerPassword.getAttribute('maxlength'),'63');await ownerPassword.fill(secret);
   await page.getByRole('button',{name:zh?'创建本地账户':'Create local account',exact:true}).click();await page.getByRole('button',{name:zh?'设置':'Settings',exact:true}).click();
   assert.deepEqual(setups,[{authorization:undefined,body:{username:'local',password:secret}}]);
-  const manual=page.locator('.provision-device');await expect(manual.locator('.hub-broker-details')).toBeVisible();
-  const details=await manual.innerText();assert(details.includes('192.168.1.18'));assert(details.includes('1883'));assert(details.includes('local'));assert(!details.includes(secret));assert(!details.includes(webSecret));
-  await expect(manual.getByRole('button')).toHaveCount(0);
+  await expect(page.locator('.provision-device')).toHaveCount(0);
+  await expect(page.locator('.hub-broker-details')).toHaveCount(0);
   await page.getByRole('button',{name:zh?/中枢服务/:/Hub services/}).click();await expect(page.getByRole('heading',{name:'HomeKit',exact:true})).toBeVisible();await expect(page.getByRole('heading',{name:zh?'上游转发':'Upstream forwarding',exact:true})).toBeVisible();
   await screenshot(page,`${engine.name()}-${language}-owner`);
   await page.getByRole('button',{name:zh?/设备管理/:/Device management/}).click();
-  const selfRow=page.locator('.managed-device').filter({has:page.getByText(zh?'本机中枢':'This hub',{exact:true})});await expect(selfRow).toHaveCount(1);await expect(selfRow.locator('.device-summary .stat')).toContainText('12');await expect(selfRow.locator('.rack-head b')).toHaveText('Local hub sensor');
-  await selfRow.locator('.device-details summary').click();await expect(selfRow.locator('.local-connection')).toHaveCount(0);await expect(selfRow.locator('button.danger')).toHaveCount(0);await expect(selfRow.locator('.device-details dd').first()).toHaveText(mac);
-  await page.getByRole('button',{name:zh?'添加设备':'Add device',exact:true}).click();
-  await page.locator('.add-device-panel input').fill('AABBCCDDEE01');await page.locator('.add-device-panel').getByRole('button').click();await expect(page.locator('.managed-device')).toHaveCount(2);
-  const remoteRow=page.locator('.managed-device').nth(1);await expect(remoteRow.locator('.local-connection')).toHaveCount(1);await expect(remoteRow.locator('button.danger')).toHaveCount(1);await screenshot(page,`${engine.name()}-${language}-self-device`);
+  const lan=page.getByRole('region',{name:zh?'局域网设备':'LAN devices',exact:true});
+  await expect(lan.locator('.lan-device')).toHaveCount(1);await expect(lan).toContainText('aabbccddee01');
+  await expect(lan.getByText(zh?'Home Assistant 的 MQTT 接入需要配置外部 Broker。':'Home Assistant MQTT access requires an external broker.',{exact:false})).toBeVisible();
+  await expect(lan.getByRole('button',{name:zh?'取消配对':'Unpair',exact:true})).toBeVisible();
+  await expect(page.locator('.add-device-panel')).toHaveCount(0);
+  assert(!requests.some(r=>r.path==='/api/devices'&&r.method==='POST'),'owner discovery must not implicitly register devices');
+  await screenshot(page,`${engine.name()}-${language}-lan-devices`);
   await page.getByRole('button',{name:/Bemfa|巴法/}).click();await expect(page.locator('.bemfa-card')).toBeVisible();await expect(page.locator('.bemfa-card option[value="'+mac+'"]')).toHaveCount(0);
   await passwordBounds(page,language,true,requests);
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'owner settings overflow');assert.deepEqual(errors,[]);await context.close();
   const cloudOwner=await fixtureContext(browser,language,{owner:true}),cloudPage=await cloudOwner.context.newPage();await cloudPage.goto(platform+'/#/login');
   await cloudPage.locator('.auth-form input[autocomplete="username"]').fill('local');await cloudPage.locator('.auth-form input[autocomplete="current-password"]').fill(secret);await cloudPage.locator('.auth-submit').click();await cloudPage.getByRole('button',{name:zh?'设置':'Settings',exact:true}).click();
-  await passwordBounds(cloudPage,language,false,cloudOwner.requests);assert.deepEqual(cloudOwner.errors,[]);await cloudOwner.context.close();
+  await passwordBounds(cloudPage,language,false,cloudOwner.requests);
+  // Manual registration belongs to cloud management, independently of the hub's
+  // discovered/paired LAN inventory.
+  await cloudPage.locator('.settings-navigation').getByRole('button',{name:zh?/设备管理/:/Device management/}).click();
+  await cloudPage.getByRole('button',{name:zh?'添加设备':'Add device',exact:true}).click();
+  await cloudPage.locator('.add-device-panel input').fill('AABBCCDDEE01');await cloudPage.locator('.add-device-panel').getByRole('button').click();
+  const remoteRow=cloudPage.locator('.managed-device');await expect(remoteRow).toHaveCount(1);
+  await remoteRow.locator('.device-details summary').click();await expect(remoteRow.locator('.local-connection')).toHaveCount(1);await expect(remoteRow.locator('button.danger')).toHaveCount(1);
+  assert.deepEqual(cloudOwner.errors,[]);await cloudOwner.context.close();
   for(const variant of ['hub','full']){
    const {context,requests,errors,setIdentityUnavailable}=await fixtureContext(browser,language,{variant}),page=await context.newPage();await page.goto(platform+'/#/local');
    await page.getByRole('button',{name:zh?'本地连接':'Local connection',exact:true}).click();
@@ -170,6 +180,6 @@ for(const engine of [chromium,webkit].filter(engine=>!process.env.BROWSER||engin
   }
   const localHub=await fixtureContext(browser,language),localPage=await localHub.context.newPage();await localPage.goto(target+'/iotcloud/#/local');await localPage.getByRole('button',{name:zh?'设置':'Settings',exact:true}).click();
   await expect(localPage.getByRole('button',{name:zh?/中枢服务/:/Hub services/})).toHaveCount(0);assert(!localHub.requests.some(r=>r.path.startsWith('/api/hub/')));await localHub.context.close();
-  console.log(`PASS ${engine.name()} ${language} 390: conditional root/iframe entry, password-free/authenticated owner setup + back link, manual broker details, devices/Bemfa/HomeKit, hub/cloud password bounds, cloud local hub/full identity`);
+  console.log(`PASS ${engine.name()} ${language} 390: conditional root/iframe entry, password-free/authenticated owner setup + back link, LAN discovery/external broker guidance, cloud manual registration, Bemfa/HomeKit, hub/cloud password bounds, cloud local hub/full identity`);
  }}finally{await browser.close();}
 }

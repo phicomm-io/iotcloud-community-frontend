@@ -3,7 +3,7 @@ import {readFileSync,existsSync} from 'node:fs';
 import {createRequire} from 'node:module';
 import {resolve,dirname} from 'node:path';
 
-const products={tc1:'TC1/http_server/web/index.html',a1:'A1/web/index.html',m1:'M1/web/index.html',daikin:'DAIKIN/web/index.html'};
+const products={tc1:'TC1/http_server/web/index.html',a1:'A1/web/index.html',m1:'M1/web/index.html',daikin:'DAIKIN/web/index.html','s30-v1b':'S30/web/index.html'};
 const i18nScript=/<script data-device-part="i18n.js">([\s\S]*?)<\/script>/;
 
 // Only hub builds use external resources. The ordinary device and cloud pages
@@ -23,7 +23,7 @@ export async function buildDeviceAssets({sourceRoot,appRoot,watch=()=>{}}){
   if(html.includes('@include'))throw Error('Unresolved device include: '+path);
   return [model,html.replace('</head>','<script>'+read(resolve(sourceRoot,'common/web/appearance.js'))+'</script></head>')];
  }));
- // A single dictionary covers the actual references in all four products. This
+ // A single dictionary covers the actual references in every product. This
  // retains dynamic key families while making their i18n script identical.
  const dictionary=pages.daikin.match(i18nScript)?.[1];
  if(!dictionary)throw Error('Device translation script missing');

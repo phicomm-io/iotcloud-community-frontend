@@ -4,7 +4,7 @@ const http=require('node:http'),fs=require('node:fs'),path=require('node:path');
 const root=path.resolve('build/bundle');
 const server=http.createServer((req,res)=>{let file=path.resolve(root,'.'+new URL(req.url,'http://local').pathname);if(!file.startsWith(root+path.sep)){res.writeHead(403).end();return;}if(file.endsWith(path.sep)||fs.existsSync(file)&&fs.statSync(file).isDirectory())file=path.join(file,'index.html');try{const body=fs.readFileSync(file);res.setHeader('Content-Type',file.endsWith('.js')?'application/javascript':file.endsWith('.css')?'text/css':'text/html');res.end(body);}catch{res.writeHead(404).end();}});
 (async()=>{await new Promise(r=>server.listen(0,'127.0.0.1',r));const base='http://127.0.0.1:'+server.address().port;const browser=await chromium.launch({headless:true});try{
- for(const model of ['tc1','m1','a1','daikin','platform']){
+ for(const model of ['tc1','m1','a1','daikin','s30-v1b','platform']){
   const page=await browser.newPage(),errors=[],external=[];
   page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(!r.url().startsWith(base+'/'))external.push(r.url());});
   await page.goto(base+'/demos/'+model+'/');
@@ -29,7 +29,13 @@ const server=http.createServer((req,res)=>{let file=path.resolve(root,'.'+new UR
    assert.equal(await page.locator('#filterRemaining').textContent(),'100%');
   }
   if(model==='platform'){
-   await page.waitForSelector('.device-select');assert.equal(await page.locator('.device-select').count(),4);for(const b of await page.locator('.device-select').all())await b.click();
+   await page.waitForSelector('.device-select');assert.equal(await page.locator('.device-select').count(),5);for(const b of await page.locator('.device-select').all())await b.click();
+   const s30=page.locator('.device-select').filter({has:page.locator('.meter-readings')});
+   await page.waitForFunction(()=>document.querySelector('.device-select .meter-readings')?.textContent.includes('230.1 V'));
+   assert.match(await s30.innerText(),/0\.167 A/);
+   await s30.click();
+   await page.frameLocator('iframe.device-home').locator('#voltage').waitFor({state:'visible'});
+   assert.match(await page.frameLocator('iframe.device-home').locator('#voltage').innerText(),/230\.1.*V/);
    await page.locator('.device-select').nth(2).click();
    const frame=page.frameLocator('iframe.device-home');
    await frame.locator('#filterCard').waitFor({state:'visible'});
@@ -37,6 +43,14 @@ const server=http.createServer((req,res)=>{let file=path.resolve(root,'.'+new UR
    await frame.locator('body').evaluate(()=>new Promise((resolve,reject)=>{let n=0;const check=()=>{if(UI.state.filter.lifetime_hours===6000)resolve();else if(++n>100)reject(Error('platform filter form did not submit'));else setTimeout(check,50);};check();}));
    await frame.locator('#filterReset').click();await frame.getByRole('dialog').getByRole('button',{name:/Reset after replacing|更换滤芯后重置/}).click();
    await frame.locator('body').evaluate(()=>new Promise((resolve,reject)=>{let n=0;const check=()=>{if(UI.state.filter.used_seconds===0)resolve();else if(++n>100)reject(Error('platform filter reset failed'));else setTimeout(check,50);};check();}));
+  }
+  else if(model==='s30-v1b'){
+   assert.match(await page.locator('#voltage').innerText(),/230\.1.*V/);
+   assert.match(await page.locator('#current').innerText(),/0\.167.*A/);
+   await page.locator('[data-tab="settings"]').click();await page.locator('#side a[href="#settings/device"]').click();
+   await page.locator('#coefForm').evaluate(el=>el.closest('details').open=true);
+   assert.equal(await page.locator('#coefForm').evaluate(el=>el.checkValidity()),true);
+   assert.equal(Number(await page.locator('#powerCoef').inputValue()),1.88835008906368);
   }
   else if(model==='daikin'){
    await page.locator('[data-sensor="pm25"] > .stat > .num').waitFor({state:'visible'});

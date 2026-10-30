@@ -6,6 +6,23 @@ const decodeWire=value=>JSON.parse(typeof value==='string'?value:new TextDecoder
 const token='1'.repeat(32),other='2'.repeat(32);
 const reply=(data,status=200)=>new Response(encodeWire(data),{status,headers:{'Content-Type':'application/json'}});
 const logged=(value=token)=>reply({code:'ok',data:{token:value,expires_in_ms:1800000,max_age_ms:86400000}});
+test('an explicitly password-free device consumes no bearer session, and later protection blocks without replay',async()=>{
+ let protectedNow=false,logins=0,writes=0,required=0;
+ const auth=createDeviceAuth({onRequired:()=>required++,fetcher:async(url,options)=>{
+  if(url.endsWith('/login')){logins++;return reply({code:'ok',data:{token:'',password_required:false}});}
+  assert.equal(options.headers.Authorization,undefined);writes++;
+  return reply({code:protectedNow?'unauthorized':'ok'},protectedNow?401:200);
+ }});
+ await Promise.all([auth.fetch('/api/v1/status'),auth.fetch('/api/v1/status')]);
+ assert.equal(logins,1);assert.equal(auth.authenticated,true);assert.equal(required,0);
+ protectedNow=true;assert.equal((await auth.fetch('/api/v1/command',{method:'POST',value:{}})).status,401);
+ assert.equal(writes,3);assert.equal(required,1);assert.equal(auth.authenticated,false);
+ await assert.rejects(auth.ensure(),{status:401});assert.equal(logins,1);
+});
+test('an empty token without explicit password-free policy is invalid',async()=>{
+ const auth=createDeviceAuth({fetcher:async()=>reply({code:'ok',data:{token:''}})});
+ await assert.rejects(auth.ensure(),{code:'Invalid device session'});
+});
 test('empty password is exchanged once and concurrent business requests only send bearer',async()=>{
  const calls=[];let open;const gate=new Promise(resolve=>open=resolve);
  const auth=createDeviceAuth({origin:'http://192.168.1.10',fetcher:async(url,options)=>{calls.push({url,options});if(url.endsWith('/login')){await gate;assert.deepEqual(decodeWire(options.body),{password:''});return logged();}return reply({code:'ok'});}});

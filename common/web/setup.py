@@ -5,7 +5,7 @@ from page import _auth_bundle
 ROOT = Path(__file__).resolve().parent
 
 def render_setup(model):
-    if model not in ('tc1', 'a1', 'm1', 'daikin'):
+    if model not in ('tc1', 'a1', 'm1', 'daikin', 's30-v1b'):
         raise ValueError('Unknown model')
     # Shared tokens and base components only; exclude settings and product views.
     style = (ROOT / 'style.css').read_text().split('/* Settings layout */')[0]

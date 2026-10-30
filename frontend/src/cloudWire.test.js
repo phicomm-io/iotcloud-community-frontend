@@ -24,3 +24,20 @@ test('retained and reply capabilities are rejected when their firmware binding d
  applyMessage(d,state,baseTopic(d)+'/capabilities',encodeWire({device_id:mac,model:'a1',firmware_version:'old',variant:'full',actions:['old']}));assert.equal(state.capabilities,undefined);
  applyMessage(d,state,baseTopic(d)+'/result',encodeWire({request_id:'read',code:'ok',data:{device_id:mac,model:'a1',firmware_version:'old',variant:'full',actions:['old']}}));assert.equal(state.result.code,'identity_mismatch');
 });
+
+test('S30 discovery binds binary commands to identity and never creates a JSON fallback',()=>{
+ const value={...announcement,model:'s30-v1b',protocol:'openiot',command_protocol:'tmcp',wire_formats:['msgpack','cbor']};
+ const discovered=discoveryMessage(encodeWire(value),mac);assert(discovered);
+ const device=deviceEntry({mac,...discovered});assert.equal(commandFormat(device),'msgpack');
+ const request=command(device,{action:'outlet.set',params:{index:0,on:false},request_id:'s30-outlet'});
+ assert.equal(request.topic,`phicomm/v2/local/s30-v1b/${mac}/command`);
+ assert.deepEqual(decodeWire(request.payload),{action:'outlet.set',params:{index:0,on:false},request_id:'s30-outlet'});
+ for(const patch of [{device_id:'001122334455'},{firmware_version:''},{variant:''},{wire_version:2},{command_protocol:'unknown'},{schema:1}])assert.equal(discoveryMessage(encodeWire({...value,...patch}),mac),null);
+ assert.equal(discoveryMessage(JSON.stringify(value),mac),null);
+ assert.equal(discoveryMessage(JSON.stringify({...value,schema:1,protocol:'tmcp'}),mac),null);
+ const manual=deviceEntry({mac,model:'s30-v1b'});assert.equal(manual.wire_format,'');
+ assert.throws(()=>command(manual,{action:'outlet.set',params:{on:true}}),{code:'discovery_required'});
+ assert.throws(()=>commandFormat({mac,model:'s30-v1b'}),{code:'discovery_required'});
+ assert.throws(()=>deviceEntry({mac,model:'s30-v1b',wire_format:'json'}));
+ assert.throws(()=>deviceEntry({mac,model:'s30-v1b',version:'v1'}));
+});

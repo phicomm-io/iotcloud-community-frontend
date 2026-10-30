@@ -2,12 +2,13 @@
 import {t} from '../i18n.js';
 
 import {computed} from 'vue';
-import {socketStates,pressureReading} from '../devicePresentation';
+import {socketStates,pressureReading,meterReading} from '../devicePresentation';
 import AppIcon from './AppIcon.vue';
 const props=defineProps({device:Object,state:Object,name:String,connected:Boolean,now:Number});
 const live=computed(()=>(props.connected||props.state?.lan_connected)&&props.state?.available!==false);
-const sockets=computed(()=>socketStates(props.state));
-const knownSockets=computed(()=>live.value&&sockets.value.length===6&&sockets.value.every(v=>typeof v==='boolean'));
+const outletCount=computed(()=>props.device.model==='s30-v1b'?1:6);
+const sockets=computed(()=>socketStates(props.state,outletCount.value));
+const knownSockets=computed(()=>live.value&&sockets.value.every(v=>typeof v==='boolean'));
 const pm=computed(()=>props.device.model==='daikin'?props.state?.sensors?.pm25?.value:props.state?.pm25);
 const freshAir=computed(()=>live.value&&props.state?.sensorAt&&(props.device.model==='daikin'?props.state?.sensors?.pm25?.valid&&props.now-props.state.sensorAt+(props.state.sensors.pm25.age_ms||0)<20000:props.state?.sensor_valid&&props.now-props.state.sensorAt<=15000)&&valid(pm.value));
 const co2=computed(()=>{if(props.device.model==='daikin'){const c=props.state?.sensors?.co2;return live.value&&c?.valid&&typeof c.value==='number'&&props.now-props.state.sensorAt+c.age_ms<20000?Math.round(c.value):null;}const s=props.state?.scd40;return live.value&&s?.ready&&s.valid&&s.age_ms<20000&&props.state?.sensorAt&&props.now-props.state.sensorAt<20000&&typeof s.co2_ppm==='number'?Math.round(s.co2_ppm):null;});
@@ -16,7 +17,7 @@ const quality=computed(()=>!freshAir.value?'—':Number(pm.value)>75||Number(pro
 const presence=computed(()=>{
  if(!props.connected&&!props.state?.lan_connected)return {label:t('p.3d52574ce150'),tone:'muted'};
  if(props.state?.available===false)return {label:t('p.be1b4f3c6c1c'),tone:'muted'};
- const ready=['m1','daikin'].includes(props.device.model)?freshAir.value:props.device.model==='tc1'?knownSockets.value:props.state?.fan_on!==undefined;
+ const ready=['m1','daikin'].includes(props.device.model)?freshAir.value:['tc1','s30-v1b'].includes(props.device.model)?knownSockets.value:props.state?.fan_on!==undefined;
  return ready?{label:t('p.b9086662b1df'),tone:'online'}:{label:t('p.5d06446987af'),tone:'waiting'};
 });
 const speed=computed(()=>props.state?.applied_speed??props.state?.percentage??props.state?.speed);
@@ -26,9 +27,9 @@ function reading(v,digits=0){return live.value&&valid(v)?Number(v).toFixed(digit
 <template>
 <span class="device-summary">
  <span class="rack-head"><span class="presence-pill" :class="presence.tone" role="status">{{presence.label}}</span><b :title="name">{{name}}</b></span>
- <span v-if="device.model==='tc1'" class="rack-body tc1-body">
+ <span v-if="['tc1','s30-v1b'].includes(device.model)" class="rack-body tc1-body">
   <span class="stat">{{reading(state?.power_watts??state?.power,1)}}<small>W</small></span>
-  <span class="socket-info"><span class="sockets" role="img" :aria-label="sockets.map((v,i)=>t('p.adb6a3f989a5',{v0:(i+1),v1:t(!live||v===undefined?'state.unknown':v?'state.on':'state.off')})).join('; ')"><i v-for="i in 6" :key="i" :class="{on:live&&sockets[i-1]===true,unknown:!live||sockets[i-1]===undefined}"/></span></span>
+  <span class="socket-info"><span class="sockets" role="img" :aria-label="sockets.map((v,i)=>t('p.adb6a3f989a5',{v0:(i+1),v1:t(!live||v===undefined?'state.unknown':v?'state.on':'state.off')})).join('; ')"><i v-for="i in outletCount" :key="i" :class="{on:live&&sockets[i-1]===true,unknown:!live||sockets[i-1]===undefined}"/></span><small v-if="device.model==='s30-v1b'" class="rack-detail meter-readings"><span>{{reading(meterReading(state,'voltage'),1)}} V</span><span>{{reading(meterReading(state,'current'),3)}} A</span></small></span>
  </span>
  <span v-else-if="['m1','daikin'].includes(device.model)" class="rack-body m1-body">
   <span class="ring-mini"><span>{{quality}}</span></span><span class="sensor-copy"><span class="stat">{{freshAir?Math.round(Number(pm)):'—'}}<small>μg/m³</small></span></span><small class="rack-detail sensor-details"><span>PM2.5</span><span v-if="co2!==null"> · CO₂ {{co2}} ppm</span><span v-if="pressure!==null" :title="state.barometer.model"> · {{pressure.toFixed(1)}} hPa</span></small>
@@ -41,5 +42,6 @@ function reading(v,digits=0){return live.value&&valid(v)?Number(v).toFixed(digit
 .presence-pill{flex-shrink:0;white-space:nowrap;display:inline-flex;align-items:center;justify-self:start;gap:5px;padding:2px 9px;border-radius:999px;font-size:11px;line-height:18px;font-weight:500;background:var(--surface-muted);color:var(--muted)}.presence-pill::before{content:'';width:6px;height:6px;border-radius:50%;background:currentColor}.presence-pill.online{background:var(--success-soft);color:var(--success)}.presence-pill.waiting{background:var(--warn-soft);color:var(--warn)}
 
 .tc1-body>.stat{flex:0 0 128px;text-align:right;white-space:nowrap}.tc1-body>.socket-info{flex:0 1 127px;min-width:0}
+.meter-readings{display:flex;flex-wrap:wrap;gap:0 8px}.meter-readings>span{white-space:nowrap}
 .sensor-copy{min-width:0}.m1-body{display:grid;grid-template-columns:52px minmax(0,1fr);gap:4px 12px}.sensor-details{grid-column:1/-1;display:flex;flex-wrap:wrap;column-gap:3px}.sensor-details>span{white-space:nowrap}.device-summary:has(.sensor-details){grid-template-rows:24px minmax(54px,auto)}
 </style>
