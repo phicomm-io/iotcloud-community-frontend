@@ -10,7 +10,7 @@ test('A1 mode controls, idle state, automatic cap and manual speed remain distin
   w.fetch=async(url,options)=>{const req=JSON.parse(options.body);writes.push(req);return {ok:true,json:async()=>({code:'ok',data:{linkage_status:'disabled',effect:0}})};};
  require('./legacy_device_fixture.cjs')(w);
   const scripts=[...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m=>m[1]);
-  scripts.forEach((source,i)=>{if(i===scripts.length-1){w.UI.start=dev=>{w.UI.device=dev;};w.UI.reload=async()=>w.UI.state;}vm.runInContext(source,dom.getInternalVMContext());});
+  scripts.forEach((source,i)=>{if(i===scripts.length-1){w.UI.start=dev=>{w.UI.device=dev;};w.UI.reload=async()=>w.UI.acceptStatus({...w.UI.state});}vm.runInContext(source,dom.getInternalVMContext());});
   await flush();w.I18N.set('en');
   w.UI.caps={actions:['fan.mode.set']};
   w.UI.state={red:0,green:0,blue:255,brightness:255,requested_speed:64,percentage:0,applied_speed:0,fan_on:true,fan_mode:'auto',fan_state:'idle',auto_max_speed:45,panel_ready:true};
