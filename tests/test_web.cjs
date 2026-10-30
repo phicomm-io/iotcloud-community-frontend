@@ -18,7 +18,7 @@ const ACTIONS={M1:['schedules.get','schedules.put','schedules.delete','schedules
  const pollTimers=[];w.TextEncoder=require('node:util').TextEncoder;
  // Minification renames callbacks. Identify the status poll by its configured
  // interval rather than relying on a source-only function name.
- w.setTimeout=(fn,delay)=>{const page=w.UI?.activePage?.(),interval=page?(page==='diagnostics'?5000:10000):(w.UI?.device?.interval||2000);if(delay===interval)pollTimers.push(fn);return 0;};w.confirm=()=>true;w.scrollTo=()=>{};
+ w.setTimeout=(fn,delay)=>{if(delay===5000)pollTimers.push(fn);return 0;};w.confirm=()=>true;w.scrollTo=()=>{};
  const state={mqtt_topic_mode:model==='TC1'?'legacy':'tmcp',name:'test <img>',device_id:'aabbccddeeff',version:'test',ip:'1.2.3.4',ssid:'home',wifi_connected:true,mqtt_status:'ready',mqtt_host:'broker',mqtt_user:'user',mqtt_port:1883,
   brightness_requested:4,brightness:255,led_enabled:true,led_always_on:true,red:1,green:2,blue:3,speed:60,percentage:60,applied_speed:60,requested_speed:60,fan_on:true,fan_ready:true,panel_ready:true,
   sensor_received:true,sensor_valid:true,age_ms:1000,temperature:25,humidity:50,formaldehyde:0.02,pm25:20,time_synced:true,timezone_minutes:480,ntp_host:'pool.ntp.org',ntp_status:'synced',ntp_synced:true,
@@ -239,9 +239,9 @@ const ACTIONS={M1:['schedules.get','schedules.put','schedules.delete','schedules
   assert(calls.some(r=>r.action==='outlet.set'&&r.params.index===0&&r.params.on===false),'a socket tile must toggle one socket');
   assert.equal(d.querySelector('#socket1').disabled,false,'another socket stays usable while the first command is pending');
   d.querySelector('#socket1').click();await flush();
-  await w.UI.reload();
+  const queuedRefresh=w.UI.reload();await flush();
   for(const id of ['socket0','socket1'])assert.equal(d.querySelector('#'+id).getAttribute('aria-pressed'),'false','stale status must not overwrite pending socket output');
-  for(const release of releases)release();holdOutlet=null;
+  const released=[...releases];holdOutlet=null;for(const release of released)release();await queuedRefresh;
   for(let i=0;i<4;i++)await flush();
   for(const id of ['socket0','socket1'])assert.equal(d.querySelector('#'+id).disabled,false,'acknowledged sockets become usable again');
   w.location.hash='settings/buttons';w.dispatchEvent(new w.Event('hashchange'));await flush();

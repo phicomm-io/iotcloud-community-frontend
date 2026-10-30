@@ -4,6 +4,21 @@ const deviceFetch=(path,options={})=>{const write=options.method&&!['GET','HEAD'
 // subscriber owns cancellation; an unrelated subscriber keeps the wire alive.
 const deviceReads=new Map();let deviceReadEpoch=0;
 const readAbort=()=>new DOMException('Read superseded','AbortError');
+// One lane through response decoding. Writes and confirmations take precedence
+// over queued background reads; cancellation only retires read subscribers.
+globalThis.DeviceHttpQueue=true;
+const deviceJobs=[];let deviceWorking=false;
+function deviceSchedule(work,{signal,priority=2}={}){
+ if(signal?.aborted)return Promise.reject(readAbort());
+ return new Promise((resolve,reject)=>{
+  const job={priority,async run(){signal?.removeEventListener('abort',abort);try{resolve(await work());}catch(error){reject(error);}}};
+  const abort=()=>{const index=deviceJobs.indexOf(job);if(index<0)return;deviceJobs.splice(index,1);signal.removeEventListener('abort',abort);reject(readAbort());};
+  signal?.addEventListener('abort',abort,{once:true});deviceJobs.push(job);
+  if(deviceWorking)return;
+  deviceWorking=true;
+  (async()=>{while(deviceJobs.length){deviceJobs.sort((a,b)=>a.priority-b.priority);await deviceJobs.shift().run();}deviceWorking=false;})();
+ });
+}
 function command(action,params={},options={}){
  if(!action.endsWith('.get'))return deviceCommand(action,params);
  const signal=options.signal;
@@ -13,7 +28,7 @@ function command(action,params={},options={}){
  let read=deviceReads.get(key);
  if(!read){
   const controller=new AbortController();read={controller,users:0};
-  read.promise=deviceCommand(action,params,{signal:controller.signal}).finally(()=>{if(deviceReads.get(key)===read)deviceReads.delete(key);});
+  read.promise=deviceCommand(action,params,{signal:controller.signal,priority:options.priority}).finally(()=>{if(deviceReads.get(key)===read)deviceReads.delete(key);});
   deviceReads.set(key,read);
  }
  read.users++;
@@ -25,7 +40,12 @@ function command(action,params={},options={}){
   if(signal?.aborted)abort();
  });
 }
-async function deviceCommand(action,params={},options={}){
+function deviceCommand(action,params={},options={}){
+ const write=!action.endsWith('.get');
+ if(write)deviceReadEpoch++;
+ return deviceSchedule(()=>deviceSend(action,params,options),{signal:write?undefined:options.signal,priority:write?0:options.priority});
+}
+async function deviceSend(action,params={},options={}){
  const identity=globalThis.UI?.identityGeneration||0;
  const request={action,params};
  if(!action.endsWith('.get'))request.request_id=globalThis.crypto?.randomUUID?crypto.randomUUID():Date.now().toString(36)+'-'+Math.random().toString(36).slice(2);
@@ -44,7 +64,7 @@ async function deviceCommand(action,params={},options={}){
  }finally{clearTimeout(timer);options.signal?.removeEventListener('abort',abort);}
 }
 async function api(path,data,options={}){
- if(path==='/auth/password'&&globalThis.DeviceSession){checkDeviceWrite();const reply=await DeviceSession.changePassword(data.password,{beforeSend:checkDeviceWrite});deviceReadEpoch++;globalThis.UI?.invalidateStatus?.();return reply.data||{};}
+ if(path==='/auth/password'&&globalThis.DeviceSession){checkDeviceWrite();deviceReadEpoch++;return deviceSchedule(async()=>{const reply=await DeviceSession.changePassword(data.password,{beforeSend:checkDeviceWrite});deviceReadEpoch++;globalThis.UI?.invalidateStatus?.();return reply.data||{};},{priority:0});}
  if(path==='/status')return command('status.get',{},options);
  if(path==='/sensors/average')return command('sensors.average.get',{},options);
  if(path==='/power')return command('power.get',{},options);

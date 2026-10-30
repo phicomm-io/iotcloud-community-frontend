@@ -160,11 +160,14 @@ const UI=window.UI={$,h,fieldRow,saveDraft,icon,toast,run,onSubmit,confirm:confi
 // Keep requested output visible until a fresh read confirms it. Polls may still
 // contain the pre-write state while the device applies an accepted command.
 let pendingControl=null;
+const controlObservers=new Set();
 // Partial reads retain slow fields; null explicitly invalidates a measurement.
 UI.acceptStatus=(s,partial=false)=>{
  const merged=partial?{...UI.confirmed,...s}:s;
  if(partial&&s.scd40&&UI.confirmed?.scd40)merged.scd40={...UI.confirmed.scd40,...s.scd40};
- UI.confirmed=merged;UI.state=pendingControl?{...merged,...pendingControl}:merged;return UI.state;
+ UI.confirmed=merged;UI.state=pendingControl?{...merged,...pendingControl}:merged;
+ for(const observe of controlObservers)observe(merged);
+ return UI.state;
 };
 function diagnosticSnapshot(reply){
  if(!reply||reply.schema!==diagnosticSchema||!Array.isArray(reply.fields))throw Error('Invalid diagnostics schema');
@@ -194,6 +197,20 @@ UI.statusParams=()=>{
  const page=UI.activePage(),ttl=page==='diagnostics'?5000:['network','mqtt','device','firmware'].includes(page)?10000:30000;
  return UI.caps?.status_views?.includes('live')&&loadedGeneration===fullGeneration&&Date.now()-lastFullAt<ttl?{view:'live'}:{};
 };
+// Three additional reads at most. Slower application work can still be
+// confirmed by ordinary 5-second polling, without extending the read burst.
+UI.confirmStatus=matches=>new Promise(resolve=>{
+ let settled=false,reads=0,timer;
+ const stop=()=>finish(null);
+ const finish=value=>{if(settled)return;settled=true;clearTimeout(timer);clearTimeout(deadline);controlObservers.delete(observe);window.removeEventListener('pagehide',stop);resolve(value);};
+ const observe=s=>{if(matches(s))finish(s);};controlObservers.add(observe);
+ const deadline=setTimeout(stop,12000);window.addEventListener('pagehide',stop,{once:true});
+ async function read(){
+  await UI.reload({priority:1}).catch(()=>{});
+  if(!settled&&++reads<3)timer=setTimeout(read,reads===1?250:750);
+ }
+ read();
+});
 UI.control=async(action,params,patch)=>{
  if(!patch||typeof patch!=='object'||Array.isArray(patch)||!Object.keys(patch).length)throw Error(t('error.invalid_params'));
  if(pendingControl){UI.device.onStatus?.(UI.state);throw Error(t('control.pending'));}
@@ -204,12 +221,8 @@ UI.control=async(action,params,patch)=>{
  const matches=s=>s&&Object.entries(patch).every(([k,v])=>Object.hasOwn(s,k)&&(Array.isArray(v)?Array.isArray(s[k])&&v.length===s[k].length&&v.every((x,i)=>!!x===!!s[k][i]):typeof v==='boolean'?!!s[k]===v:s[k]===v));
  try{
   try{await command(action,params);}catch(e){sendError=e;if(e.code&&!['timeout','offline'].includes(e.code))throw e;}
-  const until=Date.now()+20000;
-  do{
-   last=await UI.reload();
-   if(matches(last))return last;
-   await new Promise(resolve=>setTimeout(resolve,750));
-  }while(Date.now()<until);
+  last=await UI.confirmStatus(matches);
+  if(last)return last;
   throw Error(t('control.unconfirmed')+(sendError?' · '+sendError.message:''));
  }finally{
   pendingControl=null;UI.controlBusy=false;UI.state=UI.confirmed||UI.state;render();
@@ -684,22 +697,22 @@ function clockCard({load,save,status}){
 }
 
 /* ---------- Boot ---------- */
-let initialized=false,failures=0,lastSuccess=0,loading=null;
+let initialized=false,failures=0,lastSuccess=0,loading=null,loadingGeneration=0;
 let stopped=false,pollingStarted=false,pollTimer=null,pollGeneration=0;
 const lockedControls=new Map();
 function lockHome(){if(!UI.embedded)return;for(const el of document.querySelectorAll('#homePage button,#homePage input,#homePage select')){if(!lockedControls.has(el))lockedControls.set(el,el.disabled);el.disabled=true;}}
 function unlockHome(){for(const [el,disabled] of lockedControls)el.disabled=disabled;lockedControls.clear();}
-async function load(){
+async function load(priority){
  const lifecycle=pollGeneration,resetVersion=resetGeneration;
  try{
   const params=UI.statusParams(),generation=fullGeneration;
-  const raw=await command('status.get',params);
+  const raw=await command('status.get',params,{priority});
   if(stopped||lifecycle!==pollGeneration)return null;
   failures=0;lastSuccess=Date.now();unlockHome();
   if(!params.view&&!raw.ota_mode){lastFullAt=Date.now();loadedGeneration=generation;}
   if(raw.ota_active&&raw.ota_mode){UI.pages.firmware?.status(raw);return raw;}
   if((!params.view&&(!UI.caps?.business_status||capabilityGeneration!==generation))||UI.caps?.config_recovery||resetPending){
-   const caps=await command('capabilities.get'),config=await command('config.get');
+   const caps=await command('capabilities.get',{}, {priority}),config=await command('config.get',{}, {priority});
    if(stopped||lifecycle!==pollGeneration||resetVersion!==resetGeneration)return null;
    const wasRecovery=!!UI.caps?.config_recovery;
    UI.acceptCapabilities(caps);
@@ -715,6 +728,7 @@ async function load(){
     toast(t(UI.caps.config_recovery?'recovery.unconfirmed':'recovery.ready'),!!UI.caps.config_recovery);
    }
   }
+  if(generation!==fullGeneration)return null;
   const s=UI.acceptStatus(raw,params.view==='live');
   if(mayM1)readMcuVersion().catch(()=>{});
   $('title').textContent=UI.device.model+' '+(s.name||'');
@@ -735,7 +749,7 @@ async function load(){
   return raw;
  }catch(e){if(!stopped&&lifecycle===pollGeneration&&++failures>=3&&(!lastSuccess||Date.now()-lastSuccess>=30000)){lockHome();renderBanners(null,true);}return null;}
 }
-function pollLoad(){if(stopped)return Promise.resolve(null);if(!loading)loading=load().finally(()=>{loading=null;});return loading;}
+function pollLoad(priority=2){if(stopped)return Promise.resolve(null);if(!loading){loadingGeneration=fullGeneration;loading=load(priority).finally(()=>{loading=null;});}return loading;}
 window.addEventListener('pagehide',()=>{stopped=true;pollGeneration++;clearTimeout(pollTimer);pollTimer=null;});
 async function refreshStatus(generation=pollGeneration,resuming=false){
  if(stopped||generation!==pollGeneration)return;
@@ -749,7 +763,7 @@ async function refreshStatus(generation=pollGeneration,resuming=false){
  if(!stopped&&generation===pollGeneration)pollTimer=setTimeout(function refresh(){
   if(generation===pollGeneration)pollTimer=null;
   return refreshStatus(generation);
- },UI.activePage()?(UI.activePage()==='diagnostics'?5000:10000):(UI.device.interval||2000));
+ },UI.device.interval||5000);
 }
 window.addEventListener('pageshow',()=>{
  if(!stopped)return;
@@ -757,9 +771,10 @@ window.addEventListener('pageshow',()=>{
  if(pollingStarted)refreshStatus(pollGeneration,true);
 });
 let fullReload=null;
-UI.reload=({full=false}={})=>{
- if(!full)return loading||pollLoad();
- if(!fullReload){UI.invalidateStatus();fullReload=(async()=>{if(loading)await loading;return pollLoad();})().finally(()=>{fullReload=null;});}
+UI.reload=({full=false,priority=2}={})=>{
+ if(full)UI.invalidateStatus();
+ if(!loading||loadingGeneration===fullGeneration)return loading||pollLoad(priority);
+ if(!fullReload)fullReload=(async()=>{await loading;return pollLoad(priority);})().finally(()=>{fullReload=null;});
  return fullReload;
 };
 document.addEventListener('visibilitychange',()=>{if(UI.device&&!document.hidden&&!stopped)UI.reload({full:true});});

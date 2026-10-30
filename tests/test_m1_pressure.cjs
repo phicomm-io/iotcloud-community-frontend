@@ -89,8 +89,8 @@ for(const model of ['M1','A1','TC1'])test(model+' restores one status polling ch
   scripts.forEach((source,i)=>{if(i===scripts.length-1)w.command=command;vm.runInContext(source,dom.getInternalVMContext());});
   await flush();assert.equal(reads.length,1);assert.equal(w.UI.state.name,'current');
   const onStatus=w.UI.device.onStatus;w.UI.device.onStatus=s=>{rendered.push(s.name);onStatus?.(s);};
-  const interval=w.UI.device.interval||2000;
-  const pending=()=>[...timers.values()].filter(t=>t.delay===interval);
+  const interval=model==='TC1'?3000:5000;
+  const pending=()=>[...timers.values()].filter(t=>t.delay===interval&&t.fn.name==='refresh');
   const tick=async()=>{assert.equal(pending().length,1,'exactly one home status timer');const timer=pending()[0];timers.delete(timer.id);const result=timer.fn();await flush();return result;};
   assert.equal(pending().length,1);
   const oldTimer=pending()[0];
