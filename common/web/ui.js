@@ -700,8 +700,8 @@ function clockCard({load,save,status}){
 let initialized=false,failures=0,lastSuccess=0,loading=null,loadingGeneration=0;
 let stopped=false,pollingStarted=false,pollTimer=null,pollGeneration=0;
 const lockedControls=new Map();
-function lockHome(){if(!UI.embedded)return;for(const el of document.querySelectorAll('#homePage button,#homePage input,#homePage select')){if(!lockedControls.has(el))lockedControls.set(el,el.disabled);el.disabled=true;}}
-function unlockHome(){for(const [el,disabled] of lockedControls)el.disabled=disabled;lockedControls.clear();}
+function lockHome(){if(!UI.embedded)return;const home=$('homePage');if(home)home.inert=true;for(const el of document.querySelectorAll('#homePage button,#homePage input,#homePage select')){if(!lockedControls.has(el))lockedControls.set(el,el.disabled);el.disabled=true;}}
+function unlockHome(){if(UI.embedded){const home=$('homePage');if(home)home.inert=false;}for(const [el,disabled] of lockedControls)el.disabled=disabled;lockedControls.clear();}
 async function load(priority){
  const lifecycle=pollGeneration,resetVersion=resetGeneration;
  try{

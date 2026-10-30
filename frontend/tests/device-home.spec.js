@@ -1,5 +1,7 @@
 import {test,expect} from '@playwright/test';
 test('product home components share platform design and expose full settings',async({page})=>{
+ // Four products each wait for the ordinary status loop to declare offline.
+ test.setTimeout(90000);
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.addInitScript(()=>localStorage.setItem('iotcloud.devices.'+encodeURIComponent(`${location.protocol==='https:'?'wss':'ws'}://${location.host}/mqtt`)+'/',JSON.stringify(['tc1','m1','a1','daikin'].map((model,i)=>({model,mac:'aabbccddee0'+i,version:'v2'})))));
  await page.goto('/#/guest');
@@ -10,8 +12,11 @@ test('product home components share platform design and expose full settings',as
   await expect(home.locator('.topbar')).toBeHidden();
   await expect(home.locator('#settingsPage')).toBeHidden();
   await expect(home.locator('#homePage')).toBeVisible();
+  // Auxiliary renderers can replace controls or refresh their disabled state
+  // after an offline response. The whole disconnected home must stay inert.
+  await expect(home.locator('#homePage')).toHaveJSProperty('inert',true);
   const buttons=home.locator('#homePage button');
-  for(let i=0;i<await buttons.count();i++)await expect(buttons.nth(i)).toBeDisabled();
+  for(let i=0;i<await buttons.count();i++)expect(await buttons.nth(i).evaluate(el=>el.disabled||!!el.closest('[inert]'))).toBe(true);
   expect(await home.locator('body').evaluate(()=>document.documentElement.outerHTML.includes('@include'))).toBe(false);
   const shared=await page.locator('body').evaluate(()=>getComputedStyle(document.documentElement).getPropertyValue('--accent'));
   expect(await home.locator('body').evaluate(()=>getComputedStyle(document.documentElement).getPropertyValue('--accent'))).toBe(shared);
