@@ -384,7 +384,7 @@ function mqttPage(dev){
  const host=h('input',{id:'mqttHost',maxLength:dev.mqttHostMax||127,placeholder:t('mqtt.host_ph')});
  const port=h('input',{id:'mqttPort',type:'number',min:1,max:65535,required:true,value:'1883'});
  const user=h('input',{id:'mqttUser',maxLength:63,autocomplete:'off'});
- const pass=h('input',{id:'mqttPassword',type:'password',maxLength:256,autocomplete:'new-password',placeholder:t('mqtt.pass_ph')});
+ const pass=h('input',{id:'mqttPassword',type:'password',maxLength:dev.mqttPasswordMax||256,autocomplete:'new-password',placeholder:t('mqtt.pass_ph')});
  const protocol=(PRODUCT===null||PRODUCT==='tc1')&&dev.model==='TC1'?h('select',{id:'mqttMode'},h('option',{value:'tmcp'},'TMCP (v2)'),h('option',{value:'legacy'},'Legacy (v1)')):null;
  const clear=switchRow('clearMqttPassword','mqtt.clear','mqtt.clear_desc');
  const imported=mqttImportPanel(dev,{host,port,user,pass,protocol,clear:clear.querySelector('input')});
@@ -536,13 +536,20 @@ function firmwarePage(dev){
   file.accept=selected?'.signed':'.bin,.raw,.signed';
  }
  conversionInput?.addEventListener('change',conversionMode);
- const url=h('input',{id:'otaUrl',type:'url',maxLength:499,required:true,placeholder:'https://…/'+dev.otaName});
+ const url=h('input',{id:'otaUrl',type:'url',maxLength:UI.caps?.ota_url_max||499,required:true,placeholder:'https://…/'+dev.otaName});
  const fileForm=h('form',{id:'fileForm',class:'stack'},h('label',{class:'field'},h('span',{},t('fw.file',{m:dev.model})),file),
   h('details',{class:'more'},h('summary',{i18n:'common.advanced'}),unsigned,...(conversion?[conversion]:[])),
   h('div',{class:'form-actions'},h('button',{class:'btn primary',type:'submit'},h('span',{i18n:'fw.upload'}))));
  const urlForm=h('form',{id:'urlForm',class:'stack',hidden:true},fieldRow('fw.url',url),
   h('div',{class:'form-actions'},h('button',{class:'btn primary',type:'submit'},h('span',{i18n:'fw.download'}))));
- const picker=seg([['file','fw.tab_file'],['url','fw.tab_url']],v=>{fileForm.hidden=v!=='file';urlForm.hidden=v!=='url';});picker.set('file');picker.hidden=!UI.caps?.actions?.includes('ota.start');
+ const picker=seg([['file','fw.tab_file'],['url','fw.tab_url']],v=>{fileForm.hidden=v!=='file';urlForm.hidden=v!=='url';});
+ function installCapabilities(caps){
+  const urlOnly=caps?.ota_upload===false;
+  picker.set(urlOnly?'url':'file');
+  fileForm.hidden=urlOnly;urlForm.hidden=!urlOnly;
+  picker.hidden=urlOnly||!caps?.actions?.includes('ota.start');
+ }
+ installCapabilities(UI.caps);
  // Upload streams raw bytes; the request is synchronous up to send(), like the old page.
  let uploading=false;
  fileForm.addEventListener('submit',e=>{
@@ -573,9 +580,9 @@ function firmwarePage(dev){
  const fileLabel=fileForm.querySelector('.field>span');I18N.onChange(()=>{fileLabel.textContent=t('fw.file',{m:dev.model});});
  return {el:h('div',{class:'stack'},pageHead('nav.firmware','fw.lead'),sum,...(mcu?[mcu.el]:[]),card('fw.compare_title',null,h('p',{class:'help',i18n:'fw.compare_help'}),comparison),online,
   card('fw.install',null,picker,h('div',{style:'margin-top:16px'},fileForm,urlForm),h('div',{class:'stack',style:'margin-top:20px'},prog,state,cancel),info(dev.otaHintKey))),
-  capabilities(caps){if(conversion&&caps.ota_variant_conversion!=='full-to-hub'){conversionInput.checked=false;conversion.remove();conversionMode();}online.hidden=!caps.actions?.includes('ota.sources.get');picker.hidden=!caps.actions?.includes('ota.start');},
+  capabilities(caps){if(conversion&&caps.ota_variant_conversion!=='full-to-hub'){conversionInput.checked=false;conversion.remove();conversionMode();}online.hidden=!caps.actions?.includes('ota.sources.get');installCapabilities(caps);},
   status(s){identity=s;comparisonLink();if(mcu)mcu.refresh().catch(()=>{});sum.replaceChildren(summary([['fw.version',h('span',{class:'num'},s.version||'—')],['fw.state',t('s.'+(s.ota_state||'idle'))],s.ota_error?['fw.error',h('span',{class:'badge bad'},s.ota_error)]:null]));
-   cancel.hidden=!s.ota_active||s.ota_mode==='committing';
+   cancel.hidden=!UI.caps?.actions?.includes('ota.cancel')||!s.ota_active||s.ota_mode==='committing';
    if(s.ota_active){prog.value=s.ota_progress;state.textContent=t('fw.progress',{p:s.ota_progress});}}};
 }
 function diagValue(k,v){

@@ -12,7 +12,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, '..');
 const hubMode=process.env.VITE_HUB==='1';
 const minifyDevice = createRequire(import.meta.url)(resolve(root,'tools/minify_device.cjs'));
-const products = {tc1:'TC1/http_server/web/index.html',a1:'A1/web/index.html',m1:'M1/web/index.html',daikin:'DAIKIN/web/index.html'};
+const products = {tc1:'TC1/http_server/web/index.html',a1:'A1/web/index.html',m1:'M1/web/index.html',daikin:'DAIKIN/web/index.html','s30-v1b':'S30/web/index.html'};
 function devicePages() {
  return {name:'device-pages', resolveId(id){if(id==='virtual:device-pages')return '\0device-pages';},
  async load(id){if(id!=='\0device-pages')return;

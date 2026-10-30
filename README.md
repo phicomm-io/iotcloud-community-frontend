@@ -2,13 +2,13 @@
 
 [English](README.en.md)
 
-TC1 智能排插、M1 空气检测仪、A1 空气净化器和 DAIKIN 大金空气检测仪的共享 WebUI 源码。设备本地网页、IoTCloud 管理平台、本地直连、中枢界面和交互演示复用同一套设备页面，支持中英文、手机与桌面浏览器。
+TC1 智能排插、M1 空气检测仪、A1 空气净化器、DAIKIN 大金空气检测仪和 ORVIBO S30-V1B 单路插座的共享 WebUI 源码。设备本地网页、IoTCloud 管理平台、本地直连、中枢界面和交互演示复用同一套设备页面，支持中英文、手机与桌面浏览器。
 
 **[打开 IoTCloud](https://phicomm-io.github.io/iotcloud/) · [本地直连](https://phicomm-io.github.io/local/) · [模拟演示](https://phicomm-io.github.io/#demos) · [使用指南](https://phicomm-io.github.io/#install)**
 
 ## 功能与源码
 
-- **设备页面**：TC1 插口、功率与定时；M1 / DAIKIN 空气读数、显示与联动；A1 风机、滤芯、灯环与自动模式。控件按固件能力显示。
+- **设备页面**：TC1 插口、功率与定时；M1 / DAIKIN 空气读数、显示与联动；A1 风机、滤芯、灯环与自动模式；S30-V1B 单路开关、计量、童锁和上电策略。控件按固件能力显示。
 - **平台与本地直连**：平台账号管理设备，也可连接自己的 MQTT Broker；局域网直连使用设备网页密码，无需平台账号。平台接入与设备配置见[使用指南](https://phicomm-io.github.io/guides/iotcloud-connect.html)。
 - **DAIKIN 中枢**：独立构建使用本地账户管理 Broker、上游 MQTT 和转发；不提供邮箱注册或 GitHub 登录。v1.0.0-rc 提供独立中枢预发布构建，v1 稳定版尚未发布；安装与切换条件见[大金指南](https://phicomm-io.github.io/guides/daikin-guide.html)。
 - **静态网页与演示**：IoTCloud 可单独托管、添加到桌面；演示使用模拟数据。
@@ -16,7 +16,7 @@ TC1 智能排插、M1 空气检测仪、A1 空气净化器和 DAIKIN 大金空�
 | 路径 | 内容 |
 | --- | --- |
 | `common/web/` | 设备共享样式、国际化、服务层和页面渲染 |
-| `TC1/http_server/web/`、`M1/web/`、`A1/web/`、`DAIKIN/web/` | 四款设备页面 |
+| `TC1/http_server/web/`、`M1/web/`、`A1/web/`、`DAIKIN/web/`、`S30/web/` | 五款设备页面 |
 | `frontend/` | Vue 平台、本地直连与中枢界面 |
 | `tools/build_release.py` | 设备页面、各模式及演示的统一打包 |
 
@@ -68,6 +68,8 @@ npm --prefix frontend run build
 独立托管的前端来源须加入后端 `backend/config.yaml` 的 `allowed_origins`，例如 `https://your-account.github.io`，不含项目路径或末尾 `/`；`public_url` 保持为后端自己的 HTTPS 来源。部署、GitHub 登录与巴法云配置见[平台维护文档](https://github.com/phicomm-io/iotcloud-community-mqtt/blob/main/docs/OPERATIONS.md)、[GitHub 登录](https://github.com/phicomm-io/iotcloud-community-mqtt/blob/main/docs/GITHUB_LOGIN.md)与[巴法云转发](https://github.com/phicomm-io/iotcloud-community-mqtt/blob/main/docs/bemfa-cloud.md)。
 
 本地直连需要支持对应 HTTP API 的固件和浏览器的本地网络访问许可。Web App 离线可打开应用界面，实时控制仍需连接设备或服务。
+
+S30-V1B 使用带设备身份、固件版本和二进制契约的发现包，云端 MQTT 仅接受 MessagePack，不回退 JSON。平台后端须同时支持 `s30-v1b` 与 schema 2 发现协议；仅发布静态页面不会升级后端。上传固件和其他未实现的能力不会出现在设备设置中，升级使用 URL 下载。
 
 ## 参与与许可
 

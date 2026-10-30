@@ -12,6 +12,18 @@ test('summaries prioritize useful readings and preserve unknown and offline stat
  assert.equal(deviceSummary({model:'tc1'},{power:23},false),'尚未连接');
 });
 
+test('S30 summaries show one outlet while preserving unknown, off and disconnected states',async()=>{
+ const {socketStates,deviceType}=await import('./devicePresentation.js');
+ const device={model:'s30-v1b'};
+ assert.equal(deviceType(device),'ORVIBO S30-V1B');
+ assert.deepEqual(socketStates({socket_states:[true]},1),[true]);
+ assert.deepEqual(socketStates({},1),[undefined]);
+ assert.equal(deviceSummary(device,{socket_states:[true],power_watts:5.25},true),'5.3 W · 1 开 · 0 关');
+ assert.equal(deviceSummary(device,{socket_states:[false]},true),'0 开 · 1 关');
+ assert.equal(deviceSummary(device,{},true),'等待设备数据');
+ assert.equal(deviceSummary(device,{available:false,socket_states:[true]},true),'设备离线');
+});
+
 test('Legacy and TMCP numeric relay states render consistently without inventing unknown outlets',async()=>{
  const {socketStates}=await import('./devicePresentation.js');
  const {deviceEntry,applyMessage,baseTopic}=await import('./deviceProtocol.js');
