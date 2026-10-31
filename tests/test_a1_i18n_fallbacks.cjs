@@ -22,6 +22,8 @@ for(const language of ['en','zh-CN'])test(`A1 missing automation and light-effec
    if(index===scripts.length-1){w.UI.start=device=>{w.UI.device=device;w.UI.pages=device.pages;};w.UI.reload=async()=>{};}
    vm.runInContext(source,dom.getInternalVMContext());
   });
+  w.UI.caps={actions:['binding.status.get','light_effect.get']};
+  w.UI.device.capabilities(w.UI.caps);
   await flush();
   const state={red:0,green:100,blue:255,brightness:192,led_enabled:true,led_always_on:false,requested_speed:60,percentage:60,applied_speed:60,fan_on:true,fan_mode:'manual'};
   w.UI.state=state;
