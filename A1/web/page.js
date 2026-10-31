@@ -5,7 +5,7 @@
 const {t}=I18N;
 const {$,h,fieldRow,icon,toast,run,onSubmit,confirm,switchRow,seg,summary,card,info,pageHead,saveBar,num,flag,slider,hhmm,toMinutes,normalizeMac,prettyMac,clone}=UI;
 
-let advanced={effect:0,segments:3,segment:[]},bindingStatus={peers:[],members:[],linkage_status:'disabled'};
+let advanced={effect:0,segments:3,segment:[]},bindingStatus={peers:[],members:[],linkage_status:'disabled'},bindingPending=false;
 const refresh=()=>UI.reload();
 
 /* ---------- Home: fan ---------- */
@@ -64,6 +64,8 @@ function renderFilter(s){
  const locked=filterBusy||UI.controlBusy||s.ota_active||s.reboot_pending||s.wifi_trial_active;
  const canModel=UI.caps?.actions?.includes('filter.model.set');
  $('filterModelForm').hidden=!canModel;
+ $('filterForm').hidden=UI.caps?.hub_remote===true&&!UI.caps.actions?.includes('filter.set');
+ $('filterReset').hidden=UI.caps?.hub_remote===true&&!UI.caps.actions?.includes('filter.reset');
  for(const id of ['filterModel','filterModelSave'])$(id).disabled=!!locked;
  for(const id of ['filterSave','filterReset','filterLifetime'])$(id).disabled=!!locked;
 }
@@ -84,6 +86,7 @@ $('filterReset').onclick=()=>run(null,async()=>{
 /* ---------- Home: automatic control summary ---------- */
 function renderAuto(){
  const c=$('autoCard'),st=bindingStatus.linkage_status,peers=bindingStatus.peers||[];
+ c.hidden=UI.caps?.hub_remote===true&&!UI.caps.actions?.includes('binding.status.get');
  const head=h('div',{class:'card-head'},h('div',{},h('h2',{},h('a',{href:'#settings/linkage',i18n:'a1.auto'})),h('p',{class:'help',i18n:'a1.auto_lead'})),
   h('div',{class:'row'},h('span',{class:'badge '+(st==='active'?'ok':st==='sensor_failed'?'warn':'')},t(['disabled','active','sensor_failed'].includes(st)?'s.link_'+st:'s.unknown')),
    h('a',{class:'btn',href:'#settings/linkage'},h('span',{},t('auto.settings')))));
@@ -213,7 +216,8 @@ function updateRingAnimation(){
 function effectLabel(effect){return t([0,1,2,3,4,5].includes(effect)?'a1.effect.'+effect:'s.unknown');}
 function renderLight(s){
  if(!lightDirty){$('ledEnabled').checked=s.led_enabled;$('ledAlways').checked=s.led_always_on;$('bright').value=s.brightness;color=[s.red,s.green,s.blue];renderLightControls();}
- $('effectNote').replaceChildren(t('a1.effect_note',{e:effectLabel(advanced.effect)})+' ',h('a',{href:'#settings/light'},t('a1.effect_change')));
+ $('effectNote').hidden=UI.caps?.hub_remote===true;
+ $('effectNote').replaceChildren(...(UI.caps?.hub_remote?[]:[t('a1.effect_note',{e:effectLabel(advanced.effect)})+' ',h('a',{href:'#settings/light'},t('a1.effect_change'))]));
  renderRing(s);
 }
 
@@ -397,7 +401,7 @@ function renderFresh(s){
   fieldRow('fresh.speed',input,value),
   h('p',{class:'help'},t('fresh.status',{target:s.fresh_air_target,applied:s.fresh_air_speed,duty:(s.fresh_air_pwm_milli/1000).toFixed(1),rpm:s.fresh_air_rpm})),
   h('p',{class:'help'},t('fresh.reason.'+(s.fresh_air_limit_reason||0))+(s.fresh_air_fallback?' · '+t('auto.no_sensor'):'')),
-  h('div',{class:'row'},h('a',{class:'btn',href:'#settings/freshair'},t('fresh.settings')),h('a',{class:'btn',href:'#settings/linkage'},t('fresh.auto'))));
+  ...(!UI.caps?.hub_remote?[h('div',{class:'row'},h('a',{class:'btn',href:'#settings/freshair'},t('fresh.settings')),h('a',{class:'btn',href:'#settings/linkage'},t('fresh.auto')))]:[]));
 }
 async function showFresh(options={}){
  const m=await command('fresh_air.config.get',{},options);if(options.current&&!options.current())return;const page=document.querySelector('[data-settings-page="freshair"]');
@@ -429,7 +433,11 @@ const clock=UI.clockCard({
 $('clockCard').replaceWith(clock.el);
 
 UI.start({
- capabilities(caps){if(caps.fresh_air){this.groups[1][1].push('freshair');this.nav.freshair='fresh.settings';this.pages.freshair={show:showFresh};}},
+ capabilities(caps){
+  if(caps.fresh_air){this.groups[1][1].push('freshair');this.nav.freshair='fresh.settings';this.pages.freshair={show:showFresh};}
+  if(caps.actions?.includes('light_effect.get'))api('/light/advanced').then(a=>{advanced=a;updateRingAnimation();if(UI.state)renderLight(UI.state);}).catch(e=>toast(e.message,true));
+  renderAuto();pollBinding();
+ },
  model:'A1',kindKey:'kind.a1',icon:'fan',mqttHostMax:127,factoryReset:true,
  otaName:'phicomm_a1.ota.bin.signed',haHintKey:'mqtt.ha_a1',otaHintKey:'fw.hint_a1',buttonHintKey:'sys.hint_a1',
  scheduleLead:'sch.lead_a1',hasButtons:true,
@@ -447,6 +455,10 @@ UI.start({
 });
 I18N.onChange(()=>{if(UI.state){renderAuto();UI.showRoute();}});
 // Keep the automatic-control summary fresh even while the home page is idle.
-(async function poll(){try{if(document.hidden||($('homePage').hidden&&UI.activePage()!=='binding'&&UI.activePage()!=='linkage'))return;const previous=JSON.stringify([bindingStatus.average?.fields,bindingStatus.average?.valid,bindingStatus.average?.co2_valid]);bindingStatus=await api('/binding/status');if(previous!==JSON.stringify([bindingStatus.average?.fields,bindingStatus.average?.valid,bindingStatus.average?.co2_valid])&&UI.activePage()==='linkage'&&!document.querySelector('[data-settings-page="linkage"] [data-dirty="1"], [data-settings-page="linkage"][data-dirty="1"]'))linkageDraws.forEach(draw=>draw());if(UI.state)renderFan(UI.state);renderAuto();}catch{}finally{setTimeout(poll,5000);}})();
-api('/light/advanced').then(a=>{advanced=a;updateRingAnimation();if(UI.state)renderLight(UI.state);}).catch(e=>toast(e.message,true));
+async function pollBinding(){
+ if(bindingPending||!UI.caps?.actions?.includes('binding.status.get')||document.hidden||($('homePage').hidden&&UI.activePage()!=='binding'&&UI.activePage()!=='linkage'))return;
+ bindingPending=true;
+ try{const previous=JSON.stringify([bindingStatus.average?.fields,bindingStatus.average?.valid,bindingStatus.average?.co2_valid]);bindingStatus=await api('/binding/status');if(previous!==JSON.stringify([bindingStatus.average?.fields,bindingStatus.average?.valid,bindingStatus.average?.co2_valid])&&UI.activePage()==='linkage'&&!document.querySelector('[data-settings-page="linkage"] [data-dirty="1"], [data-settings-page="linkage"][data-dirty="1"]'))linkageDraws.forEach(draw=>draw());if(UI.state)renderFan(UI.state);renderAuto();}catch{}finally{bindingPending=false;}
+}
+(async function poll(){try{await pollBinding();}finally{setTimeout(poll,5000);}})();
 })();

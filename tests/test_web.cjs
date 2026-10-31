@@ -183,10 +183,10 @@ const ACTIONS={M1:['schedules.get','schedules.put','schedules.delete','schedules
   const before=calls.length;await w.UI.reload();
   assert.equal(calls.slice(before).filter(r=>['capabilities.get','config.get'].includes(r.action)).length,0,'business_status skips repeated capability/config reads');
   const fullAt=calls.length;await w.UI.reload({full:true});
-  assert.deepEqual(calls.slice(fullAt).filter(r=>['capabilities.get','config.get'].includes(r.action)).map(r=>r.action),['capabilities.get','config.get'],'explicit full reload refreshes capabilities and config');
+  assert.deepEqual(calls.slice(fullAt).filter(r=>['capabilities.get','config.get'].includes(r.action)).map(r=>r.action),['capabilities.get'],'explicit full reload refreshes capabilities without configuration access');
   if(model==='A1'){
    await w.eval("command('fan.set',{speed:61})");const mutationAt=calls.length;await w.UI.reload();
-   assert.deepEqual(calls.slice(mutationAt).filter(r=>['capabilities.get','config.get'].includes(r.action)).map(r=>r.action),['capabilities.get','config.get'],'mutations refresh capabilities and config with the next full status');
+   assert.deepEqual(calls.slice(mutationAt).filter(r=>['capabilities.get','config.get'].includes(r.action)).map(r=>r.action),['capabilities.get'],'mutations refresh capabilities with the next full status');
   }
   holdDiagnostics=true;const pendingBefore=diagnosticsPending.length;const oldView=w.UI.reload();await flush();
   assert.equal(diagnosticsPending.length,pendingBefore+1,'diagnostics view starts a deferred diagnostic read');

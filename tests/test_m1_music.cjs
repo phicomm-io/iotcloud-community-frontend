@@ -19,7 +19,7 @@ async function setup(supported=true){
   return {ok:true,json:async()=>({code,data})};};
  require('./legacy_device_fixture.cjs')(w);
  const scripts=[...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(x=>x[1]);
- scripts.forEach((s,i)=>{if(i===scripts.length-1)w.UI.start=dev=>{w.UI.device=dev;dev.capabilities({actions:['wake_alarm.start','wake_alarm.get','wake_alarm.stop']});};vm.runInContext(s,dom.getInternalVMContext());});
+ scripts.forEach((s,i)=>{if(i===scripts.length-1)w.UI.start=dev=>{w.UI.device=dev;w.UI.caps={actions:['wake_alarm.start','wake_alarm.get','wake_alarm.stop','music.get','music.begin','music.chunk','music.commit','music.read','music.play','music.stop','music.cancel']};dev.capabilities(w.UI.caps);};vm.runInContext(s,dom.getInternalVMContext());});
  w.I18N.set('en');await settle();return {dom,w,calls,get:id=>w.document.getElementById(id),song:()=>song,setFail:v=>failCommit=v};
 }
 test('M1 RTTTL upload, CRC, bounded chunk retry, readback, play/stop and saved-song capability',async()=>{

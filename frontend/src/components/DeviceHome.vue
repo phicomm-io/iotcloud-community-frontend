@@ -3,6 +3,7 @@ import {t} from '../i18n.js';
 
 import {ref,computed,onMounted,onBeforeUnmount} from 'vue';
 import pages from 'virtual:device-pages';
+import {hubRemoteCapabilities} from '../hubCapabilities.js';
 const props=defineProps({device:Object,rawResources:{type:Boolean,default:true},sensorSources:{type:Array,default:()=>[]},displaySources:{type:Array,default:()=>[]}});
 const emit=defineEmits(['command','settings','upload','resource']);
 const uploads=new Map();
@@ -40,7 +41,7 @@ function receive(event){
   reads.delete(id);
   // These are the operations available through this host's transport. Shared
   // device pages keep their normal layout and capability-driven controls.
-  if(!props.rawResources&&request.action==='capabilities.get'&&reply.code==='ok')reply={...reply,data:{...reply.data,ota_upload:false,ota_variant_conversion:undefined,config_backup:false}};
+  if(!props.rawResources&&request.action==='capabilities.get'&&reply.code==='ok')reply={...reply,data:hubRemoteCapabilities(reply.data)};
   if(frame.value?.contentWindow===target)target.postMessage({type:'device-result',id,reply:JSON.parse(JSON.stringify(reply))},location.origin);
  },{...props.device},{signal:controller?.signal});
 }
