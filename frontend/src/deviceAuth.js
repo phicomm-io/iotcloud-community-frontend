@@ -9,11 +9,11 @@ const basic=password=>'Basic '+btoa(String.fromCharCode(...new TextEncoder().enc
 // into a tab-scoped token shared with the same device's embedded hub console.
 export function createDeviceAuth({fetcher=globalThis.fetch,origin='',onRequired=()=>{},allowLegacy=true,wire=fixedDeviceWire({fetcher,origin}),sessionStore=null}={}){
  let token='',legacy='',legacyReady=false,blocked=false,pending=null,generation=0,loginAbort=null,emptySession=false,discovered=false,rebindGeneration=-1;
- let restoreAttempted=false,restoring=null;
+ let restoreAttempted=false,restoring=null,restoreAbort=null;
  const clearStored=()=>{try{sessionStore?.clear();}catch{}};
  const storeSession=()=>{try{if(token&&wire.identity)sessionStore?.write({token,identity:wire.identity,expires:Date.now()+1800000});else clearStored();}catch{}};
  const headers=()=>token?{Authorization:'Bearer '+token}:legacy?{Authorization:legacy}:{};
- const reset=({requireLogin=true}={})=>{generation++;loginAbort?.abort();loginAbort=null;token=legacy='';legacyReady=false;emptySession=false;blocked=requireLogin;pending=null;clearStored();};
+ const reset=({requireLogin=true}={})=>{generation++;loginAbort?.abort();loginAbort=null;restoreAbort?.abort();restoreAbort=null;token=legacy='';legacyReady=false;emptySession=false;blocked=requireLogin;pending=null;clearStored();};
  function required(){if(!blocked){blocked=true;onRequired();}}
  function observe(status,authorization){if(arguments.length>1&&authorization!==headers().Authorization)return;if(status===401){if(emptySession&&token){reset({requireLogin:false});return login('').catch(()=>{});}token=legacy='';legacyReady=false;clearStored();required();}}
  async function login(password=''){
@@ -47,7 +47,8 @@ export function createDeviceAuth({fetcher=globalThis.fetch,origin='',onRequired=
   if(blocked)throw authError('unauthorized',401);
   if(sessionStore&&!restoreAttempted){
    restoring||=(async()=>{
-    await wire.discover();discovered=true;
+    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),5000);restoreAbort=controller;
+    try{await wire.discover({signal:controller.signal});discovered=true;}finally{clearTimeout(timer);if(restoreAbort===controller)restoreAbort=null;}
     if(version!==generation||restoreAttempted)return;
     restoreAttempted=true;
     let saved;try{saved=sessionStore.read();}catch{}
