@@ -1,6 +1,6 @@
 // The released native TC1 page, real MessagePack/session/HTTP queue and browser
 // navigation. Only the device responses are gated; no DUT or remote host is used.
-const {chromium,webkit}=require('@playwright/test');
+const {chromium,webkit,expect}=require('@playwright/test');
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
 const html=require('node:child_process').execFileSync('python3',['common/web/page.py','TC1/http_server/web/index.html','--minify']);
 const engine=process.env.BROWSER||'chromium';
@@ -10,6 +10,10 @@ const deferred=()=>{let resolve;const promise=new Promise(done=>resolve=done);re
  const {encodeWire,decodeWire}=await import('../frontend/src/wireCodec.js');
  const browser=await ({chromium,webkit}[engine]).launch({headless:true,...(process.env.BROWSER_EXECUTABLE_PATH?{executablePath:process.env.BROWSER_EXECUTABLE_PATH}:{})});
  const page=await browser.newPage({viewport:{width:1280,height:800}}),errors=[],calls=[],gates=[];
+ // Exercise exactly three route generations. Wall-clock execution in WebKit
+ // can otherwise cross TC1's ordinary three-second polling interval.
+ await page.clock.install();
+ await page.clock.pauseAt(new Date());
  const identity={device_id:'aabbccddeeff',model:'tc1',firmware_version:'test-rc4',variant:'full'};
  const caps={...identity,business_status:true,status_views:['full','live'],actions:['status.get','capabilities.get','config.get','schedules.get','buttons.get','outlet.set']};
  const state={...identity,version:'test-rc4',name:'initial',socket_names:['1','2','3','4','5','6'],socket_states:[false,false,false,false,false,false],
@@ -37,7 +41,8 @@ const deferred=()=>{let resolve;const promise=new Promise(done=>resolve=done);re
   }finally{active--;}
  });
  try{
-  await page.goto('http://status-reload.test/');await page.waitForFunction(()=>UI?.state?.name==='initial');
+  await page.goto('http://status-reload.test/');
+  await expect.poll(()=>page.evaluate(()=>window.UI?.state?.name)).toBe('initial');
   await page.evaluate(()=>{
    document.querySelector('#deviceName').value='unsaved draft';
    const reload=UI.reload;window.__reloads=[];
@@ -51,7 +56,7 @@ const deferred=()=>{let resolve;const promise=new Promise(done=>resolve=done);re
   await navigate('schedule');await start.started.promise;
   await navigate('buttons');start.release.resolve();await catchup.started.promise;
   state.name='latest';const last=await navigate('device');catchup.release.resolve();
-  await page.waitForFunction(index=>__reloads[index]?.settled,last);
+  await expect.poll(()=>page.evaluate(index=>__reloads[index]?.settled,last)).toBe(true);
   const result=await page.evaluate(index=>({reload:__reloads[index],state:UI.state.name,route:location.hash,
    draft:document.querySelector('#deviceName').value,visible:[...document.querySelectorAll('[data-settings-page]')].filter(el=>!el.hidden).map(el=>el.dataset.settingsPage),
    errors:[...document.querySelectorAll('.page-load-error')].map(el=>el.textContent)}),last);
