@@ -47,7 +47,7 @@ const deferred=()=>{let resolve;const promise=new Promise(done=>resolve=done);re
    };
   });
   const navigate=route=>page.evaluate(route=>{history.replaceState(null,'','#settings/'+route);UI.showRoute();return __reloads.length-1;},route);
-  const before=calls.length,start=hold('config.get'),catchup=hold('config.get');
+  const before=calls.length,start=hold('capabilities.get'),catchup=hold('capabilities.get');
   await navigate('schedule');await start.started.promise;
   await navigate('buttons');start.release.resolve();await catchup.started.promise;
   state.name='latest';const last=await navigate('device');catchup.release.resolve();

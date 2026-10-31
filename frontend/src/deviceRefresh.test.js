@@ -4,7 +4,7 @@ import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 import {JSDOM} from 'jsdom';
 const ui=readFileSync(new URL('../../common/web/ui.js',import.meta.url),'utf8');
-const route=ui.slice(ui.indexOf('let routeGeneration=0;'),ui.indexOf('/* Wi-Fi scan is shared:'));
+const route=ui.slice(ui.indexOf('function settingsAvailable('),ui.indexOf('function buildNav('))+ui.slice(ui.indexOf('let routeGeneration=0;'),ui.indexOf('/* Wi-Fi scan is shared:'));
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
 function fixture(){
  const dom=new JSDOM('<div id="homePage"></div><div id="settingsPage"></div><div id="side"></div>'+['linkage','binding','light'].map(key=>'<div data-settings-page="'+key+'"><input value="old"></div>').join(''));
