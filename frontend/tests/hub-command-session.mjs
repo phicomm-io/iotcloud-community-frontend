@@ -99,17 +99,47 @@ for(const engine of [chromium,webkit].filter(engine=>!process.env.BROWSER||engin
    await expect(page.locator('.auth-form')).toHaveCount(0);
    assert(!f.calls.some(call=>call.path==='/api/hub/setup'||call.path==='/api/auth/login'));
    assert(!f.calls.some(call=>call.path.includes('mqtt')));
+   const readyFrame=async(model,mark)=>{
+    const device=f.devices.find(device=>device.model===model),identity={device_id:device.mac,model,firmware_version:device.firmware_version||firmware,variant:device.self?'hub':'full'};
+    let snapshot;
+    await expect.poll(async()=>{
+     snapshot=await page.locator('iframe.device-home').evaluate((node,{identity,mark})=>{
+      const view=node.contentWindow,caps=view?.UI?.caps,state=view?.UI?.state;
+      if(!view||view.document.readyState!=='complete'||state?.device_id!==identity.device_id||caps?.device_id!==identity.device_id||caps.model!==identity.model||caps.firmware_version!==identity.firmware_version||(caps.variant||caps.firmware_variant)!==identity.variant||caps.wire_version!==1||caps.default_wire_format!=='msgpack')return null;
+      // Check and mark one loaded document in the same browser evaluation.
+      if(mark)view.__fixtureDocumentMarker=mark;
+      return {identity,marker:view.__fixtureDocumentMarker||null};
+     },{identity,mark});
+     return snapshot?.identity;
+    }).toEqual(identity);
+    return snapshot;
+   };
    const select=async model=>{
     f.setStage('select '+model);
     const index=f.devices.findIndex(device=>device.model===model);await page.locator('.device-select').nth(index).click();
-    await expect.poll(()=>page.locator('iframe.device-home').evaluate(node=>node.contentWindow?.UI?.state?.device_id)).toBe(f.devices[index].mac);
+    await readyFrame(model);
     return page.frameLocator('iframe.device-home');
    };
    for(const model of ['daikin','m1','a1','s30-v1b','tc1'])await select(model);
-   await select('m1');await page.locator('iframe.device-home').evaluate(node=>{node.contentWindow.__oldFirmwarePage=true;});
+   await select('m1');assert.equal((await readyFrame('m1','before-firmware-change')).marker,'before-firmware-change');
+   await page.evaluate(()=>{
+    const counts={added:0,removed:0},frames=node=>node.nodeType===1?(node.matches('iframe.device-home')?1:0)+node.querySelectorAll('iframe.device-home').length:0;
+    const observer=new MutationObserver(records=>{for(const record of records){for(const node of record.addedNodes)counts.added+=frames(node);for(const node of record.removedNodes)counts.removed+=frames(node);}});
+    observer.observe(document.getElementById('app'),{childList:true,subtree:true});
+    window.__firmwareFrameLifecycle={counts,observer};
+   });
    f.changeFirmware('m1');await page.locator('.devices-panel>button').last().click();
-   await expect.poll(()=>page.locator('iframe.device-home').evaluate(node=>node.contentWindow.UI?.caps?.firmware_version)).toBe(firmware+'-updated');
-   assert.equal(await page.locator('iframe.device-home').evaluate(node=>!!node.contentWindow.__oldFirmwarePage),false,'new discovery identity replaces the old page and capabilities');
+   assert.equal((await readyFrame('m1')).marker,null,'new discovery identity replaces the marked document and capabilities');
+   await readyFrame('m1','after-firmware-change');
+   for(let i=0;i<2;i++){
+    const inventoryReads=f.calls.filter(call=>call.path==='/api/devices').length;
+    await page.locator('.devices-panel>button').last().click();
+    await expect.poll(()=>f.calls.filter(call=>call.path==='/api/devices').length).toBeGreaterThan(inventoryReads);
+    await expect.poll(()=>f.pending).toBe(0);
+    assert.equal((await readyFrame('m1')).marker,'after-firmware-change','unchanged discovery preserves the loaded document');
+   }
+   const firmwareLifecycle=await page.evaluate(()=>{const {counts,observer}=window.__firmwareFrameLifecycle;observer.disconnect();return counts;});
+   assert.deepEqual(firmwareLifecycle,{added:1,removed:1},'firmware change replaces the iframe once; ordinary refreshes preserve it');
    let frame=await select('tc1');
    await frame.locator('#socket0').click();
    await expect.poll(()=>f.calls.filter(call=>call.data?.action==='outlet.set').length).toBe(1);
@@ -172,7 +202,7 @@ for(const engine of [chromium,webkit].filter(engine=>!process.env.BROWSER||engin
     assert.equal(f.calls.filter(call=>call.data?.action==='outlet.set').length,2,'expired write is sent once');
    }
    assert.equal(f.maxPending,1,'gateway commands are serialized across targets');assert.deepEqual(f.errors,[]);assert.deepEqual(f.consoleIssues,[]);
-   results.push({engine:engine.name(),language,passwordRequired:protectedDevice,commands:f.calls.filter(call=>call.path.endsWith('/command')).length,maxPending:f.maxPending,passed:true});
+   results.push({engine:engine.name(),language,passwordRequired:protectedDevice,commands:f.calls.filter(call=>call.path.endsWith('/command')).length,maxPending:f.maxPending,firmwareLifecycle,passed:true});
    console.log('PASS',engine.name(),language,protectedDevice?'password':'open','binary controls, five models, UTC, cancelled reads, writes once, root/hub/reload session');
   }catch(error){
    if(evidence){await page.screenshot({path:resolve(evidence,'failure.png'),fullPage:true});await writeFile(resolve(evidence,'failure-calls.json'),JSON.stringify(f.calls,null,2)+'\n');}
