@@ -699,7 +699,7 @@ function clockCard({load,save,status}){
   info('clock.hint'),h('div',{class:'form-actions'},h('button',{class:'btn primary',type:'submit'},h('span',{i18n:'common.save'}))));
  onSubmit(form,()=>save({timezone_minutes:Number(tz.value),ntp_host:ntp.value.trim()}));
  return {el:card('clock.title',null,sum,h('div',{style:'margin-top:16px'},form)),
-  async show(options={}){const c=await load(options);if(!c||options.current&&!options.current())return;tz.value=String(c.timezone_minutes||480);ntp.value=c.ntp_host||'';},
+  async show(options={}){const c=await load(options);if(!c||options.current&&!options.current())return;tz.value=String(c.timezone_minutes??480);ntp.value=c.ntp_host||'';},
   status(s){sum.replaceChildren(summary(status(s)));}};
 }
 
