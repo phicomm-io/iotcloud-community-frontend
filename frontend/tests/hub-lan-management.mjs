@@ -9,7 +9,7 @@ import {decodeWire,encodeWire} from '../src/wireCodec.js';
 
 const root=resolve(process.env.HUB_LAN_DIST||process.env.HUB_TEST_DIST||'dist');
 const evidence=resolve(process.env.HUB_LAN_EVIDENCE||'../../review/hub-lan-management');
-const token='fixture-hub-owner-token',peer='a1b2c3d4e5f6',ip='192.168.1.45';
+const token='abcdef0123456789abcdef0123456789',peer='a1b2c3d4e5f6',ip='192.168.1.45';
 let browser,inventory,events,pairPolls,paired,pairPhase,registered;
 const types={'.html':'text/html','.js':'text/javascript','.css':'text/css','.svg':'image/svg+xml','.png':'image/png','.webmanifest':'application/manifest+json'};
 const server=createServer(async(req,res)=>{
@@ -58,7 +58,7 @@ async function fixture(language,width){
  inventory='discovered';events=[];pairPolls=0;paired=false;registered=false;pairPhase='';
  const context=await browser.newContext({viewport:{width,height:950},serviceWorkers:'block'}),page=await context.newPage(),errors=[];
  page.on('pageerror',error=>errors.push(error.message));
- await page.addInitScript(({language,token})=>{localStorage.setItem('phicomm.language',language);localStorage.setItem('iotcloud.session.'+location.origin,token);},{language,token});
+ await page.addInitScript(({language,token})=>{try{localStorage.setItem('phicomm.language',language);sessionStorage.setItem('iotcloud.device-session.v1',JSON.stringify({token,identity:{device_id:'001122334455',model:'daikin',firmware_version:'fixture',variant:'hub'},expires:Date.now()+1800000}));}catch{}},{language,token});
  await page.clock.install();await page.goto(base);
  const w=words[language];await page.getByRole('button',{name:w.settings,exact:true}).click();
  return {context,page,errors,w};

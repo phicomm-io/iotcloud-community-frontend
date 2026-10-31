@@ -1,4 +1,4 @@
-// Standalone device pages use an in-memory local session. Embedded pages use
+// Standalone device pages share a tab-scoped local session. Embedded pages use
 // their parent's transport and must never send HTTP credentials over MQTT.
 (()=>{
  if(typeof window==='undefined'||window.deviceParentTransport===true)return;
@@ -17,8 +17,9 @@
   });return prompt;
  }
  const fetcher=window.fetch.bind(window),wire=DeviceAuth.createDeviceWire({fetcher});
- const auth=DeviceAuth.createDeviceAuth({fetcher,wire,onRequired:()=>{signIn();}});
+ const auth=DeviceAuth.createDevicePageAuth({fetcher,wire,onRequired:()=>{signIn();}});
  async function ready(){try{await auth.ensure();}catch(error){if(error.status!==401)throw error;await signIn();}}
  window.DeviceSession={...auth,ready,login:auth.login,async fetch(path,options){await ready();return auth.fetch(path,options);},async logout(){await auth.logout();},headers:auth.headers};
- window.addEventListener('pagehide',()=>auth.release());
+ // Navigation to this device's hub console reuses the same token. Explicit
+ // sign-out revokes it; the firmware enforces expiry and password changes.
 })();

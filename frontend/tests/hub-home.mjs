@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import {encodeWire,decodeWire} from '../src/wireCodec.js';
 import {chromium,webkit,expect} from '@playwright/test';
 
-const root=resolve(process.env.HUB_TEST_DIST||'dist'),evidence=resolve(process.env.HUB_HOME_EVIDENCE||'../../review/hub-home'),token='fixture-local-owner-token';
+const root=resolve(process.env.HUB_TEST_DIST||'dist'),evidence=resolve(process.env.HUB_HOME_EVIDENCE||'../../review/hub-home'),token='abcdef0123456789abcdef0123456789';
 const code='246-81-357',uri='X-HM://0023ISYWYABCD';
 const unpaired=()=>({enabled:true,protocol:'hap',ready:true,paired:false,devices:3,port:51826,code:'ok',setup_code:code,setup_uri:uri});
 let browser,home,readsFail=false,writeFails=false,offline=false,sessionExpired=false,writes=[],homeReads=[];
@@ -25,7 +25,7 @@ const server=createServer(async(req,res)=>{
    let result={},status=200;
    if(path==='/api/v1/info')result={code:'ok',data:{api_version:1,device_id:'aabbccddeeff',model:'daikin',firmware_version:'rc4',variant:'hub',wire_version:1,wire_formats:['msgpack'],default_wire_format:'msgpack'}};
    else if(path==='/api/auth/me')result={username:'local',mqtt_username:'local',mqtt_password_separate:true};
-   else if(path==='/api/auth/login'){sessionExpired=false;res.setHeader('X-IotCloud-Session',token);result={username:'local',mqtt_username:'local',mqtt_password_separate:true};}
+   else if(path==='/api/v1/auth/login'){sessionExpired=false;result={code:'ok',data:{token}};}
    else if(path==='/api/register/status')result={setup_required:false,mqtt_uri:'mqtt://127.0.0.1:1',mqtt_ws_uri:'ws://127.0.0.1:1/mqtt'};
    else if(path==='/api/devices')result=[];
    else if(path==='/api/hub/bridge')result={enabled:false,mappings:[],mqtt:{host:'',port:1883,user:'',password_set:false}};
@@ -55,7 +55,7 @@ async function fixture(language,width){
  home=unpaired();readsFail=false;writeFails=false;offline=false;sessionExpired=false;writes=[];homeReads=[];
  const context=await browser.newContext({viewport:{width,height:950},serviceWorkers:'block'}),page=await context.newPage(),errors=[];
  page.on('pageerror',error=>errors.push(error.message));
- await page.addInitScript(({language,token})=>{localStorage.setItem('phicomm.language',language);localStorage.setItem('iotcloud.session.'+location.origin,token);},{language,token});
+ await page.addInitScript(({language,token})=>{try{localStorage.setItem('phicomm.language',language);sessionStorage.setItem('iotcloud.device-session.v1',JSON.stringify({token,identity:{device_id:'aabbccddeeff',model:'daikin',firmware_version:'rc4',variant:'hub'},expires:Date.now()+1800000}));}catch{}},{language,token});
  await page.clock.install();
  await page.goto(base);
  const w=words[language];await page.getByRole('button',{name:w.settings,exact:true}).click();
@@ -111,8 +111,8 @@ try{
     // indefinitely with a discarded token, and never retry the DELETE.
     offline=false;sessionExpired=true;await page.clock.fastForward(6000);await expect(page).toHaveURL(/#\/login\?reason=hub-session-expired$/);await expect(page.getByRole('alert')).toContainText(language==='zh-CN'?'登录已失效':'session has expired');
     await expect(section).toHaveCount(0);const expiredReads=homeReads.length;await page.clock.fastForward(12000);assert.equal(homeReads.length,expiredReads);assert.equal(writes.length,1);
-    assert.equal(await page.evaluate(()=>localStorage.getItem('iotcloud.session.'+location.origin)),null);
-    await page.locator('.auth-form input[autocomplete=username]').fill('local');await page.locator('.auth-form input[autocomplete=current-password]').fill('adminfjr');
+    assert.equal(await page.evaluate(()=>sessionStorage.getItem('iotcloud.device-session.v1')),null);
+    await expect(page.locator('.auth-form input')).toHaveCount(1);await page.locator('.auth-form input[autocomplete=current-password]').fill('fixture-password');
     home=unpaired();await page.locator('.auth-submit').click();await page.getByRole('button',{name:w.settings,exact:true}).click();await page.getByRole('button',{name:new RegExp(w.services)}).click();await expect(section.getByText(w.ready,{exact:true})).toBeVisible();await expect(image).toBeVisible();assert.equal(writes.length,1);
    }else if(scenario==='enable'||scenario==='disable'){
     if(scenario==='enable'){

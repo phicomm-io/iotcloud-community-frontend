@@ -699,7 +699,7 @@ function clockCard({load,save,status}){
   info('clock.hint'),h('div',{class:'form-actions'},h('button',{class:'btn primary',type:'submit'},h('span',{i18n:'common.save'}))));
  onSubmit(form,()=>save({timezone_minutes:Number(tz.value),ntp_host:ntp.value.trim()}));
  return {el:card('clock.title',null,sum,h('div',{style:'margin-top:16px'},form)),
-  async show(options={}){const c=await load(options);if(!c||options.current&&!options.current())return;tz.value=String(c.timezone_minutes||480);ntp.value=c.ntp_host||'';},
+  async show(options={}){const c=await load(options);if(!c||options.current&&!options.current())return;tz.value=String(c.timezone_minutes??480);ntp.value=c.ntp_host||'';},
   status(s){sum.replaceChildren(summary(status(s)));}};
 }
 
@@ -781,7 +781,17 @@ let fullReload=null;
 UI.reload=({full=false,priority=2}={})=>{
  if(full)UI.invalidateStatus();
  if(!loading||loadingGeneration===fullGeneration)return loading||pollLoad(priority);
- if(!fullReload)fullReload=(async()=>{await loading;return pollLoad(priority);})().finally(()=>{fullReload=null;});
+ if(!fullReload)fullReload=(async()=>{
+  const lifecycle=pollGeneration;let pending=loading;
+  try{for(;;){
+   const generation=loadingGeneration,result=await pending;
+   if(stopped||lifecycle!==pollGeneration)return null;
+   if(generation===fullGeneration)return result;
+   // A catch-up can itself be invalidated. Read again only for a newer
+   // generation; a failure in the current generation still settles null.
+   pending=pollLoad(priority);
+  }}finally{fullReload=null;}
+ })();
  return fullReload;
 };
 document.addEventListener('visibilitychange',()=>{if(UI.device&&!document.hidden&&!stopped)UI.reload({full:true});});

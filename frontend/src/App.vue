@@ -4,7 +4,7 @@ import {t} from './i18n.js';
 import {ref,reactive,computed,onMounted,onBeforeUnmount,watch} from 'vue';
 import {useRoute,useRouter} from 'vue-router';
 import mqtt from 'mqtt';
-import {account,api,restoreAccount} from './account';
+import {account,api,restoreAccount,hubTransport} from './account';
 import {server,scopeKey} from './serverConfig';
 import {track} from './analytics';
 import {autoConnect,setAutoConnect,rememberLogin,savedPassword,forgetLogin} from './connectionPreferences';
@@ -20,6 +20,7 @@ import DeviceHome from './components/DeviceHome.vue';
 import {co2SourceCandidates} from './sensorSources.js';
 import {applyTypedSensorFeed,displaySourceCandidates,typedSensorTopic,sensorMetadataTopic} from './sensorFeed.js';
 import {hubMode} from './deployment.js';
+import {createHubDeviceClient,hubDeviceEntry,hubDeviceIdentity} from './hubDeviceClient.js';
 import PlatformSettings from './components/PlatformSettings.vue';
 import ThemeToggle from './components/ThemeToggle.vue';
 import LocalConnect from './components/LocalConnect.vue';
@@ -57,11 +58,14 @@ const lanConnections=reactive({}),lanStates=reactive({}),devicePreferences=react
 const sensorFeeds=reactive({});
 const webPasswords=new Map();let preferenceScope='';
 const transport=createDeviceTransport({records:lanConnections,onStatus:(key,state)=>{const snapshot=statusSnapshot(state);if(snapshot)lanStates[key]={...snapshot,available:true,lan_connected:true};}});
+const ownerHub=computed(()=>hubMode&&!localMode&&!thirdParty.value);
+const hubClient=hubMode?createHubDeviceClient({request:api,onStatus:(key,snapshot)=>{states[key]={...snapshot,capabilities:states[key]?.capabilities,available:true,hub_connected:true};},onCapabilities:(key,caps)=>{(states[key]||={}).capabilities=caps;}}):null;
 const viewStates=computed(()=>Object.fromEntries(list.value.map(d=>{const k=deviceKey(d);return [k,lanConnections[k]?.ready?{...states[k],...lanStates[k]}:states[k]||{}];})));
 const activeConnected=computed(()=>!!active.value&&(connected.value||lanConnections[deviceKey(active.value)]?.ready));
 function updateConnections(force=false){
  const scope=localMode?localScope():scopeKey()+':'+connectionOwner();
  if(scope!==preferenceScope){if(preferenceScope)for(const k of Object.keys(states))delete states[k];transport.retain([]);webPasswords.clear();for(const k of Object.keys(lanStates))delete lanStates[k];for(const k of Object.keys(devicePreferences))delete devicePreferences[k];preferenceScope=scope;}
+ if(ownerHub.value){transport.retain([]);hubClient.retain(list.value);return;}
  transport.retain(list.value.map(deviceKey));
  for(const d of list.value){
   const key=deviceKey(d);let p=devicePreferences[key]||loadPreference(scope,key);
@@ -75,14 +79,49 @@ function saveConnection(d,values,done){
 }
 async function deviceResource(path,options,done){
  const target=active.value;if(!target){done({error:t('backup.device_changed')});return;}
- try{done(await transport.resource(deviceKey(target),path,options));}catch(error){done({error:error.message});}
+ try{
+  if(ownerHub.value){
+   if(!target.self)throw Error(t('hub.remoteFiles'));
+   const response=await hubTransport.auth.fetch(path,{...options,headers:{'Content-Type':'application/octet-stream'}});
+   done({status:response.status,bytes:await response.arrayBuffer()});return;
+  }
+  done(await transport.resource(deviceKey(target),path,options));
+ }catch(error){done({error:error.message});}
 }
-function uploadDevice(file,rescue,progress,done,registerAbort,conversion){const target=active.value;if(!target){done({status:0,text:t('p.fdbefb8e29e6')});return;}const upload=transport.upload(deviceKey(target),file,rescue,progress,undefined,conversion);registerAbort(upload.abort);upload.promise.then(done);}
+async function uploadDevice(file,rescue,progress,done,registerAbort,conversion){
+ const target=active.value;if(!target){done({status:0,text:t('p.fdbefb8e29e6')});return;}
+ if(ownerHub.value){
+  if(!target.self||conversion){done({status:0,text:t('hub.remoteFiles')});return;}
+  try{
+   await hubTransport.auth.ensure();
+   const xhr=new XMLHttpRequest(),authorization=hubTransport.auth.headers().Authorization;
+   registerAbort(()=>xhr.abort());xhr.open('POST',rescue?'/api/v1/ota/upload-unsigned':'/api/v1/ota/upload');xhr.timeout=310000;xhr.responseType='arraybuffer';
+   xhr.setRequestHeader('Content-Type','application/octet-stream');xhr.setRequestHeader('Accept',hubTransport.wire.headers().Accept);if(authorization)xhr.setRequestHeader('Authorization',authorization);
+   xhr.upload.onprogress=event=>{if(event.lengthComputable)progress(event.loaded,event.total);};
+   xhr.onload=async()=>{hubTransport.auth.observe(xhr.status,authorization);let text='';try{const reply=await hubTransport.decodeResponse(new Response(xhr.response,{status:xhr.status,headers:{'Content-Type':xhr.getResponseHeader('Content-Type')}}));text=reply.message||reply.code||'';}catch{text='HTTP '+xhr.status;}done({status:xhr.status,text});};
+   xhr.onerror=xhr.ontimeout=xhr.onabort=()=>done({status:0,text:t('p.404da89a85cb')});xhr.send(file);
+  }catch(error){done({status:0,text:error.message});}
+  return;
+ }
+ const upload=transport.upload(deviceKey(target),file,rescue,progress,undefined,conversion);registerAbort(upload.abort);upload.promise.then(done);
+}
 async function deviceCommand(request,reply,target=active.value,options={}){
  if(demoMode){return mqttCommand(request,reply,target,options);}
  if(!target){reply({code:'offline',message:t('p.4d62b8d69d9d')});return;}
  const captured={...target},key=deviceKey(captured),scope=preferenceScope;
  const data={...request,request_id:request.request_id||requestId()};
+ if(ownerHub.value){
+  let result;try{result=await hubClient.dispatch(captured,data,options);}catch(error){result={code:error.name==='AbortError'?'cancelled':error.code||'offline',message:error.message};}
+  reply(result);
+  if(['ok','accepted'].includes(result.code)&&captured.self&&data.action==='config.set'&&data.params?.section==='auth'){
+   const password=data.params.values?.password;
+   if(typeof password==='string'){
+    hubTransport.auth.reset({requireLogin:password!==''});account.loaded=false;account.username=null;
+    if(password===''){await restoreAccount();}else await router.replace('/login');
+   }
+  }
+  return;
+ }
  const result=await transport.dispatch(key,data,()=>new Promise(resolve=>mqttCommand(data,resolve,captured,options)));
  if(scope!==preferenceScope)return reply({code:'offline',message:t('p.f807ec3022b9')});
  if(['ok','accepted'].includes(result.code)&&data.action==='config.set'&&data.params?.section==='auth'){
@@ -92,6 +131,7 @@ async function deviceCommand(request,reply,target=active.value,options={}){
  reply(result);
 }
 const active=computed(()=>{const d=list.value.find(x=>deviceKey(x)===selected.value);return d?{...viewStates.value[deviceKey(d)],...d}:null;});
+const devicePageKey=computed(()=>ownerHub.value&&active.value?hubDeviceIdentity(active.value):selected.value);
 const localHubURL=computed(()=>{
  if(!localMode||active.value?.model!=='daikin')return '';
  const lan=lanConnections[deviceKey(active.value)];
@@ -106,7 +146,7 @@ const displaySources=computed(()=>displaySourceCandidates(list.value,viewStates.
 watch(page,value=>track('pageview',thirdParty.value?(value==='settings'?'/guest/settings':'/guest'):(value==='settings'?'/settings':'/')));
 watch(()=>active.value?deviceKey(active.value):'',value=>{if(value)track('device_view',thirdParty.value?'/guest':'/',active.value.model);});
 let client,timer,poll,lanPoll;
-function visibilityProbe(){if(!document.hidden)updateConnections(true);}
+function visibilityProbe(){if(!document.hidden){updateConnections(true);if(ownerHub.value)pollHubStates();}}
 const replies=new Map();
 async function mqttCommand(request,reply,target=active.value,{timeoutMs=20000}={}){
  // A newly mounted device page can request data before MQTT finishes connecting.
@@ -163,7 +203,37 @@ function receiveDeviceMessage(topic,payload,packet){
  for(const d of list.value){const state=states[deviceKey(d)] ||= {};if(!applyMessage(d,state,topic,payload))continue;if(state.ip)updateConnections();if(topic.endsWith('/result')){const pending=replies.get(state.result?.request_id);if(pending&&pending.key===deviceKey(d)){clearTimeout(pending.timeout);replies.delete(state.result.request_id);pending.reply(state.result);}delete state.pending?.[state.result?.request_id];}break;}
 }
 
-async function refresh(){try{list.value=(localMode?savedLocalDevices():thirdParty.value?localDevices(guestStorage).map(d=>({...d,username:connection.username})):await api('/devices')).map(deviceEntry);if(!list.value.some(d=>deviceKey(d)===selected.value))selected.value=list.value[0]?deviceKey(list.value[0]):'';if(connected.value)subscribe();listReady.value=true;updateConnections();}catch(e){error.value=e.message;}}
+let refreshPending;
+async function refresh(){
+ if(refreshPending)return refreshPending;
+ refreshPending=(async()=>{try{
+  const records=localMode?savedLocalDevices():thirdParty.value?localDevices(guestStorage).map(d=>({...d,username:connection.username})):await api('/devices');
+  const next=records.map(ownerHub.value?hubDeviceEntry:deviceEntry);
+  if(ownerHub.value){const previous=new Map(list.value.map(d=>[deviceKey(d),d]));for(const d of next)if(previous.has(deviceKey(d))&&hubDeviceIdentity(previous.get(deviceKey(d)))!==hubDeviceIdentity(d))delete states[deviceKey(d)];}
+  list.value=next;
+  if(!list.value.some(d=>deviceKey(d)===selected.value))selected.value=list.value[0]?deviceKey(list.value[0]):'';
+  if(ownerHub.value)connected.value=true;else if(connected.value)subscribe();
+  listReady.value=true;updateConnections();
+ }catch(e){if(ownerHub.value&&e.code==='busy')return;if(ownerHub.value)connected.value=false;error.value=e.message;}})();
+ try{return await refreshPending;}finally{refreshPending=null;}
+}
+let hubPollPending;
+async function pollHubStates(){
+ if(!ownerHub.value||document.hidden)return;
+ if(hubPollPending)return hubPollPending;
+ hubPollPending=(async()=>{
+ await refresh();
+ await Promise.all(list.value.map(async device=>{
+  try{
+   const result=await hubClient.dispatch(device,{action:'status.get'},{background:true});
+   if(!['ok','accepted','busy'].includes(result.code)&&list.value.some(d=>deviceKey(d)===deviceKey(device)&&d.firmware_version===device.firmware_version)){
+    const state=states[deviceKey(device)]||={};state.available=false;state.sensorFresh=false;
+   }
+  }catch{}
+ }));
+ })();
+ try{return await hubPollPending;}finally{hubPollPending=null;}
+}
 function connect(){if(demoMode){connected.value=true;busy.value=false;for(const d of list.value)Object.assign(states[deviceKey(d)]||={},demoDevices[d.model].state);return;}if(!thirdParty.value&&connection.password)rememberLogin(account.username,connection.password);disconnect();error.value='';if(location.protocol==='https:'&&!connection.host.startsWith('wss://')){error.value=t('p.22211d965247');return;}if(!/^wss?:\/\//.test(connection.host)){error.value=t('p.5da207244bf4');return;}busy.value=true;
  client=mqtt.connect(connection.host,{username:connection.username,password:connection.password,clientId:'web_'+requestId(),connectTimeout:5000,reconnectPeriod:3000,clean:true});
  client.on('connect',()=>{connected.value=true;busy.value=false;subscribe();track('mqtt_connect',thirdParty.value?'/guest':'/');});
@@ -202,18 +272,20 @@ function legacyRequest({action,params={}},reply,d){
 }
 function sendTo(d,action,params={}){deviceCommand({action,params},r=>{if(!['ok','accepted'].includes(r.code))error.value=r.message||r.code;},d);}
 async function localConnected(d){await refresh();selected.value=deviceKey(d);updateConnections(true);page.value='home';}
-async function changeMode(){if(localMode){connection.host='';await refresh();return;}transport.retain([]);for(const k of Object.keys(lanStates))delete lanStates[k];for(const k of Object.keys(states))delete states[k];Object.assign(deviceBroker,{host:'',port:'',hub:false});disconnect();notice.value='';error.value='';if(hubMode){Object.assign(connection,{host:'',username:'',password:''});await refresh();return;}if(thirdParty.value){Object.assign(connection,{host:`${location.protocol==='https:'?'wss':'ws'}://${location.host}/mqtt`,username:'',password:''},JSON.parse(localStorage.getItem('tmcp_broker')||'{}'));}else{const s=await api('/register/status');try{const u=new URL(s.mqtt_uri.includes('://')?s.mqtt_uri:'mqtt://'+s.mqtt_uri);if(u.protocol==='mqtt:'&&u.hostname&&!u.username&&!u.password)Object.assign(deviceBroker,{host:u.hostname,port:Number(u.port||1883),hub:s.hub===true&&u.hostname===location.hostname&&Number(u.port||1883)===1883});}catch{}Object.assign(connection,{host:server.mqttWS||s.mqtt_ws_uri||`${location.protocol==='https:'?'wss':'ws'}://${location.host}/mqtt`,username:account.mqttUsername||account.username,password:account.password||savedPassword(account.username)});}await refresh();if(demoMode||(autoConnect(connectionOwner())&&connection.password))connect();}
+async function changeMode(){if(localMode){connection.host='';await refresh();return;}transport.retain([]);for(const k of Object.keys(lanStates))delete lanStates[k];for(const k of Object.keys(states))delete states[k];Object.assign(deviceBroker,{host:'',port:'',hub:false});disconnect();notice.value='';error.value='';if(ownerHub.value){Object.assign(connection,{host:'',username:account.mqttUsername||account.username,password:''});await refresh();pollHubStates();return;}if(thirdParty.value){Object.assign(connection,{host:`${location.protocol==='https:'?'wss':'ws'}://${location.host}/mqtt`,username:'',password:''},JSON.parse(localStorage.getItem('tmcp_broker')||'{}'));}else{const s=await api('/register/status');try{const u=new URL(s.mqtt_uri.includes('://')?s.mqtt_uri:'mqtt://'+s.mqtt_uri);if(u.protocol==='mqtt:'&&u.hostname&&!u.username&&!u.password)Object.assign(deviceBroker,{host:u.hostname,port:Number(u.port||1883),hub:s.hub===true&&u.hostname===location.hostname&&Number(u.port||1883)===1883});}catch{}Object.assign(connection,{host:server.mqttWS||s.mqtt_ws_uri||`${location.protocol==='https:'?'wss':'ws'}://${location.host}/mqtt`,username:account.mqttUsername||account.username,password:account.password||savedPassword(account.username)});}await refresh();if(demoMode||(autoConnect(connectionOwner())&&connection.password))connect();}
 async function add(){try{const d=deviceEntry({...addForm,version:addForm.model==='tc1'?addForm.version:'v2',...(thirdParty.value?{username:connection.username}:{})});if(thirdParty.value){if(list.value.some(x=>x.mac===d.mac))throw Error(t('p.bf5557c8f16a'));localStorage.setItem(guestKey(),JSON.stringify([...list.value,d]));}else await api('/devices',{method:'POST',body:JSON.stringify(d)});await refresh();addForm.mac='';}catch(e){error.value=e.message;}}
 async function remove(d){if(!confirm(t('p.4c8411974d35',{v0:(d.mac)})))return;try{client?.unsubscribe(topics(d));if(thirdParty.value)localStorage.setItem(guestKey(),JSON.stringify(list.value.filter(x=>deviceKey(x)!==deviceKey(d))));else await api(`/devices/${d.namespace?'scoped/':''}${d.mac}${d.namespace?'?mqtt_username='+encodeURIComponent(d.mqtt_username||d.username):''}`,{method:'DELETE'});await refresh();}catch(e){error.value=e.message;}}
 async function logout(){transport.retain([]);webPasswords.clear();try{await api('/auth/logout',{method:'POST',body:'{}'});}catch(e){error.value=e.message;}account.username=null;account.mqttUsername=null;account.isAdmin=false;account.aliases=[];account.githubLogin='';account.password='';forgetLogin();disconnect();await router.replace('/login');}
 async function changeMQTTPassword(values){try{await api('/auth/mqtt-password',{method:'POST',body:JSON.stringify({current_password:values.current,password:values.password})});account.password=values.password;rememberLogin(account.username,values.password);if(!thirdParty.value){connection.password=values.password;connect();}notice.value=t('p.14c896de34db');}catch(e){error.value=e.message;}}
 async function changePassword(values){try{await api('/auth/password',{method:'POST',body:JSON.stringify({current_password:values.current,password:values.password})});await logout();}catch(e){error.value=e.message;}}
-onMounted(async()=>{if(!localMode&&route.name!=='Guest')await restoreAccount();try{aliases.value=JSON.parse(localStorage.getItem('phicomm.names.'+scopeKey()+':'+(account.username||'guest'))||'{}');}catch{}await changeMode();if(route.query.github==='linked')notice.value=t('p.034b28c46590');else if(route.query.github==='login'&&!connection.password)notice.value=t('p.dfcf6ba14455');timer=setInterval(()=>now.value=Date.now(),1000);lanPoll=setInterval(()=>{if(!document.hidden)updateConnections();},30000);document.addEventListener('visibilitychange',visibilityProbe);poll=setInterval(()=>{if(!thirdParty.value&&!document.hidden)refresh();},5000);});
-onBeforeUnmount(()=>{disconnect();clearInterval(timer);clearInterval(poll);clearInterval(lanPoll);transport.stop();webPasswords.clear();document.removeEventListener('visibilitychange',visibilityProbe);});
+function hubSessionLost(){if(ownerHub.value){hubClient.cancelReads();disconnect();router.replace({name:'Login',query:{reason:'hub-session-expired'}});}}
+watch([page,selected],()=>{if(ownerHub.value)hubClient.cancelReads();});
+onMounted(async()=>{if(!localMode&&route.name!=='Guest')await restoreAccount();try{aliases.value=JSON.parse(localStorage.getItem('phicomm.names.'+scopeKey()+':'+(account.username||'guest'))||'{}');}catch{}await changeMode();if(route.query.github==='linked')notice.value=t('p.034b28c46590');else if(route.query.github==='login'&&!connection.password)notice.value=t('p.dfcf6ba14455');timer=setInterval(()=>now.value=Date.now(),1000);lanPoll=setInterval(()=>{if(!document.hidden)updateConnections();},30000);document.addEventListener('visibilitychange',visibilityProbe);window.addEventListener('phicomm-session-expired',hubSessionLost);poll=setInterval(()=>{if(ownerHub.value)pollHubStates();else if(!thirdParty.value&&!document.hidden)refresh();},5000);});
+onBeforeUnmount(()=>{disconnect();clearInterval(timer);clearInterval(poll);clearInterval(lanPoll);hubClient?.stop();transport.stop();webPasswords.clear();document.removeEventListener('visibilitychange',visibilityProbe);window.removeEventListener('phicomm-session-expired',hubSessionLost);});
 </script>
 <template>
 <main class="console-page">
-<header class="console-topbar topbar"><div class="brand"><span class="kind">{{localMode?t('p.4ba8ad7e3075'):t('p.c3fdeb90d7eb')}}</span><h1><img :src="iconURL" width="30" height="30" alt="" style="vertical-align:middle;margin-right:8px">IotCloud</h1></div><nav class="console-nav"><span v-if="!localMode" class="status-pill" :class="{online:connected}">{{connected?t('p.91a6918c1b13'):t('p.c3ba111be9cb')}}</span><RouterLink v-if="!localMode&&account.isAdmin" class="btn console-admin" to="/admin">{{t('p.1ffea8d7039e')}}</RouterLink><ThemeToggle/><button v-if="!localMode&&account.username" @click="logout">{{t('p.498e1d59b4d7')}}</button><RouterLink v-else-if="!localMode" to="/login">{{t('p.1e2df9c3075a')}}</RouterLink></nav></header>
+<header class="console-topbar topbar"><div class="brand"><span class="kind">{{localMode?t('p.4ba8ad7e3075'):ownerHub?t('hub.manage'):t('p.c3fdeb90d7eb')}}</span><h1><img :src="iconURL" width="30" height="30" alt="" style="vertical-align:middle;margin-right:8px">IotCloud</h1></div><nav class="console-nav"><span v-if="!localMode" class="status-pill" :class="{online:connected}">{{ownerHub?t(connected?'hub.connected':'hub.disconnected'):connected?t('p.91a6918c1b13'):t('p.c3ba111be9cb')}}</span><RouterLink v-if="!localMode&&account.isAdmin" class="btn console-admin" to="/admin">{{t('p.1ffea8d7039e')}}</RouterLink><ThemeToggle/><button v-if="!localMode&&account.username" @click="logout">{{t('p.498e1d59b4d7')}}</button><RouterLink v-else-if="!localMode" to="/login">{{t('p.1e2df9c3075a')}}</RouterLink></nav></header>
 <nav class="platform-tabs tabs" :aria-label="t('p.9bae68040509')"><button :aria-current="page==='home'?'page':undefined" @click="page='home'">{{t('p.203c08e0d44a')}}</button><button :aria-current="page==='settings'?'page':undefined" @click="openSettings()">{{t('p.df3d58c7d84b')}}</button></nav>
 <div v-if="showDeviceHint" role="status" class="feedback device-host-hint"><details><summary>{{t('p.390bf998195f')}}<strong>{{mqttDeviceHost}}</strong></summary><p>{{t('p.af0f3d5d3468')}}</p></details><button type="button" @click="dismissDeviceHint">{{t('p.348f1cf1243e')}}</button></div>
 <p v-if="error" role="alert" class="feedback error">{{error}}</p><p v-if="notice" role="status" class="feedback">{{notice}}</p>
@@ -225,7 +297,7 @@ onBeforeUnmount(()=>{disconnect();clearInterval(timer);clearInterval(poll);clear
 <button class="device-picker-trigger" type="button" aria-haspopup="dialog" :aria-label="t('p.e7819c97f607',{v0:(displayName(active))})" @click="devicePicker.open()"><span class="current-device"><b :title="displayName(active)">{{displayName(active)}}</b><small>{{!activeConnected?t('p.5e8b7d10afc5'):active.lan_connected?t('p.a2d6d3fd2463'):active.available===false?t('p.be1b4f3c6c1c'):active.available===true?t('p.b9086662b1df'):t('p.21a94004577c')}}</small></span><span class="switch-device-label">{{t('p.28465d512f3a')}}<AppIcon name="arrow" :size="16"/></span></button>
 <button class="device-refresh" type="button" :aria-label="t('p.f51eeae36b84')" :disabled="!activeConnected" @click="home?.refresh()"><AppIcon name="refresh"/></button>
 </div><div class="device-heading"><div><h2>{{displayName(active)}}</h2><p class="help">{{deviceType(active)}}</p></div><span class="badge" :class="active.available===true&&activeConnected?'ok':''">{{!activeConnected?t('p.5e8b7d10afc5'):active.lan_connected?t('p.a2d6d3fd2463'):active.available===false?t('p.be1b4f3c6c1c'):active.available===true?t('p.b9086662b1df'):t('p.21a94004577c')}}</span><button :disabled="!activeConnected" @click="home?.refresh()">{{t('p.802a407c7743')}}</button></div>
-<DeviceHome ref="home" :key="selected" :device="active" :sensor-sources="sensorSources" :display-sources="displaySources" @command="deviceCommand" @upload="uploadDevice" @resource="deviceResource" @settings="openSettings()"/>
+<DeviceHome ref="home" :key="devicePageKey" :device="active" :raw-resources="!ownerHub||active.self===true" :sensor-sources="sensorSources" :display-sources="displaySources" @command="deviceCommand" @upload="uploadDevice" @resource="deviceResource" @settings="openSettings()"/>
 </div><section v-else class="surface empty-control"><h2>{{t('p.7549828062bc')}}</h2><p>{{localMode?t('p.48e36ea6f1e3'):t('p.17784e8330b1')}}</p><button @click="openSettings('devices')">{{t('p.3aea0927d015')}}</button></section></div>
 <DevicePicker ref="devicePicker" :devices="list" :selected="selected" :states="viewStates" :device-name="displayName" :connected="connected" :now="now" @select="selected=$event" @refresh="refresh" @add="openSettings('devices')"/>
 </template>

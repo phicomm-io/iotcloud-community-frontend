@@ -27,6 +27,7 @@ const t=(id,args={})=>{if(globalThis.I18N){I18N.extend(bridgeMessages);return I1
   if(next)send(...next);
  }
  function remove(id){const entry=pending.get(id);if(!entry)return;pending.delete(id);clearTimeout(entry.timer);entry.cleanup();if(activeRead===id)activeRead=null;}
+ function cancelRead(id){const entry=pending.get(id);if(entry?.read&&entry.sent)parent.postMessage({type:'device-command-cancel',id},parent.location.origin);}
 
  window.addEventListener('message',event=>{
   if(event.source!==parent||event.origin!==parent.location.origin||event.data?.type!=='device-result')return;
@@ -44,7 +45,7 @@ const t=(id,args={})=>{if(globalThis.I18N){I18N.extend(bridgeMessages);return I1
   if(event.source!==parent||event.origin!==parent.location.origin||event.data?.type!=='device-resource-result')return;
   finishResource(event.data.id,event.data.error?Error(event.data.error):null,event.data);
  });
- window.addEventListener('pagehide',()=>{for(const id of resources.keys())finishResource(id,Error('Cancelled'));for(const id of pending.keys()){const entry=pending.get(id);remove(id);entry.resolve(new Response(JSON.stringify({code:'cancelled'}),{status:200}));}});
+ window.addEventListener('pagehide',()=>{for(const id of resources.keys())finishResource(id,Error('Cancelled'));for(const id of pending.keys()){const entry=pending.get(id);cancelRead(id);remove(id);entry.resolve(new Response(JSON.stringify({code:'cancelled'}),{status:200}));}});
  window.fetch=(url,options={})=>{
   if(['/api/v1/config/backup','/api/v1/config/restore'].includes(url))return new Promise((resolve,reject)=>{
    if(options.signal?.aborted){reject(Error('Cancelled'));return;}
@@ -57,7 +58,7 @@ const t=(id,args={})=>{if(globalThis.I18N){I18N.extend(bridgeMessages);return I1
   if(url!=='/api/v1/command')return Promise.reject(Error(t('p.85dade959621')));
   return new Promise((resolve,reject)=>{
    const id=Array.from(crypto.getRandomValues(new Uint8Array(16)),b=>b.toString(16).padStart(2,'0')).join('');
-   const abort=()=>{remove(id);clearTimeout(timer);cleanup();reject(Error(t('p.f9ce625a07fc')));nextRead();};
+   const abort=()=>{cancelRead(id);remove(id);clearTimeout(timer);cleanup();reject(Error(t('p.f9ce625a07fc')));nextRead();};
    const cleanup=()=>options.signal?.removeEventListener('abort',abort);
    const timer=setTimeout(abort,24000);
    if(options.signal?.aborted){abort();return;}

@@ -34,7 +34,7 @@ jobs:
       - run: npm test --prefix frontend
       - run: python3 tests/check_web.py
       - run: NODE_PATH=frontend/node_modules node tests/test_setup.cjs
-      - run: NODE_PATH=frontend/node_modules node --test tests/test_config_recovery.cjs tests/test_device_auth.cjs
+      - run: NODE_PATH=frontend/node_modules node --test tests/test_config_recovery.cjs tests/test_device_auth.cjs tests/test_status_reload.cjs
       - run: NODE_PATH=frontend/node_modules node tests/test_web.cjs
       - run: WEB_TEST_VIEWS=1 NODE_PATH=frontend/node_modules node tests/test_web.cjs
       - run: NODE_PATH=frontend/node_modules node tests/test_a1_light_save.cjs
@@ -55,7 +55,7 @@ jobs:
           NODE_PATH: frontend/node_modules
           WEB_TEST_MINIFIED: '1'
         run: |
-          node --test tests/test_config_recovery.cjs tests/test_device_auth.cjs
+          node --test tests/test_config_recovery.cjs tests/test_device_auth.cjs tests/test_status_reload.cjs
           node tests/test_web.cjs
           node tests/test_a1_light_save.cjs
           node tests/test_a1_countdown.cjs
@@ -69,6 +69,8 @@ jobs:
           node tests/test_m1_pressure.cjs
       - run: python3 tools/build_release.py
       - run: npx --prefix frontend playwright install --with-deps chromium webkit
+      - run: NODE_PATH=frontend/node_modules node tests/test_status_reload_browser.cjs
+      - run: BROWSER=webkit NODE_PATH=frontend/node_modules node tests/test_status_reload_browser.cjs
       - name: Test M1 display profiles in built platform, local and hub applications
         env:
           M1_DISPLAY_BUNDLE_ROOT: ../build/bundle
@@ -126,6 +128,8 @@ jobs:
           node tests/hub-home.mjs
           node --test tests/hub-device-assets.mjs
           node tests/hub-lan-management.mjs
+          BROWSER=chromium node tests/hub-command-session.mjs
+          BROWSER=webkit node tests/hub-command-session.mjs
         working-directory: frontend
       - name: Test standalone and local hub management entry points
         env:
