@@ -128,7 +128,7 @@ jobs:
           node tests/hub-home.mjs
           node --test tests/hub-device-assets.mjs
           node tests/hub-lan-management.mjs
-          node tests/hub-command-session.mjs
+          BROWSER=chromium node tests/hub-command-session.mjs
           BROWSER=webkit node tests/hub-command-session.mjs
         working-directory: frontend
       - name: Test standalone and local hub management entry points
