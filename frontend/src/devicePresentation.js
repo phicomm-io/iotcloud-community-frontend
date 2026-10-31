@@ -1,5 +1,6 @@
 
 import {t} from './i18n.js';
+import {hubPowerReading} from './hubMeter.js';
 // Both Legacy and TMCP devices may report relay states as booleans or 0/1.
 export function socketStates(s={},count=6){
  const source=Array.isArray(s.socket_states)?s.socket_states:Array.from({length:count},(_,i)=>s[`plug_${i}`]?.on);
@@ -28,7 +29,7 @@ export function deviceSummary(d,s={},connected=false,now=Date.now()){
  if(d.model==='tc1'||d.model==='s30-v1b'){
   const sockets=socketStates(s,d.model==='s30-v1b'?1:6);
   const known=sockets.every(x=>x!==undefined&&x!==null);
-  const power=s.power_watts??s.power;
+  const power=hubPowerReading(s,now);
   if(!known&&power===undefined)return t('p.59b4aa3bd881');
   const meter=d.model==='s30-v1b'?['voltage','current'].map((field,i)=>{const v=meterReading(s,field);return v===null?null:number(v,i?3:1)+(i?' A':' V');}):[];
   return [power!==undefined?number(power,1)+' W':null,...meter,known?t('p.0f583152f409',{v0:(sockets.filter(Boolean).length),v1:(sockets.filter(x=>!x).length)}):null].filter(Boolean).join(' · ');

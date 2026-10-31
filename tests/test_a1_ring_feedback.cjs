@@ -13,7 +13,7 @@ test('A1 ring animation never polls; fan controls share bounded confirmation wit
   w.fetch=async(url,options)=>{const r=JSON.parse(options.body);return {ok:true,json:async()=>({code:'ok',data:r.action==='light_effect.get'?{effect:2,segments:3,segment:[]}: {}})};};
   require('./legacy_device_fixture.cjs')(w);
   const scripts=[...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m=>m[1]);
-  scripts.forEach((s,i)=>{if(i===scripts.length-1){w.UI.start=dev=>w.UI.device=dev;w.UI.reload=async()=>{reads++;return w.UI.state;};w.UI.control=async(...args)=>controls.push(args);}vm.runInContext(s,dom.getInternalVMContext());});
+  scripts.forEach((s,i)=>{if(i===scripts.length-1){w.UI.start=dev=>{w.UI.device=dev;w.UI.caps={actions:['light_effect.get']};dev.capabilities(w.UI.caps);};w.UI.reload=async()=>{reads++;return w.UI.state;};w.UI.control=async(...args)=>controls.push(args);}vm.runInContext(s,dom.getInternalVMContext());});
   await flush();w.UI.state={applied_speed:0,percentage:60,fan_on:true};w.document.getElementById('homePage').hidden=false;
   Object.defineProperty(w.document,'hidden',{value:false,configurable:true});
   const animation=[...intervals.values()].find(t=>t.ms===50);assert(animation);

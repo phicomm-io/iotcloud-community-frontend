@@ -3,6 +3,7 @@ import {t} from '../i18n.js';
 
 import {computed} from 'vue';
 import {socketStates,pressureReading,meterReading} from '../devicePresentation';
+import {hubPowerReading} from '../hubMeter.js';
 import AppIcon from './AppIcon.vue';
 const props=defineProps({device:Object,state:Object,name:String,connected:Boolean,now:Number});
 const live=computed(()=>(props.connected||props.state?.lan_connected)&&props.state?.available!==false);
@@ -13,6 +14,7 @@ const pm=computed(()=>props.device.model==='daikin'?props.state?.sensors?.pm25?.
 const freshAir=computed(()=>live.value&&props.state?.sensorAt&&(props.device.model==='daikin'?props.state?.sensors?.pm25?.valid&&props.now-props.state.sensorAt+(props.state.sensors.pm25.age_ms||0)<20000:props.state?.sensor_valid&&props.now-props.state.sensorAt<=15000)&&valid(pm.value));
 const co2=computed(()=>{if(props.device.model==='daikin'){const c=props.state?.sensors?.co2;return live.value&&c?.valid&&typeof c.value==='number'&&props.now-props.state.sensorAt+c.age_ms<20000?Math.round(c.value):null;}const s=props.state?.scd40;return live.value&&s?.ready&&s.valid&&s.age_ms<20000&&props.state?.sensorAt&&props.now-props.state.sensorAt<20000&&typeof s.co2_ppm==='number'?Math.round(s.co2_ppm):null;});
 const pressure=computed(()=>live.value?pressureReading(props.state,props.now):null);
+const power=computed(()=>hubPowerReading(props.state,props.now));
 const quality=computed(()=>!freshAir.value?'—':Number(pm.value)>75||Number(props.device.model==='daikin'&&props.state?.sensors?.formaldehyde?.valid?props.state.sensors.formaldehyde.value:props.state.formaldehyde)>0.1?t('p.895dcef3f1bd'):Number(pm.value)>35||Number(props.device.model==='daikin'&&props.state?.sensors?.formaldehyde?.valid?props.state.sensors.formaldehyde.value:props.state.formaldehyde)>0.08?t('p.91e25f4ddc6f'):t('p.cfea0dce5c5d'));
 const presence=computed(()=>{
  if(!props.connected&&!props.state?.lan_connected)return {label:t('p.3d52574ce150'),tone:'muted'};
@@ -28,7 +30,7 @@ function reading(v,digits=0){return live.value&&valid(v)?Number(v).toFixed(digit
 <span class="device-summary">
  <span class="rack-head"><span class="presence-pill" :class="presence.tone" role="status">{{presence.label}}</span><b :title="name">{{name}}</b></span>
  <span v-if="['tc1','s30-v1b'].includes(device.model)" class="rack-body tc1-body">
-  <span class="stat">{{reading(state?.power_watts??state?.power,1)}}<small>W</small></span>
+  <span class="stat">{{reading(power,1)}}<small>W</small></span>
   <span class="socket-info"><span class="sockets" role="img" :aria-label="sockets.map((v,i)=>t('p.adb6a3f989a5',{v0:(i+1),v1:t(!live||v===undefined?'state.unknown':v?'state.on':'state.off')})).join('; ')"><i v-for="i in outletCount" :key="i" :class="{on:live&&sockets[i-1]===true,unknown:!live||sockets[i-1]===undefined}"/></span><small v-if="device.model==='s30-v1b'" class="rack-detail meter-readings"><span>{{reading(meterReading(state,'voltage'),1)}} V</span><span>{{reading(meterReading(state,'current'),3)}} A</span></small></span>
  </span>
  <span v-else-if="['m1','daikin'].includes(device.model)" class="rack-body m1-body">

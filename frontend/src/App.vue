@@ -20,7 +20,7 @@ import DeviceHome from './components/DeviceHome.vue';
 import {co2SourceCandidates} from './sensorSources.js';
 import {applyTypedSensorFeed,displaySourceCandidates,typedSensorTopic,sensorMetadataTopic} from './sensorFeed.js';
 import {hubMode} from './deployment.js';
-import {createHubDeviceClient,hubDeviceEntry,hubDeviceIdentity} from './hubDeviceClient.js';
+import {createHubDeviceClient,hubDeviceEntry,hubDeviceIdentity,hubDeviceReadable} from './hubDeviceClient.js';
 import PlatformSettings from './components/PlatformSettings.vue';
 import ThemeToggle from './components/ThemeToggle.vue';
 import LocalConnect from './components/LocalConnect.vue';
@@ -146,7 +146,7 @@ const displaySources=computed(()=>displaySourceCandidates(list.value,viewStates.
 watch(page,value=>track('pageview',thirdParty.value?(value==='settings'?'/guest/settings':'/guest'):(value==='settings'?'/settings':'/')));
 watch(()=>active.value?deviceKey(active.value):'',value=>{if(value)track('device_view',thirdParty.value?'/guest':'/',active.value.model);});
 let client,timer,poll,lanPoll;
-function visibilityProbe(){if(!document.hidden){updateConnections(true);if(ownerHub.value)pollHubStates();}}
+function visibilityProbe(){if(document.hidden){if(ownerHub.value)hubClient.cancelReads();return;}updateConnections(true);if(ownerHub.value)pollHubStates();}
 const replies=new Map();
 async function mqttCommand(request,reply,target=active.value,{timeoutMs=20000}={}){
  // A newly mounted device page can request data before MQTT finishes connecting.
@@ -219,13 +219,15 @@ async function refresh(){
 }
 let hubPollPending;
 async function pollHubStates(){
- if(!ownerHub.value||document.hidden)return;
+ if(!ownerHub.value||document.hidden||page.value!=='home')return;
  if(hubPollPending)return hubPollPending;
  hubPollPending=(async()=>{
  await refresh();
- await Promise.all(list.value.map(async device=>{
+ if(!ownerHub.value||document.hidden||page.value!=='home')return;
+ await Promise.all(list.value.filter(hubDeviceReadable).map(async device=>{
   try{
-   const result=await hubClient.dispatch(device,{action:'status.get'},{background:true});
+   if(deviceKey(device)===selected.value&&hubClient.hasFreshStatus(device)){await hubClient.refreshMeter(device,{background:true});return;}
+   const result=await hubClient.refreshState(device,{background:true});
    if(!['ok','accepted','busy'].includes(result.code)&&list.value.some(d=>deviceKey(d)===deviceKey(device)&&d.firmware_version===device.firmware_version)){
     const state=states[deviceKey(device)]||={};state.available=false;state.sensorFresh=false;
    }
@@ -279,7 +281,14 @@ async function logout(){transport.retain([]);webPasswords.clear();try{await api(
 async function changeMQTTPassword(values){try{await api('/auth/mqtt-password',{method:'POST',body:JSON.stringify({current_password:values.current,password:values.password})});account.password=values.password;rememberLogin(account.username,values.password);if(!thirdParty.value){connection.password=values.password;connect();}notice.value=t('p.14c896de34db');}catch(e){error.value=e.message;}}
 async function changePassword(values){try{await api('/auth/password',{method:'POST',body:JSON.stringify({current_password:values.current,password:values.password})});await logout();}catch(e){error.value=e.message;}}
 function hubSessionLost(){if(ownerHub.value){hubClient.cancelReads();disconnect();router.replace({name:'Login',query:{reason:'hub-session-expired'}});}}
-watch([page,selected],()=>{if(ownerHub.value)hubClient.cancelReads();});
+watch([page,selected],()=>{
+ if(!ownerHub.value)return;
+ hubClient.cancelReads();
+ const device=list.value.find(d=>deviceKey(d)===selected.value);
+ // The visible page needs its verified capabilities before optional settings
+ // reads. The iframe joins this request instead of waiting behind list polling.
+ if(page.value==='home'&&!document.hidden&&device&&hubDeviceReadable(device))hubClient.dispatch(device,{action:'capabilities.get'}).catch(()=>{});
+});
 onMounted(async()=>{if(!localMode&&route.name!=='Guest')await restoreAccount();try{aliases.value=JSON.parse(localStorage.getItem('phicomm.names.'+scopeKey()+':'+(account.username||'guest'))||'{}');}catch{}await changeMode();if(route.query.github==='linked')notice.value=t('p.034b28c46590');else if(route.query.github==='login'&&!connection.password)notice.value=t('p.dfcf6ba14455');timer=setInterval(()=>now.value=Date.now(),1000);lanPoll=setInterval(()=>{if(!document.hidden)updateConnections();},30000);document.addEventListener('visibilitychange',visibilityProbe);window.addEventListener('phicomm-session-expired',hubSessionLost);poll=setInterval(()=>{if(ownerHub.value)pollHubStates();else if(!thirdParty.value&&!document.hidden)refresh();},5000);});
 onBeforeUnmount(()=>{disconnect();clearInterval(timer);clearInterval(poll);clearInterval(lanPoll);hubClient?.stop();transport.stop();webPasswords.clear();document.removeEventListener('visibilitychange',visibilityProbe);window.removeEventListener('phicomm-session-expired',hubSessionLost);});
 </script>

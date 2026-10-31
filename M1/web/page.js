@@ -7,7 +7,7 @@ const {$,h,fieldRow,icon,toast,run,confirm,summary,card,info,pageHead,seg,pretty
 const METRICS=['pm25','formaldehyde','temperature','humidity'];
 const STALE_MS=15000;
 const PRESSURE_STALE_MS=10000;
-let bindingStatus={peers:[]};
+let bindingStatus={peers:[]},bindingPending=false;
 let pressureSnapshot=null,pressureReceivedAt=0;
 
 function renderPressure(){
@@ -333,6 +333,7 @@ function peerSessionRows(){
  return SensorUI.peers(bindingStatus);
 }
 function renderPeers(){
+ $('peerCard').hidden=!UI.caps?.actions?.includes('binding.status.get');
  const rows=peerSessionRows(),capacity=Number(bindingStatus.max_sessions)||4;
  const head=h('div',{class:'card-head'},h('div',{},h('h2',{i18n:'m1.linked'}),h('p',{class:'help',i18n:'m1.linked_desc'})),
   h('span',{class:'badge '+(rows.length?'ok':'')},rows.length+' / '+capacity));
@@ -352,7 +353,7 @@ let wakeStatus=null,wakeReadAt=0,wakePending=false,wakeReadPending=false,wakeLas
 function renderWakeAlarm(){
  const box=$('wakeAlarmCard');if(!box)return;
  const tones=wakeStatus?.tone_supported===true&&wakeStatus.tone_count===4;
- UI.m1MusicSupported=tones&&wakeStatus?.music_supported===true;
+ UI.m1MusicSupported=tones&&wakeStatus?.music_supported===true&&UI.caps?.actions?.includes('music.get');
  if(musicEnabled!==UI.m1MusicSupported){musicEnabled=UI.m1MusicSupported;renderMusic();if(musicEnabled)run(null,loadMusic,null);}
  const custom=$('wakeAlarmTone').querySelector('[value="5"]');if(custom)custom.hidden=!UI.m1MusicPresent;
  if(UI.m1ToneSupported!==tones){UI.m1ToneSupported=tones;window.dispatchEvent(new Event('m1-tone-capability'));}
@@ -406,6 +407,7 @@ $('clockCard').replaceWith(clock.el);
 
 UI.start({
  capabilities(caps){
+  renderPeers();pollBinding();
   UI.userDisplay.enable(caps);
   particleEnabled=caps.actions?.includes("sensor_details.get")===true;renderParticles();pollParticles();
   if(caps.actions?.includes('alarm.get')&&caps.actions.includes('alarm.set')){thresholdCard.hidden=false;renderThresholds();run(null,loadThresholds,null);}
@@ -428,6 +430,11 @@ UI.start({
 });
 I18N.onChange(()=>{renderPeers();renderThresholds();const p=document.querySelector('[data-settings-page="binding"]');if(p&&!p.hidden)showBinding();});
 // The linked list is small and changes rarely; refresh it with the status.
-(async function poll(){try{if(document.hidden||($('homePage').hidden&&UI.activePage()!=='binding'&&UI.activePage()!=='linkage'))return;bindingStatus=await api('/binding/status');renderPeers();}catch{}finally{setTimeout(poll,5000);}})();
+async function pollBinding(){
+ if(bindingPending||!UI.caps?.actions?.includes('binding.status.get')||document.hidden||($('homePage').hidden&&UI.activePage()!=='binding'&&UI.activePage()!=='linkage'))return;
+ bindingPending=true;
+ try{bindingStatus=await api('/binding/status');renderPeers();}catch{}finally{bindingPending=false;}
+}
+(async function poll(){try{await pollBinding();}finally{setTimeout(poll,5000);}})();
 renderPeers();
 })();

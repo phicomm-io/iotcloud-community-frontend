@@ -11,12 +11,14 @@ const app=fileURLToPath(new URL('..',import.meta.url));
 const dist=resolve(process.env.HUB_TEST_DIST||resolve(app,'../build/hub-session'));
 const evidence=process.env.HUB_SESSION_EVIDENCE;
 if(evidence)await mkdir(evidence,{recursive:true});
-const target='http://192.168.1.18',password='fixture-password',firmware='1.0.0-rc.5-fixture';
+const target='http://192.168.1.18',clockTarget='http://192.168.1.45',password='fixture-password',firmware='1.0.0-rc.5-fixture';
 const sandbox={window:{},structuredClone,performance};
 vm.runInNewContext(await readFile(resolve(app,'../M1/web/display-format.js'),'utf8'),sandbox);
 vm.runInNewContext(await readFile(resolve(app,'../common/web/demo.js'),'utf8'),sandbox);
 const types={'.html':'text/html','.js':'text/javascript','.css':'text/css','.svg':'image/svg+xml','.png':'image/png','.json':'application/json','.webmanifest':'application/manifest+json'};
 const results=[];
+// Remote peer authorization is intentionally narrower than its local WebUI.
+const lanActions=new Set(['status.get','capabilities.get','info.get','diagnostics.get','power.get','filter.get','alarm.get','wake_alarm.get','mcu.version.get','fan.set','fan.mode.set','fan.mode.toggle','light.set','child_lock.set','light_always.set','light_effect.select','light_effect.next','outlet.set','indicator.set','display.set','buzzer.set','wake_alarm.start','wake_alarm.stop','fresh_air.config.get','fresh_air.linkage.get','fresh_air.set']);
 
 async function fixture(browser,language,passwordRequired){
  const context=await browser.newContext({viewport:{width:1280,height:960},serviceWorkers:'block'});
@@ -25,7 +27,7 @@ async function fixture(browser,language,passwordRequired){
   Object.assign(demo.state,{name:'Fixture '+model,version:firmware,firmware_version:firmware,firmware_variant:model==='daikin'?'hub':'full',timezone_minutes:0,ntp_host:'pool.ntp.org',web_password_set:passwordRequired});
   return {model,mac:demo.state.device_id,self:model==='daikin',demo};
  });
- const local=devices[0],calls=[],errors=[],consoleIssues=[],tokens=new Set();let tokenSequence=1,pending=0,maxPending=0,expireWrite=false,stage='initial',meBusy=false;
+ const local=devices[0],calls=[],errors=[],consoleIssues=[],tokens=new Set();let tokenSequence=1,pending=0,maxPending=0,expireWrite=false,stage='initial',meBusy=false,capabilitiesBusyFor='',powerWatts=36;
  const info=device=>({api_version:1,device_id:device.mac,model:device.model,firmware_version:device.firmware_version||firmware,firmware_variant:device.self?'hub':'full',wire_version:1,wire_formats:['msgpack'],default_wire_format:'msgpack'});
  await context.addInitScript(language=>{try{localStorage.setItem('phicomm.language',language);localStorage.setItem('iotcloud.session.'+location.origin,'f'.repeat(64));}catch{}},language);
  context.on('page',page=>{
@@ -38,6 +40,21 @@ async function fixture(browser,language,passwordRequired){
  await context.route('**/*',async route=>{
   const req=route.request(),url=new URL(req.url()),path=url.pathname;
   const reply=(value,status=200)=>route.fulfill({status,contentType:'application/msgpack',body:Buffer.from(encodeWire(JSON.parse(JSON.stringify(value))))});
+  // Local management retains its full capability surface. Use the production
+  // local-connection entry to test its clock without exposing it over LAN.
+  if(url.origin===clockTarget){
+   const headers={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'Content-Type, Authorization','Access-Control-Allow-Methods':'GET,POST,OPTIONS'},device=devices.find(device=>device.model==='m1');
+   const localReply=value=>route.fulfill({headers,contentType:'application/msgpack',body:Buffer.from(encodeWire(JSON.parse(JSON.stringify(value))))});
+   if(req.method()==='OPTIONS')return route.fulfill({status:204,headers,body:''});
+   if(path==='/api/v1/info')return localReply({code:'ok',data:info(device)});
+   if(path==='/api/v1/auth/login')return localReply({code:'ok',data:{token:'',password_required:false}});
+   assert.equal(path,'/api/v1/command');const data=decodeWire(req.postDataBuffer());calls.push({origin:clockTarget,path,method:req.method(),data});
+   let result=device.demo.command(data.action,data.params);
+   if(data.action==='capabilities.get')Object.assign(result,info(device));
+   if(data.action==='time.get')result={timezone_minutes:device.demo.state.timezone_minutes,ntp_host:'pool.ntp.org'};
+   if(data.action==='time.set')device.demo.state.timezone_minutes=data.params.timezone_minutes;
+   return localReply({code:data.action.endsWith('.get')?'ok':'accepted',data:result,request_id:data.request_id});
+  }
   if(url.origin!==target){return route.abort();}
   if(path.startsWith('/api/')){
    const body=req.postDataBuffer(),data=body?.length?decodeWire(body):undefined,authorization=req.headers().authorization;
@@ -53,17 +70,27 @@ async function fixture(browser,language,passwordRequired){
    if(path==='/api/v1/auth/logout'){tokens.delete(authorization?.slice(7));return reply({code:'ok'});}
    if(passwordRequired&&!tokens.has(authorization?.slice(7)))return reply({code:'unauthorized',request_id:data?.request_id},401);
    if(path==='/api/auth/me'){if(meBusy){meBusy=false;return reply({code:'busy'},503);}return reply({username:'preserved_namespace',mqtt_username:'preserved_namespace',is_admin:false});}
-   if(path==='/api/devices')return reply(devices.map(device=>({...info(device),mac:device.mac,version:'v2',status:'active',self:device.self,online:true,paired:true,username:'preserved_namespace'})));
+   if(path==='/api/devices')return reply(devices.map(device=>({...info(device),mac:device.mac,version:'v2',status:'active',self:device.self,online:true,paired:true,route_confirmed:true,username:'preserved_namespace'})));
    const proxied=path.match(/^\/api\/hub\/devices\/([0-9a-f]{12})\/command$/);
    if(proxied||path==='/api/v1/command'){
     const device=proxied?devices.find(device=>device.mac===proxied[1]):local;
     assert(device);assert.equal(typeof data.request_id==='string'||data.action.endsWith('.get'),true);
     pending++;maxPending=Math.max(maxPending,pending);
     try{
+     if(proxied&&!device.self&&!lanActions.has(data.action)){call.lanRejected=true;return await reply({code:'unsupported',request_id:data.request_id});}
+     if(data.action==='capabilities.get'&&capabilitiesBusyFor===device.model){capabilitiesBusyFor='';call.injectedBusy=true;return await reply({code:'busy',request_id:data.request_id},503);}
      if(data.params?.delayed_test)await new Promise(resolve=>setTimeout(resolve,400));
      if(expireWrite&&!data.action.endsWith('.get')){expireWrite=false;tokens.clear();return await reply({code:'unauthorized',request_id:data.request_id},401);}
      let result=device.demo.command(data.action,data.params);
-     if(data.action==='capabilities.get')Object.assign(result,info(device));
+     if(data.action==='capabilities.get'){
+      Object.assign(result,info(device));
+      result.actions=[...new Set([...result.actions,'diagnostics.get'])];
+      if(device.model==='tc1')result.actions=[...new Set([...result.actions,'power.get'])];
+      if(device.model==='m1')result.actions=[...new Set([...result.actions,'wake_alarm.get','wake_alarm.start','wake_alarm.stop'])];
+     }
+     if(device.model==='tc1'&&data.action==='status.get'){result={...result};delete result.power_watts;delete result.power;}
+     if(device.model==='tc1'&&data.action==='power.get')result={power_watts:powerWatts,energy_kwh:.28};
+     if(device.model==='m1'&&data.action==='wake_alarm.get')result={active:false,tone_supported:true,tone_count:4,music_supported:true};
      if(data.action==='time.get')result={timezone_minutes:device.demo.state.timezone_minutes,ntp_host:'pool.ntp.org'};
      if(data.action==='time.set')device.demo.state.timezone_minutes=data.params.timezone_minutes;
      if(data.action==='status.get'&&data.params?.delayed_test)result={...result,power_watts:999};
@@ -81,7 +108,7 @@ async function fixture(browser,language,passwordRequired){
   const file=resolve(dist,name);assert(file.startsWith(dist+'/'));
   try{return route.fulfill({contentType:types[extname(file)]||'application/octet-stream',body:await readFile(file)});}catch{return route.fulfill({status:404,body:''});}
  });
- return {context,calls,errors,consoleIssues,devices,setStage(value){stage=value;},get maxPending(){return maxPending;},get pending(){return pending;},expireNextWrite(){expireWrite=true;},busyNextMe(){meBusy=true;},changeFirmware(model){const device=devices.find(d=>d.model===model);device.firmware_version=firmware+'-updated';Object.assign(device.demo.state,{version:device.firmware_version,firmware_version:device.firmware_version});}};
+ return {context,calls,errors,consoleIssues,devices,setStage(value){stage=value;},get maxPending(){return maxPending;},get pending(){return pending;},setPower(value){powerWatts=value;},expireNextWrite(){expireWrite=true;},busyNextMe(){meBusy=true;},busyNextCapabilities(model){capabilitiesBusyFor=model;},changeFirmware(model){const device=devices.find(d=>d.model===model);device.firmware_version=firmware+'-updated';Object.assign(device.demo.state,{version:device.firmware_version,firmware_version:device.firmware_version});}};
 }
 
 for(const engine of [chromium,webkit].filter(engine=>!process.env.BROWSER||engine.name()===process.env.BROWSER)){
@@ -96,6 +123,8 @@ for(const engine of [chromium,webkit].filter(engine=>!process.env.BROWSER||engin
    }
    await expect(page.locator('.device-list-item')).toHaveCount(5);
    await expect(page.locator('.device-list .presence-pill.online')).toHaveCount(5);
+   await expect(page.locator('.device-select').nth(1).locator('.stat')).toHaveText(/36\.0\s*W/);
+   assert(f.calls.some(call=>call.data?.action==='power.get'),'TC1 list watts require the separate metering action');
    await expect(page.locator('.auth-form')).toHaveCount(0);
    assert(!f.calls.some(call=>call.path==='/api/hub/setup'||call.path==='/api/auth/login'));
    assert(!f.calls.some(call=>call.path.includes('mqtt')));
@@ -120,7 +149,20 @@ for(const engine of [chromium,webkit].filter(engine=>!process.env.BROWSER||engin
     await readyFrame(model);
     return page.frameLocator('iframe.device-home');
    };
-   for(const model of ['daikin','m1','a1','s30-v1b','tc1'])await select(model);
+   for(const model of ['daikin','m1','a1','s30-v1b','tc1']){
+    const frame=await select(model);
+    if(model==='daikin')continue;
+    const caps=await page.locator('iframe.device-home').evaluate(node=>node.contentWindow.UI.caps);
+    assert.equal(caps.hub_remote,true);assert(caps.actions.every(action=>lanActions.has(action)));assert(!caps.actions.includes('config.set'));
+    await frame.locator('.tabs a[data-tab="settings"]').click();
+    await expect(frame.locator('#side a')).toHaveCount(1);
+    await expect(frame.locator('#side a')).toHaveAttribute('href','#settings/diagnostics');
+    for(const route of ['device','network','mqtt','maintenance','firmware']){
+     await page.locator('iframe.device-home').evaluate((node,route)=>{node.contentWindow.UI.embeddedRoute='settings/'+route;node.contentWindow.UI.showRoute();},route);
+     await expect(frame.locator('[data-settings-page="'+route+'"]:visible')).toHaveCount(0);
+    }
+    await expect(frame.locator('#deviceName,#webPassword')).toHaveCount(0);
+   }
    await select('m1');assert.equal((await readyFrame('m1','before-firmware-change')).marker,'before-firmware-change');
    await page.evaluate(()=>{
     const counts={added:0,removed:0},frames=node=>node.nodeType===1?(node.matches('iframe.device-home')?1:0)+node.querySelectorAll('iframe.device-home').length:0;
@@ -128,8 +170,11 @@ for(const engine of [chromium,webkit].filter(engine=>!process.env.BROWSER||engin
     observer.observe(document.getElementById('app'),{childList:true,subtree:true});
     window.__firmwareFrameLifecycle={counts,observer};
    });
-   f.changeFirmware('m1');await page.locator('.devices-panel>button').last().click();
+   f.busyNextCapabilities('m1');f.changeFirmware('m1');await page.locator('.devices-panel>button').last().click();
    assert.equal((await readyFrame('m1')).marker,null,'new discovery identity replaces the marked document and capabilities');
+   await expect(page.frameLocator('iframe.device-home').locator('#wakeAlarmCard')).toHaveCount(1);
+   assert.equal(await page.locator('iframe.device-home').evaluate(node=>node.contentWindow.UI.device.nav.schedule),'wake.schedules','the first busy capability read must recover product hooks');
+   assert.equal(f.calls.filter(call=>call.injectedBusy).length,1);
    await readyFrame('m1','after-firmware-change');
    for(let i=0;i<2;i++){
     const inventoryReads=f.calls.filter(call=>call.path==='/api/devices').length;
@@ -141,25 +186,44 @@ for(const engine of [chromium,webkit].filter(engine=>!process.env.BROWSER||engin
    const firmwareLifecycle=await page.evaluate(()=>{const {counts,observer}=window.__firmwareFrameLifecycle;observer.disconnect();return counts;});
    assert.deepEqual(firmwareLifecycle,{added:1,removed:1},'firmware change replaces the iframe once; ordinary refreshes preserve it');
    let frame=await select('tc1');
+   f.setPower(0);await page.locator('iframe.device-home').evaluate(node=>node.contentWindow.command('power.get'));
+   await expect(page.locator('.device-select').nth(1).locator('.stat')).toHaveText(/0\.0\s*W/);
+   if(language==='en'&&!protectedDevice){
+    await frame.locator('.tabs a[data-tab="settings"]').click();
+    await expect(frame.locator('[data-settings-page="diagnostics"]')).toBeVisible();
+    const began=Date.now(),powerReads=f.calls.filter(call=>call.data?.action==='power.get').length;
+    f.setPower(19);
+    await expect(page.locator('.device-select').nth(1).locator('.stat')).toHaveText(/19\.0\s*W/,{timeout:8000});
+    await expect.poll(async()=>{
+     await expect(page.locator('.device-select').nth(1).locator('.stat')).toHaveText(/19\.0\s*W/);
+     return Date.now()-began;
+    },{timeout:22000,intervals:[1000]}).toBeGreaterThan(15500);
+    assert(f.calls.filter(call=>call.data?.action==='power.get').length>=powerReads+3,'selected settings keep refreshing power beyond the meter TTL');
+    f.setPower(0);await expect(page.locator('.device-select').nth(1).locator('.stat')).toHaveText(/0\.0\s*W/,{timeout:8000});
+    await frame.locator('.tabs a[data-tab="home"]').click();
+   }
    await frame.locator('#socket0').click();
    await expect.poll(()=>f.calls.filter(call=>call.data?.action==='outlet.set').length).toBe(1);
    assert.equal(f.calls.find(call=>call.data?.action==='outlet.set').path,'/api/hub/devices/aabbccddee01/command');
-   frame=await select('m1');
-   await page.locator('iframe.device-home').evaluate(node=>{node.contentWindow.UI.embeddedRoute='settings/device';node.contentWindow.UI.showRoute();});
-   const clock=frame.locator('.card').filter({has:frame.locator('[data-i18n="clock.title"]')});
+   const clockPage=await f.context.newPage();
+   await clockPage.goto(target+'/iotcloud/#/local');
+   await clockPage.getByRole('button',{name:zh?'本地连接':'Local connection',exact:true}).click();
+   await clockPage.getByLabel(zh?'设备 IP':'Device IP',{exact:true}).fill(clockTarget);
+   await clockPage.getByRole('button',{name:zh?'连接本地设备':'Connect local device',exact:true}).click();
+   const clockFrame=clockPage.frameLocator('iframe.device-home');
+   await expect(clockFrame.locator('#homePage')).toBeVisible();
+   await clockFrame.locator('.tabs a[data-tab=settings]').click();await clockFrame.locator('.side a[href="#settings/device"]').click();
+   const clock=clockFrame.locator('.card').filter({has:clockFrame.locator('[data-i18n="clock.title"]')});
    await expect(clock.locator('select')).toHaveValue('0');
    for(const timezone of [60,0]){
     await clock.locator('select').selectOption(String(timezone));await clock.locator('button[type="submit"]').click();
     await expect.poll(()=>f.calls.filter(call=>call.data?.action==='time.set').at(-1)?.data.params.timezone_minutes).toBe(timezone);
     await expect.poll(()=>f.pending).toBe(0);
-    await page.locator('iframe.device-home').evaluate(node=>node.contentWindow.UI.reload({full:true}));
-    await expect.poll(()=>page.locator('iframe.device-home').evaluate(node=>node.contentWindow.UI.state.timezone_minutes)).toBe(timezone);
+    await clockPage.locator('iframe.device-home').evaluate(node=>node.contentWindow.UI.reload({full:true}));
+    await expect.poll(()=>clockPage.locator('iframe.device-home').evaluate(node=>node.contentWindow.UI.state.timezone_minutes)).toBe(timezone);
    }
+   await clockPage.close();
    frame=await select('tc1');
-   await page.locator('iframe.device-home').evaluate(node=>{node.contentWindow.UI.embeddedRoute='settings/maintenance';node.contentWindow.UI.showRoute();});
-   await expect(frame.locator('.card').filter({has:frame.locator('[data-i18n="backup.title"]')})).toBeHidden();
-   await page.locator('iframe.device-home').evaluate(node=>{node.contentWindow.UI.embeddedRoute='settings/firmware';node.contentWindow.UI.showRoute();});
-   await expect(frame.locator('#firmware')).toBeHidden();
    // An old page stops reading while the single HTTP lane drains its response.
    await page.locator('iframe.device-home').evaluate(node=>{node.contentWindow.command('status.get',{delayed_test:true}).catch(()=>{});});
    await expect.poll(()=>f.calls.filter(call=>call.data?.params?.delayed_test).length).toBe(1);
@@ -201,7 +265,7 @@ for(const engine of [chromium,webkit].filter(engine=>!process.env.BROWSER||engin
     await expect(page.locator('.auth-form')).toBeVisible();
     assert.equal(f.calls.filter(call=>call.data?.action==='outlet.set').length,2,'expired write is sent once');
    }
-   assert.equal(f.maxPending,1,'gateway commands are serialized across targets');assert.deepEqual(f.errors,[]);assert.deepEqual(f.consoleIssues,[]);
+   assert.equal(f.maxPending,1,'gateway commands are serialized across targets');assert(!f.calls.some(call=>call.lanRejected),'filtered remote pages must not send local-only commands');assert.deepEqual(f.errors,[]);assert.deepEqual(f.consoleIssues,[]);
    results.push({engine:engine.name(),language,passwordRequired:protectedDevice,commands:f.calls.filter(call=>call.path.endsWith('/command')).length,maxPending:f.maxPending,firmwareLifecycle,passed:true});
    console.log('PASS',engine.name(),language,protectedDevice?'password':'open','binary controls, five models, UTC, cancelled reads, writes once, root/hub/reload session');
   }catch(error){
