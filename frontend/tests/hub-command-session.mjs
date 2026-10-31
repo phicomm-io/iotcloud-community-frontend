@@ -58,7 +58,7 @@ async function fixture(browser,language,passwordRequired){
   if(url.origin!==target){return route.abort();}
   if(path.startsWith('/api/')){
    const body=req.postDataBuffer(),data=body?.length?decodeWire(body):undefined,authorization=req.headers().authorization;
-   const call={path,method:req.method(),data,authorization};calls.push(call);
+   const call={path,method:req.method(),data,authorization,at:Date.now()};calls.push(call);
    if(data)assert.equal(req.headers()['content-type'],'application/msgpack');
    assert(!authorization||/^Bearer [0-9a-f]{32}$/.test(authorization),'only the common WebUI token may authorize hub APIs');
    if(path==='/api/v1/info')return reply({code:'ok',data:info(local)});
@@ -191,15 +191,25 @@ for(const engine of [chromium,webkit].filter(engine=>!process.env.BROWSER||engin
    if(language==='en'&&!protectedDevice){
     await frame.locator('.tabs a[data-tab="settings"]').click();
     await expect(frame.locator('[data-settings-page="diagnostics"]')).toBeVisible();
-    const began=Date.now(),powerReads=f.calls.filter(call=>call.data?.action==='power.get').length;
+    const powerPath='/api/hub/devices/'+f.devices.find(device=>device.model==='tc1').mac+'/command';
+    const powerCalls=()=>f.calls.filter(call=>call.path===powerPath&&call.data?.action==='power.get');
+    const powerReads=powerCalls().length;
     f.setPower(19);
-    await expect(page.locator('.device-select').nth(1).locator('.stat')).toHaveText(/19\.0\s*W/,{timeout:8000});
+    await expect(page.locator('.device-select').nth(1).locator('.stat')).toHaveText(/19\.0\s*W/,{timeout:12000});
+    const began=Date.now();
+    f.meterObservation={startedAt:began,samples:[]};
+    // Freshness can defer a five-second owner poll to its next cycle while
+    // foreground reads hold the serial lane. Observe all three conditions
+    // together for up to three ten-second cycles, with two seconds to drain.
     await expect.poll(async()=>{
-     await expect(page.locator('.device-select').nth(1).locator('.stat')).toHaveText(/19\.0\s*W/);
-     return Date.now()-began;
-    },{timeout:22000,intervals:[1000]}).toBeGreaterThan(15500);
-    assert(f.calls.filter(call=>call.data?.action==='power.get').length>=powerReads+3,'selected settings keep refreshing power beyond the meter TTL');
-    f.setPower(0);await expect(page.locator('.device-select').nth(1).locator('.stat')).toHaveText(/0\.0\s*W/,{timeout:8000});
+     const display=await page.locator('.device-select').nth(1).locator('.stat').textContent();
+     f.meterObservation.samples.push({elapsedMs:Date.now()-began,display});
+     assert.match(display,/19\.0\s*W/,'fresh selected watts must not flash blank');
+     return Date.now()-began>15500&&powerCalls().length>=powerReads+3;
+    },{timeout:32000,intervals:[250],message:'selected settings retain fresh watts across the TTL and at least three new power reads'}).toBe(true);
+    f.meterObservation.reads=powerCalls().slice(powerReads).map(call=>({elapsedMs:call.at-began,request_id:call.data.request_id}));
+    assert.equal(new Set(f.meterObservation.reads.map(read=>read.request_id)).size,f.meterObservation.reads.length,'every meter refresh uses a new request ID');
+    f.setPower(0);await expect(page.locator('.device-select').nth(1).locator('.stat')).toHaveText(/0\.0\s*W/,{timeout:12000});
     await frame.locator('.tabs a[data-tab="home"]').click();
    }
    await frame.locator('#socket0').click();
@@ -266,7 +276,7 @@ for(const engine of [chromium,webkit].filter(engine=>!process.env.BROWSER||engin
     assert.equal(f.calls.filter(call=>call.data?.action==='outlet.set').length,2,'expired write is sent once');
    }
    assert.equal(f.maxPending,1,'gateway commands are serialized across targets');assert(!f.calls.some(call=>call.lanRejected),'filtered remote pages must not send local-only commands');assert.deepEqual(f.errors,[]);assert.deepEqual(f.consoleIssues,[]);
-   results.push({engine:engine.name(),language,passwordRequired:protectedDevice,commands:f.calls.filter(call=>call.path.endsWith('/command')).length,maxPending:f.maxPending,firmwareLifecycle,passed:true});
+   results.push({engine:engine.name(),language,passwordRequired:protectedDevice,commands:f.calls.filter(call=>call.path.endsWith('/command')).length,maxPending:f.maxPending,firmwareLifecycle,meterObservation:f.meterObservation,passed:true});
    console.log('PASS',engine.name(),language,protectedDevice?'password':'open','binary controls, five models, UTC, cancelled reads, writes once, root/hub/reload session');
   }catch(error){
    if(evidence){await page.screenshot({path:resolve(evidence,'failure.png'),fullPage:true});await writeFile(resolve(evidence,'failure-calls.json'),JSON.stringify(f.calls,null,2)+'\n');}
