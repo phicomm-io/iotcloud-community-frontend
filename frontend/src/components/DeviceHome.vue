@@ -1,11 +1,13 @@
 <script setup>
 import {t} from '../i18n.js';
 
-import {ref,onMounted,onBeforeUnmount} from 'vue';
+import {ref,computed,onMounted,onBeforeUnmount} from 'vue';
 import pages from 'virtual:device-pages';
-const props=defineProps({device:Object,sensorSources:{type:Array,default:()=>[]},displaySources:{type:Array,default:()=>[]}});
+const props=defineProps({device:Object,rawResources:{type:Boolean,default:true},sensorSources:{type:Array,default:()=>[]},displaySources:{type:Array,default:()=>[]}});
 const emit=defineEmits(['command','settings','upload','resource']);
 const uploads=new Map();
+const reads=new Map();
+const documentHTML=computed(()=>props.rawResources?pages[props.device.model]:pages[props.device.model].replace('</head>','<style>.card:has([data-i18n="backup.title"]){display:none!important}</style></head>'));
 const frame=ref(),height=ref(700);
 function receive(event){
  if(event.source!==frame.value?.contentWindow||event.origin!==location.origin)return;
@@ -16,6 +18,7 @@ function receive(event){
   return;
  }
  if(event.data?.type==='device-upload-abort'){uploads.get(event.data.id)?.();uploads.delete(event.data.id);return;}
+ if(event.data?.type==='device-command-cancel'){reads.get(event.data.id)?.abort();reads.delete(event.data.id);return;}
  if(event.data?.type==='device-upload'){
   const {id,file,rescue,target:conversion}=event.data,target=event.source;
   if(typeof id!=='string'||uploads.has(id)||uploads.size||!(file instanceof Blob))return;
@@ -31,13 +34,21 @@ function receive(event){
  }
  if(event.data?.type!=='device-command')return;
  const {id,request}=event.data,target=event.source;
- emit('command',request,reply=>{if(frame.value?.contentWindow===target)target.postMessage({type:'device-result',id,reply:JSON.parse(JSON.stringify(reply))},location.origin);});
+ const controller=request?.action?.endsWith('.get')?new AbortController():null;
+ if(controller)reads.set(id,controller);
+ emit('command',request,reply=>{
+  reads.delete(id);
+  // These are the operations available through this host's transport. Shared
+  // device pages keep their normal layout and capability-driven controls.
+  if(!props.rawResources&&request.action==='capabilities.get'&&reply.code==='ok')reply={...reply,data:{...reply.data,ota_upload:false,ota_variant_conversion:undefined,config_backup:false}};
+  if(frame.value?.contentWindow===target)target.postMessage({type:'device-result',id,reply:JSON.parse(JSON.stringify(reply))},location.origin);
+ },{...props.device},{signal:controller?.signal});
 }
 defineExpose({refresh:()=>frame.value?.contentWindow?.UI?.reload()});
 onMounted(()=>window.addEventListener('message',receive));
-onBeforeUnmount(()=>{window.removeEventListener('message',receive);for(const abort of uploads.values())abort();uploads.clear();});
+onBeforeUnmount(()=>{window.removeEventListener('message',receive);for(const controller of reads.values())controller.abort();reads.clear();for(const abort of uploads.values())abort();uploads.clear();});
 </script>
-<template><iframe ref="frame" class="device-home" :style="{height:height+'px'}" :srcdoc="pages[props.device.model]" :title="t('p.82a2884d1cbe',{v0:(props.device.model.toUpperCase())})" sandbox="allow-scripts allow-same-origin allow-modals allow-forms" /></template>
+<template><iframe ref="frame" class="device-home" :style="{height:height+'px'}" :srcdoc="documentHTML" :title="t('p.82a2884d1cbe',{v0:(props.device.model.toUpperCase())})" sandbox="allow-scripts allow-same-origin allow-modals allow-forms" /></template>
 <style scoped>
 .device-home{display:block;width:100%;border:0;border-radius:0;background:var(--bg);}
 </style>
