@@ -9,6 +9,7 @@ test('A1 automation is selected by fresh measurements, with absent values hidden
  w.TextEncoder=TextEncoder;w.scrollTo=()=>{};w.setTimeout=(fn,ms)=>{if(ms===5000&&fn.constructor.name==='AsyncFunction')timers.push(fn);return 0;};
  w.fetch=async(url,options)=>{const req=JSON.parse(options.body);let data={};
  if(req.action==='binding.status.get')data={peers:[{mac:'9c9c1ff76748',fresh:true}],average:{valid:true,fields,pm25:42,formaldehyde:null}};
+ else if(req.action==='capabilities.get')data={actions:['fan.mode.set','binding.status.get']};
  else if(req.action==='linkage.get')data={...saved};
  else if(req.action==='light_effect.get')data={effect:0};
  else if(req.action==='linkage.set'){writes.push(req.params);data={revision:1};}
@@ -16,7 +17,7 @@ test('A1 automation is selected by fresh measurements, with absent values hidden
  require('./legacy_device_fixture.cjs')(w);
  const scripts=[...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m=>m[1]);
  scripts.forEach((source,i)=>{if(i===scripts.length-1)w.UI.start=dev=>{w.UI.device=dev;w.UI.pages=dev.pages;};vm.runInContext(source,dom.getInternalVMContext());});
- w.UI.caps={actions:['fan.mode.set']};
+ w.UI.caps={actions:['fan.mode.set','binding.status.get']};
  await w.UI.device.pages.linkage.show();
  let page=w.document.querySelector('[data-settings-page="linkage"]');
  assert.match(page.textContent,/PM2.5/);assert.ok(!page.textContent.includes(w.I18N.t('m.formaldehyde')));
