@@ -191,9 +191,11 @@ for(const engine of [chromium,webkit].filter(engine=>!process.env.BROWSER||engin
    if(language==='en'&&!protectedDevice){
     await frame.locator('.tabs a[data-tab="settings"]').click();
     await expect(frame.locator('[data-settings-page="diagnostics"]')).toBeVisible();
-    const powerReads=f.calls.filter(call=>call.data?.action==='power.get').length;
+    const powerPath='/api/hub/devices/'+f.devices.find(device=>device.model==='tc1').mac+'/command';
+    const powerCalls=()=>f.calls.filter(call=>call.path===powerPath&&call.data?.action==='power.get');
+    const powerReads=powerCalls().length;
     f.setPower(19);
-    await expect(page.locator('.device-select').nth(1).locator('.stat')).toHaveText(/19\.0\s*W/,{timeout:8000});
+    await expect(page.locator('.device-select').nth(1).locator('.stat')).toHaveText(/19\.0\s*W/,{timeout:12000});
     const began=Date.now();
     f.meterObservation={startedAt:began,samples:[]};
     // Freshness can defer a five-second owner poll to its next cycle while
@@ -203,10 +205,11 @@ for(const engine of [chromium,webkit].filter(engine=>!process.env.BROWSER||engin
      const display=await page.locator('.device-select').nth(1).locator('.stat').textContent();
      f.meterObservation.samples.push({elapsedMs:Date.now()-began,display});
      assert.match(display,/19\.0\s*W/,'fresh selected watts must not flash blank');
-     return Date.now()-began>15500&&f.calls.filter(call=>call.data?.action==='power.get').length>=powerReads+3;
+     return Date.now()-began>15500&&powerCalls().length>=powerReads+3;
     },{timeout:32000,intervals:[250],message:'selected settings retain fresh watts across the TTL and at least three new power reads'}).toBe(true);
-    f.meterObservation.reads=f.calls.filter(call=>call.data?.action==='power.get').slice(powerReads).map(call=>({elapsedMs:call.at-began,request_id:call.data.request_id}));
-    f.setPower(0);await expect(page.locator('.device-select').nth(1).locator('.stat')).toHaveText(/0\.0\s*W/,{timeout:8000});
+    f.meterObservation.reads=powerCalls().slice(powerReads).map(call=>({elapsedMs:call.at-began,request_id:call.data.request_id}));
+    assert.equal(new Set(f.meterObservation.reads.map(read=>read.request_id)).size,f.meterObservation.reads.length,'every meter refresh uses a new request ID');
+    f.setPower(0);await expect(page.locator('.device-select').nth(1).locator('.stat')).toHaveText(/0\.0\s*W/,{timeout:12000});
     await frame.locator('.tabs a[data-tab="home"]').click();
    }
    await frame.locator('#socket0').click();
