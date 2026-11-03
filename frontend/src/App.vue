@@ -1,5 +1,8 @@
 <script setup>
-import {t} from './i18n.js';
+import {t,language} from './i18n.js';
+import {readDeviceOrder,sortDevices,moveDevice,deviceSortModes} from './deviceOrder.js';
+import DeviceSort from './components/DeviceSort.vue';
+import DeviceOrderButtons from './components/DeviceOrderButtons.vue';
 
 import {ref,reactive,computed,onMounted,onBeforeUnmount,watch} from 'vue';
 import {useRoute,useRouter} from 'vue-router';
@@ -175,6 +178,14 @@ const guestKey=()=>localMode?localListKey:'iotcloud.devices.'+encodeURIComponent
 const guestStorage={getItem:key=>key==='phicomm_devices'?localStorage.getItem(guestKey()):null};
 watch(()=>[connection.host,connection.username],()=>{if(thirdParty.value){disconnect();for(const key of Object.keys(states))delete states[key];refresh();}});
 const connectionOwner=()=>thirdParty.value?'guest:'+connection.host+':'+connection.username:account.username;
+const orderStorageKey=computed(()=> 'iotcloud.device-order.'+JSON.stringify(localMode?['local',localScope()]:[scopeKey(),connectionOwner()]));
+const deviceOrder=ref({mode:'default',order:[]});
+watch(orderStorageKey,key=>{deviceOrder.value=readDeviceOrder(key);},{immediate:true});
+const orderedDevices=computed(()=>sortDevices(list.value,deviceOrder.value,displayName,language.value));
+function saveOrder(value){deviceOrder.value=value;try{localStorage.setItem(orderStorageKey.value,JSON.stringify(value));}catch{}}
+function setSort(mode){if(deviceSortModes.includes(mode))saveOrder({...deviceOrder.value,mode});}
+function reorder(device,direction){saveOrder({mode:'custom',order:moveDevice(orderedDevices.value,deviceKey(device),direction)});}
+
 function manualDisconnect(){setAutoConnect(connectionOwner(),false);disconnect();}
 function manualConnect(){setAutoConnect(connectionOwner(),true);connect();}
 function disconnect(){busy.value=false;for(const {reply,timeout} of replies.values()){clearTimeout(timeout);reply({code:'offline',message:t('p.d830845257a1')});}replies.clear();for(const key of Object.keys(sensorFeeds))delete sensorFeeds[key];client?.end(true);client=null;connected.value=false;}
@@ -301,17 +312,17 @@ onBeforeUnmount(()=>{disconnect();clearInterval(timer);clearInterval(poll);clear
 <LocalConnect v-if="localMode" @connected="localConnected"/>
 <section v-if="localHubURL" class="card local-hub-entry" aria-labelledby="local-hub-title"><h2 id="local-hub-title">{{t('hub.manage')}}</h2><p class="help">{{t('hub.localHelp')}}</p><a class="btn primary" :href="localHubURL" target="_blank" rel="noopener noreferrer">{{t('hub.manage')}}</a></section>
 <template v-if="page==='home'">
-<div class="dashboard-grid"><aside class="surface devices-panel"><h2>{{t('p.e1506406a5bd')}}</h2><button class="add-device-entry" type="button" @click="openSettings('devices')"><AppIcon name="plus" :size="17"/>{{t('p.3aea0927d015')}}</button><ul class="device-list"><li v-for="d in list" :key="deviceKey(d)" class="device-list-item"><button class="device-select" :aria-pressed="selected===deviceKey(d)" @click="selected=deviceKey(d)"><DeviceSummary :device="d" :state="viewStates[deviceKey(d)]||{}" :name="displayName(d)" :connected="connected" :now="now"/></button><button class="device-rename btn ghost icon" :aria-label="t('p.0237e5999393',{v0:(displayName(d))})" @click="nameDialog.open(d,displayName(d))"><AppIcon name="edit" :size="15"/></button></li></ul><button @click="refresh">{{t('p.e28be7098db1')}}</button><p v-if="!list.length" class="helper-text">{{t('p.c31cc68bb6bb')}}</p></aside>
+<div class="dashboard-grid"><aside class="surface devices-panel"><h2>{{t('p.e1506406a5bd')}}</h2><button class="add-device-entry" type="button" @click="openSettings('devices')"><AppIcon name="plus" :size="17"/>{{t('p.3aea0927d015')}}</button><DeviceSort :mode="deviceOrder.mode" @change="setSort"/><ul class="device-list"><li v-for="(d,index) in orderedDevices" :key="deviceKey(d)" class="device-list-item"><button class="device-select" :aria-pressed="selected===deviceKey(d)" @click="selected=deviceKey(d)"><DeviceSummary :device="d" :state="viewStates[deviceKey(d)]||{}" :name="displayName(d)" :connected="connected" :now="now"/></button><button class="device-rename btn ghost icon" :aria-label="t('p.0237e5999393',{v0:(displayName(d))})" @click="nameDialog.open(d,displayName(d))"><AppIcon name="edit" :size="15"/></button><DeviceOrderButtons v-if="deviceOrder.mode==='custom'" :name="displayName(d)" :index="index" :count="orderedDevices.length" @move="reorder(d,$event)"/></li></ul><button @click="refresh">{{t('p.e28be7098db1')}}</button><p v-if="!list.length" class="helper-text">{{t('p.c31cc68bb6bb')}}</p></aside>
 <div v-if="active" class="device-area"><div class="mobile-device-heading">
 <button class="device-picker-trigger" type="button" aria-haspopup="dialog" :aria-label="t('p.e7819c97f607',{v0:(displayName(active))})" @click="devicePicker.open()"><span class="current-device"><b :title="displayName(active)">{{displayName(active)}}</b><small>{{!activeConnected?t('p.5e8b7d10afc5'):active.lan_connected?t('p.a2d6d3fd2463'):active.available===false?t('p.be1b4f3c6c1c'):active.available===true?t('p.b9086662b1df'):t('p.21a94004577c')}}</small></span><span class="switch-device-label">{{t('p.28465d512f3a')}}<AppIcon name="arrow" :size="16"/></span></button>
 <button class="device-refresh" type="button" :aria-label="t('p.f51eeae36b84')" :disabled="!activeConnected" @click="home?.refresh()"><AppIcon name="refresh"/></button>
 </div><div class="device-heading"><div><h2>{{displayName(active)}}</h2><p class="help">{{deviceType(active)}}</p></div><span class="badge" :class="active.available===true&&activeConnected?'ok':''">{{!activeConnected?t('p.5e8b7d10afc5'):active.lan_connected?t('p.a2d6d3fd2463'):active.available===false?t('p.be1b4f3c6c1c'):active.available===true?t('p.b9086662b1df'):t('p.21a94004577c')}}</span><button :disabled="!activeConnected" @click="home?.refresh()">{{t('p.802a407c7743')}}</button></div>
 <DeviceHome ref="home" :key="devicePageKey" :device="active" :raw-resources="!ownerHub||active.self===true" :sensor-sources="sensorSources" :display-sources="displaySources" @command="deviceCommand" @upload="uploadDevice" @resource="deviceResource" @settings="openSettings()"/>
 </div><section v-else class="surface empty-control"><h2>{{t('p.7549828062bc')}}</h2><p>{{localMode?t('p.48e36ea6f1e3'):t('p.17784e8330b1')}}</p><button @click="openSettings('devices')">{{t('p.3aea0927d015')}}</button></section></div>
-<DevicePicker ref="devicePicker" :devices="list" :selected="selected" :states="viewStates" :device-name="displayName" :connected="connected" :now="now" @select="selected=$event" @refresh="refresh" @add="openSettings('devices')"/>
+<DevicePicker ref="devicePicker" :devices="orderedDevices" :sort-mode="deviceOrder.mode" @sort="setSort" @move="reorder" :selected="selected" :states="viewStates" :device-name="displayName" :connected="connected" :now="now" @select="selected=$event" @refresh="refresh" @add="openSettings('devices')"/>
 </template>
 <template v-else>
-<PlatformSettings :local-mode="localMode" :device-preferences="devicePreferences" :lan-connections="lanConnections" @device-connection="saveConnection" :initial-section="settingsSection" :device-broker="deviceBroker" :connection="connection" :connected="connected" :busy="busy" :third-party="thirdParty" :devices="list" :states="viewStates" :add-form="addForm" :device-name="displayName" :now="now" @install="installApp?.open()" @rename="nameDialog.open($event,displayName($event))" @mode-change="thirdParty=$event;changeMode()" @connect="manualConnect" @disconnect="manualDisconnect" @add="add" @remove="remove" @password="changePassword" @mqtt-password="changeMQTTPassword" @home="page='home'" @refresh="refresh"/>
+<PlatformSettings :local-mode="localMode" :device-preferences="devicePreferences" :lan-connections="lanConnections" @device-connection="saveConnection" :initial-section="settingsSection" :device-broker="deviceBroker" :connection="connection" :connected="connected" :busy="busy" :third-party="thirdParty" :devices="orderedDevices" :sort-mode="deviceOrder.mode" @sort="setSort" @move="reorder" :states="viewStates" :add-form="addForm" :device-name="displayName" :now="now" @install="installApp?.open()" @rename="nameDialog.open($event,displayName($event))" @mode-change="thirdParty=$event;changeMode()" @connect="manualConnect" @disconnect="manualDisconnect" @add="add" @remove="remove" @password="changePassword" @mqtt-password="changeMQTTPassword" @home="page='home'" @refresh="refresh"/>
 </template>
 <InstallApp v-if="!demoMode" ref="installApp" :eligible="page==='home'&&listReady&&!!account.username&&!thirdParty"/>
 <DeviceNameDialog ref="nameDialog" @save="renameDevice"/>
