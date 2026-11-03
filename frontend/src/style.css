@@ -40,3 +40,5 @@ label{display:grid;gap:6px;font-size:14px;min-width:0}input[type=email]{font:inh
 }
 
 .devices-panel>.add-device-entry{width:100%;margin-top:12px}
+
+.device-list-item:has(.device-order-buttons)>.device-select{height:auto}

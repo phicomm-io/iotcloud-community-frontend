@@ -1,5 +1,14 @@
 // Message identifiers are stable; update translations without renaming keys.
 const messages = {
+  "deviceOrder.label": ["Sort devices", "设备排序"],
+  "deviceOrder.default": ["Default order", "默认顺序"],
+  "deviceOrder.custom": ["Custom order", "自定义排序"],
+  "deviceOrder.name": ["By name", "按名称排序"],
+  "deviceOrder.type": ["By type", "按类型排序"],
+  "deviceOrder.up": ["Move up", "上移"],
+  "deviceOrder.down": ["Move down", "下移"],
+  "deviceOrder.moveUp": ["Move {name} up", "上移 {name}"],
+  "deviceOrder.moveDown": ["Move {name} down", "下移 {name}"],
   "p.6309a3bb5ba4": [
     "Save failed",
     "保存失败"
