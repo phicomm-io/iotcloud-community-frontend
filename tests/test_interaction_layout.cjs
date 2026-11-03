@@ -51,5 +51,7 @@ const server=http.createServer((req,res)=>{
   assert.equal(await page.locator(':focus-visible').evaluate(el=>getComputedStyle(el).outlineStyle),'solid');
   assert.deepEqual(errors,[]);
   await page.close();console.log(`${engine} ${model} ${width} interaction layout passed`);
- }}finally{await browser.close();}
+ }
+ await require('./test_tc1_identity_browser.cjs')(browser);
+ }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;}).finally(()=>server.close());

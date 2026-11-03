@@ -9,6 +9,7 @@ test('M1 pressure stays inline, follows detected model and expires without a suc
   w.setInterval=fn=>{timer=fn;return 1;};
   w.clearInterval=()=>{cleared=true;};
   Object.defineProperty(w.performance,'now',{value:()=>now});
+ require('./legacy_device_fixture.cjs')(w);
   const scripts=[...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m=>m[1]);
   scripts.forEach((source,i)=>{
    if(i===scripts.length-1){w.UI.start=dev=>{w.UI.device=dev;};w.UI.reload=async()=>{};}
@@ -83,12 +84,15 @@ for(const model of ['M1','A1','TC1'])test(model+' restores one status polling ch
     if(fail)throw Error('offline');return decoded();
    }finally{active--;}
   };
+ require('./legacy_device_fixture.cjs')(w);
   const scripts=[...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m=>m[1]);
   scripts.forEach((source,i)=>{if(i===scripts.length-1)w.command=command;vm.runInContext(source,dom.getInternalVMContext());});
   await flush();assert.equal(reads.length,1);assert.equal(w.UI.state.name,'current');
   const onStatus=w.UI.device.onStatus;w.UI.device.onStatus=s=>{rendered.push(s.name);onStatus?.(s);};
-  const interval=w.UI.device.interval||2000;
-  const pending=()=>[...timers.values()].filter(t=>t.delay===interval);
+  const interval=model==='TC1'?3000:5000;
+  // Minification renames the refresh callback; auxiliary status pollers are
+  // async functions, while the home-chain timeout is an ordinary callback.
+  const pending=()=>[...timers.values()].filter(t=>t.delay===interval&&t.fn.constructor.name!=='AsyncFunction');
   const tick=async()=>{assert.equal(pending().length,1,'exactly one home status timer');const timer=pending()[0];timers.delete(timer.id);const result=timer.fn();await flush();return result;};
   assert.equal(pending().length,1);
   const oldTimer=pending()[0];

@@ -2,7 +2,7 @@ import '../../M1/web/display-format.js';
 import '../../common/web/demo.js';
 import {watchEffect} from 'vue';
 import {t,language} from './i18n.js';
-const devices=['tc1','m1','a1','daikin'].map((model,i)=>({model,mac:'aabbccddee0'+(i+1),version:'v2',username:'demo',mqtt_username:'demo',status:'active',name:model.toUpperCase()}));
+const devices=['tc1','m1','a1','daikin','s30-v1b'].map((model,i)=>({model,mac:'aabbccddee0'+(i+1),version:'v2',username:'demo',mqtt_username:'demo',status:'active',name:model.toUpperCase()}));
 window.fetch=async(url,options={})=>{
  let path=String(url).split('?')[0],data={};
  if(!path.startsWith('/api/'))throw Error(t('demo.networkBlocked'));

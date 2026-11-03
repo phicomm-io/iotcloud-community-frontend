@@ -12,7 +12,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, '..');
 const hubMode=process.env.VITE_HUB==='1';
 const minifyDevice = createRequire(import.meta.url)(resolve(root,'tools/minify_device.cjs'));
-const products = {tc1:'TC1/http_server/web/index.html',a1:'A1/web/index.html',m1:'M1/web/index.html',daikin:'DAIKIN/web/index.html'};
+const products = {tc1:'TC1/http_server/web/index.html',a1:'A1/web/index.html',m1:'M1/web/index.html',daikin:'DAIKIN/web/index.html','s30-v1b':'S30/web/index.html'};
 function devicePages() {
  return {name:'device-pages', resolveId(id){if(id==='virtual:device-pages')return '\0device-pages';},
  async load(id){if(id!=='\0device-pages')return;
@@ -21,15 +21,13 @@ function devicePages() {
   let html=readFileSync(file,'utf8').replace(/\/\* @include ([\w.-]+) \*\//g,(_,name)=>{
    const shared=resolve(root,'common/web',name);this.addWatchFile(existsSync(shared)?shared:resolve(dirname(file),name));
    const content=readFileSync(existsSync(shared)?shared:resolve(dirname(file),name),'utf8');
+   if(name==='service.js'){const bridge=resolve(here,'src/deviceBridge.js');this.addWatchFile(bridge);return readFileSync(bridge,'utf8')+'\n'+content;}
    if(name==='page.js'){const runtime=resolve(here,'src/deviceHomeRuntime.js');this.addWatchFile(runtime);return readFileSync(runtime,'utf8')+'\n'+content;}
    return content;
   });
   if(html.includes('@include'))throw Error('Unresolved device include: '+path);
-  this.addWatchFile(resolve(here,'src/deviceBridge.js'));
-  const bridge=readFileSync(resolve(here,'src/deviceBridge.js'),'utf8');
   const appearance=readFileSync(resolve(root,'common/web/appearance.js'),'utf8');
   html=html.replace('</head>','<script>'+appearance+'</script></head>');
-  html=html.replace('<script>async function command(', '<script>'+bridge+'</script><script>async function command(');
   return [model,await minifyDevice(html)];
  })));
  // Device pages share complete scripts and styles. Keep one copy of each

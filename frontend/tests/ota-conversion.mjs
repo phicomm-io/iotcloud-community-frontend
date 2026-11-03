@@ -15,7 +15,7 @@ const server=createServer(async(req,res)=>{
 const fixtureIP=Object.values(networkInterfaces()).flat().find(i=>i.family==='IPv4'&&!i.internal&&/^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(i.address))?.address;
 if(!fixtureIP)throw Error('No private IPv4 interface for the local HTTP fixture');
 await new Promise(done=>server.listen(0,'0.0.0.0',done));
-const origin=`http://127.0.0.1:${server.address().port}`,address=`http://${fixtureIP}:${server.address().port}`,mac='aabbccdd0115',password='fixture-conversion-web';
+const origin=`http://127.0.0.1:${server.address().port}`,address=`http://${fixtureIP}:${server.address().port}`,mac='aabbccdd0115',password='adminfjr';
 const bytes=Buffer.from('PHOTA001 — test-only signed-upload transport fixture');
 await mkdir(evidence,{recursive:true});
 const engines=process.env.BROWSER?[[process.env.BROWSER,{chromium,webkit}[process.env.BROWSER]]]:[['chromium',chromium],['webkit',webkit]];
@@ -40,6 +40,7 @@ try{for(const [engine,type] of engines){
    const path=new URL(req.url,address).pathname,headers={'Content-Type':'application/json','Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'Authorization, Content-Type, X-IoTCloud-Target-Variant, X-IoTCloud-Confirm','Access-Control-Allow-Methods':'GET, POST, OPTIONS'};
    const reply=(status,json)=>res.writeHead(status,headers).end(json?JSON.stringify(json):'');
    if(req.method==='OPTIONS')return reply(204);
+   if(path==='/api/v1/auth/login')return reply(404,{code:'not_found'});
    if(webPassword&&req.headers.authorization!=='Basic '+Buffer.from('admin:'+webPassword).toString('base64'))return reply(401,{code:'unauthorized'});
    const chunks=[];for await(const chunk of req)chunks.push(chunk);const body=Buffer.concat(chunks);
    if(path.startsWith('/api/v1/ota/')){uploads.push({path,headers:req.headers,bytes:body});return reply(202,{code:'accepted'});}

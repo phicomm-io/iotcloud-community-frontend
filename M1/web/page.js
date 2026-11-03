@@ -3,11 +3,11 @@
 (()=>{
 'use strict';
 const {t}=I18N;
-const {$,h,icon,toast,run,confirm,summary,card,info,pageHead,seg,prettyMac,normalizeMac,clone}=UI;
+const {$,h,fieldRow,icon,toast,run,confirm,summary,card,info,pageHead,seg,prettyMac,normalizeMac,clone}=UI;
 const METRICS=['pm25','formaldehyde','temperature','humidity'];
 const STALE_MS=15000;
 const PRESSURE_STALE_MS=10000;
-let bindingStatus={peers:[]};
+let bindingStatus={peers:[]},bindingPending=false;
 let pressureSnapshot=null,pressureReceivedAt=0;
 
 function renderPressure(){
@@ -96,7 +96,7 @@ const displayLow=h('input',{id:'co2DisplayLow',type:'number',min:0,max:65535,ste
 const displayHigh=h('input',{id:'co2DisplayHigh',type:'number',min:0,max:65535,step:1,value:1500});
 let screenConfig=null,screenEditing=false;
 const screenForm=h('form',{class:'stack'},
- ...[[displayMode,'co2screen.mode'],[displaySlot,'co2screen.slot'],[displayInterval,'co2screen.interval'],[displayLow,'co2screen.low'],[displayHigh,'co2screen.high']].map(([input,key])=>h('label',{class:'field'},h('span',{i18n:key}),input)),
+ ...[[displayMode,'co2screen.mode'],[displaySlot,'co2screen.slot'],[displayInterval,'co2screen.interval'],[displayLow,'co2screen.low'],[displayHigh,'co2screen.high']].map(([input,key])=>fieldRow(key,input)),
  h('button',{class:'btn primary',type:'submit',i18n:'common.save'}));
 screenForm.addEventListener('input',()=>{screenEditing=true;});
 UI.onSubmit(screenForm,async()=>{
@@ -121,9 +121,9 @@ const sourceCandidates=h('datalist',{id:'co2SourceCandidates'});
 const doubleClick=h('select',{id:'co2DoubleClick'},h('option',{value:'none',i18n:'co2source.no_action'}),h('option',{value:'switch_display',i18n:'co2source.switch'}));
 const sourceHint=h('p',{class:'help'});
 const sourceForm=h('form',{class:'stack'},
- h('label',{class:'field'},h('span',{i18n:'co2source.source'}),sourceMode),
- h('label',{class:'field'},h('span',{i18n:'co2source.id'}),sourceID,sourceCandidates),
- h('label',{class:'field'},h('span',{i18n:'co2source.double_click'}),doubleClick),sourceHint,
+ fieldRow('co2source.source',sourceMode),
+ fieldRow('co2source.id',sourceID,sourceCandidates),
+ fieldRow('co2source.double_click',doubleClick),sourceHint,
  h('button',{class:'btn primary',type:'submit',i18n:'common.save'}));
 const sourceCard=h('section',{class:'card stack',id:'co2SourceConfig',hidden:true},h('h2',{i18n:'co2source.title'}),info('co2source.help'),sourceForm);
 document.querySelector('[data-settings-page="device"]').append(sourceCard);
@@ -142,15 +142,16 @@ function validCo2Source(config){
     !['none','switch_display'].includes(config.double_click)||!Number.isInteger(config.revision)||config.revision<0||typeof config.button_events_supported!=='boolean')throw Error(t('control.unconfirmed'));
  return config;
 }
-async function loadCo2Source(){
+async function loadCo2Source(options={}){
  if(sourceCard.hidden||sourcePending)return;
- const generation=++sourceRead,config=validCo2Source(await command('co2_source.get'));
- if(sourcePending||generation!==sourceRead)return;
+ const generation=++sourceRead,config=validCo2Source(await command('co2_source.get',{},options));
+ if(sourcePending||generation!==sourceRead||options.current&&!options.current())return;
  if(!sourceEditing){sourceConfig=config;sourceMode.value=config.source;sourceID.value=config.device_id;doubleClick.value=config.double_click;}
  else if(sourceConfig)sourceConfig.button_events_supported=config.button_events_supported;
  renderSource();
  if(window.getDeviceSensorSources){
   const candidates=await window.getDeviceSensorSources();
+  if(options.current&&!options.current())return;
   sourceCandidates.replaceChildren(...candidates.map(c=>h('option',{value:c.device_id},c.name+' · '+c.ppm+' ppm')));
  }
 }
@@ -174,11 +175,11 @@ const thresholdRows={};
 const thresholdAlarmStatus=h('p',{class:'help',id:'m1AlarmStatus',role:'status'});
 const thresholdCard=h('section',{class:'card stack',id:'m1Thresholds',hidden:true},
  h('h2',{i18n:'m1.thresholds'}),info('m1.threshold_help'),info('m1.alarm_help'),thresholdAlarmStatus);
-async function loadThresholds(){
+async function loadThresholds(options={}){
  if(thresholdCard.hidden||thresholdPending||thresholdLoading)return;
  thresholdLoading=true;thresholdReadAt=Date.now();
  const generation=++thresholdRead;
- try{const config=await command('alarm.get');if(generation===thresholdRead&&!thresholdPending){thresholdConfig=config;renderThresholds();}}
+ try{const config=await command('alarm.get',{},options);if((!options.current||options.current())&&generation===thresholdRead&&!thresholdPending){thresholdConfig=config;renderThresholds();}}
  finally{thresholdLoading=false;}
 }
 function renderThresholds(){
@@ -218,7 +219,7 @@ for(const [sensor,key,defaults] of [['hcho','m.formaldehyde',[100,300]],['pm25',
  const save=h('button',{type:'submit',class:'btn primary',i18n:'common.save'});
  const reset=h('button',{type:'button',class:'btn ghost',i18n:'m1.threshold_restore',onclick:()=>run(null,()=>saveThresholds(sensor,true),'toast.accepted')});
  const form=h('form',{class:'stack','data-threshold-sensor':sensor},h('h3',{i18n:key}),
-  ...[[low,'m1.threshold_low'],[high,'m1.threshold_high']].map(([input,label])=>h('label',{class:'field'},h('span',{i18n:label}),input)),
+  ...[[low,'m1.threshold_low'],[high,'m1.threshold_high']].map(([input,label])=>fieldRow(label,input)),
   h('label',{class:'switch'},h('span',{class:'text'},h('b',{i18n:'m1.alarm_enabled'})),buzzer),actual,
   h('div',{class:'form-actions'},save,reset));
  thresholdRows[sensor]={low,high,buzzer,actual,save,reset,defaults,editing:false};
@@ -241,7 +242,7 @@ function renderMusic(){
  window.dispatchEvent(new Event('m1-tone-capability'));
  if(!musicBusy)musicProgress.textContent=musicStatus?.present?t('music.saved',{n:musicStatus.length,s:(musicStatus.duration_ms/1000).toFixed(1)}):t('music.empty');
 }
-async function loadMusic(){if(!UI.m1MusicSupported||musicBusy)return;musicStatus=await command('music.get');renderMusic();}
+async function loadMusic(options={}){if(!UI.m1MusicSupported||musicBusy)return;const value=await command('music.get',{},options);if(options.current&&!options.current())return;musicStatus=value;renderMusic();}
 async function saveMusic(){
  if(musicBusy)return;
  const text=musicText.value.trim();
@@ -274,7 +275,7 @@ const musicPlay=h('button',{type:'button',class:'btn',id:'m1MusicPlay',i18n:'mus
 const musicStop=h('button',{type:'button',class:'btn',id:'m1MusicStop',i18n:'wake.stop',onclick:()=>run(null,async()=>{await command('wake_alarm.stop');await command('music.stop');},null)});
 const musicFile=h('input',{type:'file',accept:'.rtttl,.txt,text/plain',id:'m1MusicFile'});
 musicFile.addEventListener('change',()=>run(null,async()=>{const file=musicFile.files?.[0];if(file){if(file.size>1024)throw Error(t('music.invalid'));musicText.value=await file.text();}},null));
-musicCard.append(h('label',{class:'field'},h('span',{i18n:'music.file'}),musicFile),h('label',{class:'field'},h('span',{i18n:'music.text'}),musicText),musicProgress,
+musicCard.append(fieldRow('music.file',musicFile),fieldRow('music.text',musicText),musicProgress,
  h('div',{class:'form-actions'},musicSave,h('button',{type:'button',class:'btn ghost',id:'m1MusicRead',i18n:'music.read',onclick:()=>run(null,readMusic,null)}),musicPlay,musicStop));
 document.querySelector('[data-settings-page="device"]').append(musicCard);
 const RANK={ok:0,warn:1,bad:2};
@@ -332,14 +333,15 @@ function peerSessionRows(){
  return SensorUI.peers(bindingStatus);
 }
 function renderPeers(){
+ $('peerCard').hidden=!UI.caps?.actions?.includes('binding.status.get');
  const rows=peerSessionRows(),capacity=Number(bindingStatus.max_sessions)||4;
  const head=h('div',{class:'card-head'},h('div',{},h('h2',{i18n:'m1.linked'}),h('p',{class:'help',i18n:'m1.linked_desc'})),
   h('span',{class:'badge '+(rows.length?'ok':'')},rows.length+' / '+capacity));
  $('peerCard').replaceChildren(head,rows.length?h('div',{class:'list'},rows):h('div',{class:'empty'},t('m1.linked_empty')));
 }
 /* Session status is read-only; sources are configured on each A1. */
-async function showBinding(){
- bindingStatus=await api('/binding/status');renderPeers();
+async function showBinding(options={}){
+ const next=await api('/binding/status',undefined,options);if(options.current&&!options.current())return;bindingStatus=next;renderPeers();
  const rows=peerSessionRows(),capacity=Number(bindingStatus.max_sessions)||4;
  document.querySelector('[data-settings-page="binding"]').replaceChildren(pageHead('nav.permission','m1.perm_lead'),
   h('section',{class:'card'},h('div',{class:'card-head'},h('h2',{i18n:'m1.linked'}),h('span',{class:'badge'},rows.length+' / '+capacity)),
@@ -351,7 +353,7 @@ let wakeStatus=null,wakeReadAt=0,wakePending=false,wakeReadPending=false,wakeLas
 function renderWakeAlarm(){
  const box=$('wakeAlarmCard');if(!box)return;
  const tones=wakeStatus?.tone_supported===true&&wakeStatus.tone_count===4;
- UI.m1MusicSupported=tones&&wakeStatus?.music_supported===true;
+ UI.m1MusicSupported=tones&&wakeStatus?.music_supported===true&&UI.caps?.actions?.includes('music.get');
  if(musicEnabled!==UI.m1MusicSupported){musicEnabled=UI.m1MusicSupported;renderMusic();if(musicEnabled)run(null,loadMusic,null);}
  const custom=$('wakeAlarmTone').querySelector('[value="5"]');if(custom)custom.hidden=!UI.m1MusicPresent;
  if(UI.m1ToneSupported!==tones){UI.m1ToneSupported=tones;window.dispatchEvent(new Event('m1-tone-capability'));}
@@ -392,7 +394,7 @@ function installWakeAlarm(){
 
 /* ---------- Boot ---------- */
 const clock=UI.clockCard({
- load:async()=>UI.state||await api('/status'),
+ load:async options=>UI.state||await api('/status',undefined,options),
  save:async v=>{
   const s=UI.state;
   if(v.timezone_minutes!==s.timezone_minutes)await api('/time/config',{timezone_minutes:v.timezone_minutes});
@@ -405,6 +407,7 @@ $('clockCard').replaceWith(clock.el);
 
 UI.start({
  capabilities(caps){
+  renderPeers();pollBinding();
   UI.userDisplay.enable(caps);
   particleEnabled=caps.actions?.includes("sensor_details.get")===true;renderParticles();pollParticles();
   if(caps.actions?.includes('alarm.get')&&caps.actions.includes('alarm.set')){thresholdCard.hidden=false;renderThresholds();run(null,loadThresholds,null);}
@@ -413,10 +416,10 @@ UI.start({
  },
  model:'M1',kindKey:'kind.m1',icon:'air',mqttHostMax:127,factoryReset:true,
  otaName:'phicomm_m1.ota.bin.signed',haHintKey:'mqtt.ha_m1',otaHintKey:'fw.hint_m1',buttonHintKey:'sys.hint_m1',
- scheduleLead:'sch.lead_a1',interval:1000,
+ scheduleLead:'sch.lead_a1',
  groups:[['grp.network',['network','mqtt']],['grp.device',['device']],['grp.auto',['binding','schedule','night']],['grp.system',['firmware','diagnostics','logs','maintenance']]],
  nav:{network:'nav.wifi',mqtt:'nav.mqtt',device:'nav.general',binding:'nav.permission',schedule:'nav.schedule',night:'nav.sleep',firmware:'nav.firmware',diagnostics:'nav.diagnostics',logs:'nav.logs',maintenance:'nav.maintenance'},
- pages:{device:{show:async()=>{await Promise.all([clock.show(),loadThresholds(),loadMusic(),loadCo2Source(),UI.userDisplay.load()]);},status:clock.status},binding:{show:showBinding}},
+ pages:{device:{show:async(options={})=>{await Promise.all([clock.show(options),loadThresholds(options),loadMusic(options),loadCo2Source(options),UI.userDisplay.load(options)]);},status:clock.status},binding:{show:showBinding}},
  diagGroups:[['diag.g_sensor',['uart_ready','sensor_valid','sensor_received','age_ms','temperature','humidity','formaldehyde','pm25','rx_frames','unknown_frames','uart_errors','discarded_bytes','last_frame']],
   ['diag.g_clock',['timezone_minutes','ntp_host','ntp_status','ntp_server','ntp_synced','ntp_screen_queued','ntp_last_success','ntp_next_seconds']],
   ['diag.g_screen',['brightness_requested']],
@@ -427,6 +430,11 @@ UI.start({
 });
 I18N.onChange(()=>{renderPeers();renderThresholds();const p=document.querySelector('[data-settings-page="binding"]');if(p&&!p.hidden)showBinding();});
 // The linked list is small and changes rarely; refresh it with the status.
-(async function poll(){try{if(document.hidden||($('homePage').hidden&&UI.activePage()!=='binding'&&UI.activePage()!=='linkage'))return;bindingStatus=await api('/binding/status');renderPeers();}catch{}finally{setTimeout(poll,4000);}})();
+async function pollBinding(){
+ if(bindingPending||!UI.caps?.actions?.includes('binding.status.get')||document.hidden||($('homePage').hidden&&UI.activePage()!=='binding'&&UI.activePage()!=='linkage'))return;
+ bindingPending=true;
+ try{bindingStatus=await api('/binding/status');renderPeers();}catch{}finally{bindingPending=false;}
+}
+(async function poll(){try{await pollBinding();}finally{setTimeout(poll,5000);}})();
 renderPeers();
 })();

@@ -11,6 +11,7 @@ function setup(model,actions){
   if(req.action?.startsWith('filter.'))data=filter;
   if(req.action==='mcu.version.get')data={version_received:false,buzzer_requested:false};
   return {ok:true,json:async()=>({code:fail?'storage_error':'ok',data})};};
+ require('./legacy_device_fixture.cjs')(w);
  const scripts=[...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m=>m[1]);
  scripts.forEach((s,i)=>{if(i===scripts.length-1){w.UI.start=d=>{w.UI.device=d;w.UI.caps={actions};d.capabilities?.(w.UI.caps);};w.UI.reload=async()=>{};}vm.runInContext(s,dom.getInternalVMContext());});
  const $=id=>w.document.getElementById(id),render=s=>{w.UI.state=s;w.UI.device.onStatus(s);};

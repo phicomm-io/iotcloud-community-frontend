@@ -3,9 +3,9 @@
 (()=>{
 'use strict';
 const {t}=I18N;
-const {$,h,icon,toast,run,onSubmit,confirm,switchRow,seg,summary,card,info,pageHead,saveBar,num,flag,slider,hhmm,toMinutes,normalizeMac,prettyMac,clone}=UI;
+const {$,h,fieldRow,icon,toast,run,onSubmit,confirm,switchRow,seg,summary,card,info,pageHead,saveBar,num,flag,slider,hhmm,toMinutes,normalizeMac,prettyMac,clone}=UI;
 
-let advanced={effect:0,segments:3,segment:[]},bindingStatus={peers:[],members:[],linkage_status:'disabled'};
+let advanced={effect:0,segments:3,segment:[]},bindingStatus={peers:[],members:[],linkage_status:'disabled'},bindingPending=false;
 const refresh=()=>UI.reload();
 
 /* ---------- Home: fan ---------- */
@@ -13,9 +13,9 @@ const power=$('power');power.append(icon('power'));
 const speed=$('speed');let dragging=false;
 const presets=seg([[20,()=>t('a1.p_quiet')+' 20%'],[40,()=>t('a1.p_low')+' 40%'],[60,()=>t('a1.p_mid')+' 60%'],[100,()=>t('a1.p_max')+' 100%']],v=>setSpeed(v),{full:true});
 $('presets').replaceWith(presets);
-const fanModes=seg([['manual','auto.manual'],['auto','auto.auto']],mode=>run(null,()=>UI.control('fan.mode.set',{mode},{fan_mode:mode}).then(refresh),null),{full:true});
+const fanModes=seg([['manual','auto.manual'],['auto','auto.auto']],mode=>run(null,()=>UI.control('fan.mode.set',{mode},{fan_mode:mode}),null),{full:true});
 $('fanMode').append(fanModes);
-function setSpeed(v){speed.value=v;$('speedValue').textContent=v+'%';return run(null,()=>api('/fan/config',{speed:Number(v)}).then(refresh),null);}
+function setSpeed(v){speed.value=v;$('speedValue').textContent=v+'%';return run(null,()=>UI.control('fan.set',{speed:Number(v)},{[UI.state.fan_mode==='auto'?'auto_max_speed':'requested_speed']:Number(v)}),null);}
 speed.addEventListener('input',()=>{dragging=true;$('speedValue').textContent=speed.value+'%';presets.set(Number(speed.value));});
 speed.addEventListener('change',()=>{dragging=false;setSpeed(speed.value);});
 power.onclick=()=>{const on=!UI.state.fan_on;power.setAttribute('aria-pressed',String(on));run(power,()=>UI.control('fan.set',{on},{fan_on:on}),null);};
@@ -64,6 +64,8 @@ function renderFilter(s){
  const locked=filterBusy||UI.controlBusy||s.ota_active||s.reboot_pending||s.wifi_trial_active;
  const canModel=UI.caps?.actions?.includes('filter.model.set');
  $('filterModelForm').hidden=!canModel;
+ $('filterForm').hidden=UI.caps?.hub_remote===true&&!UI.caps.actions?.includes('filter.set');
+ $('filterReset').hidden=UI.caps?.hub_remote===true&&!UI.caps.actions?.includes('filter.reset');
  for(const id of ['filterModel','filterModelSave'])$(id).disabled=!!locked;
  for(const id of ['filterSave','filterReset','filterLifetime'])$(id).disabled=!!locked;
 }
@@ -84,6 +86,7 @@ $('filterReset').onclick=()=>run(null,async()=>{
 /* ---------- Home: automatic control summary ---------- */
 function renderAuto(){
  const c=$('autoCard'),st=bindingStatus.linkage_status,peers=bindingStatus.peers||[];
+ c.hidden=UI.caps?.hub_remote===true&&!UI.caps.actions?.includes('binding.status.get');
  const head=h('div',{class:'card-head'},h('div',{},h('h2',{},h('a',{href:'#settings/linkage',i18n:'a1.auto'})),h('p',{class:'help',i18n:'a1.auto_lead'})),
   h('div',{class:'row'},h('span',{class:'badge '+(st==='active'?'ok':st==='sensor_failed'?'warn':'')},t(['disabled','active','sensor_failed'].includes(st)?'s.link_'+st:'s.unknown')),
    h('a',{class:'btn',href:'#settings/linkage'},h('span',{},t('auto.settings')))));
@@ -103,7 +106,7 @@ function renderAuto(){
 
 /* ---------- Home: light ring ---------- */
 const SWATCHES=[[217,80,0],[255,255,255],[255,170,60],[0,90,255],[0,200,120],[170,60,255],[255,30,60]];
-let lightDirty=false,lightTimer=null,ringAnimationTimer=null,previewTarget=null,ringPolling=false,ringPolledAt=0,color=[0,0,255];
+let lightDirty=false,lightTimer=null,ringAnimationTimer=null,previewTarget=null,color=[0,0,255];
 const hex=c=>'#'+c.map(n=>n.toString(16).padStart(2,'0')).join('');
 const custom=h('input',{type:'color','aria-label':'custom'});
 $('swatches').append(...SWATCHES.map(c=>h('button',{type:'button',class:'swatch',style:'--c:'+hex(c),'aria-label':hex(c),onclick:()=>{color=c;lightChanged();}})),custom);
@@ -199,32 +202,34 @@ function renderRing(s){
   svg.innerHTML=parts.join('')+'<text x="100" y="98" text-anchor="middle" class="ring-v">'+(enabled?(eff===0?feedbackSpeed:Math.round(brightness*100))+'%':t('state.off'))+'</text><text x="100" y="122" text-anchor="middle" class="ring-l">'+(eff===0?t(touching?'a1.feedback_target':'a1.feedback_pwm'):effectLabel(eff))+'</text>';
  }
 }
+// Animation uses accepted state; network feedback belongs to the shared owner.
+function ringVisible(){const page=document.querySelector('[data-settings-page="light"]');return !document.hidden&&(!$('homePage').hidden||page&&!page.hidden);}
+window.addEventListener('pagehide',()=>{clearInterval(ringAnimationTimer);ringAnimationTimer=null;});
+window.addEventListener('pageshow',()=>{if(ringAnimationTimer===null)updateRingAnimation();});
 function updateRingAnimation(){
  clearInterval(ringAnimationTimer);
  ringAnimationTimer=setInterval(()=>{
-  if(!UI.state)return;
-  const lightPage=document.querySelector('[data-settings-page="light"]'),ramping=UI.state.applied_speed!==UI.state.percentage;
-  if(!document.hidden&&(ramping||lightPage&&!lightPage.hidden)&&!ringPolling&&performance.now()-ringPolledAt>=(ramping?200:500)){
-   ringPolling=true;ringPolledAt=performance.now();UI.reload().finally(()=>{ringPolling=false;});
-  }
+  if(!UI.state||!ringVisible())return;
   if(advanced.effect===2||advanced.effect===3||advanced.effect===5||previewTarget!==null)renderRing(UI.state);
  },50);
 }
 function effectLabel(effect){return t([0,1,2,3,4,5].includes(effect)?'a1.effect.'+effect:'s.unknown');}
 function renderLight(s){
  if(!lightDirty){$('ledEnabled').checked=s.led_enabled;$('ledAlways').checked=s.led_always_on;$('bright').value=s.brightness;color=[s.red,s.green,s.blue];renderLightControls();}
- $('effectNote').replaceChildren(t('a1.effect_note',{e:effectLabel(advanced.effect)})+' ',h('a',{href:'#settings/light'},t('a1.effect_change')));
+ $('effectNote').hidden=UI.caps?.hub_remote===true;
+ $('effectNote').replaceChildren(...(UI.caps?.hub_remote?[]:[t('a1.effect_note',{e:effectLabel(advanced.effect)})+' ',h('a',{href:'#settings/light'},t('a1.effect_change'))]));
  renderRing(s);
 }
 
 /* ---------- Settings: light effects ---------- */
 const EFFECTS=[0,1,2,3,4,5];
-async function showLight(){
+async function showLight(options={}){
  const page=document.querySelector('[data-settings-page="light"]');
- try{bindingStatus=await api('/binding/status');}catch{}
- const fields=bindingStatus.average?.fields;
+ let nextBinding=bindingStatus;try{nextBinding=await api('/binding/status',undefined,options);}catch(e){if(e.name==='AbortError')throw e;}
+ const fields=nextBinding.average?.fields;
  const sourceAvailable=v=>!fields||v===5||(v===4?(fields.pm25||fields.formaldehyde):fields[['temperature','humidity','pm25','formaldehyde'][v]]);
- const m=clone(advanced=await api('/light/advanced')),hasSpeed=Number.isInteger(m.speed);updateRingAnimation();
+ const config=await api('/light/advanced',undefined,options);if(options.current&&!options.current())return;
+ bindingStatus=nextBinding;const m=clone(advanced=config),hasSpeed=Number.isInteger(m.speed);updateRingAnimation();
  const refreshDraft=()=>{advanced=clone(m);updateRingAnimation();if(UI.state)renderRing(UI.state);};
  page.oninput=refreshDraft;page.onchange=refreshDraft;
  const draw=()=>{
@@ -234,8 +239,8 @@ async function showLight(){
    h('div',{class:'row between'},h('span',{class:'label',i18n:'fx.count'}),seg([1,2,3,4].map(n=>[n,String(n)]),n=>{m.segments=n;draw();})),
    ...m.segment.slice(0,m.segments).map((sg,i)=>h('div',{class:'subcard stack'},h('h3',{},t('fx.segment',{n:i+1})),
     h('div',{class:'fields'},
-     h('label',{class:'field'},h('span',{i18n:'fx.source'}),h('select',{onchange:e=>sg.source=+e.target.value},[0,1,2,3,4,5].filter(sourceAvailable).map(v=>h('option',{value:v,selected:sg.source===v},t('fx.src.'+v))))),
-     h('label',{class:'field'},h('span',{i18n:'fx.display'}),h('select',{onchange:e=>sg.display=+e.target.value},[0,1,2].map(v=>h('option',{value:v,selected:sg.display===v},t('fx.disp.'+v)))))),
+     fieldRow('fx.source',h('select',{onchange:e=>sg.source=+e.target.value},[0,1,2,3,4,5].filter(sourceAvailable).map(v=>h('option',{value:v,selected:sg.source===v},t('fx.src.'+v))))),
+     fieldRow('fx.display',h('select',{onchange:e=>sg.display=+e.target.value},[0,1,2].map(v=>h('option',{value:v,selected:sg.display===v},t('fx.disp.'+v)))))),
     h('div',{class:'sentence',style:'margin-top:12px'},t('fx.range'),num(sg,'minimum'),'–',num(sg,'maximum'),h('span',{class:'help'},t('fx.comfort')),num(sg,'suitable_low'),'–',num(sg,'suitable_high')),
     h('div',{class:'row',style:'margin-top:12px'},['fx.low','fx.ok','fx.high'].map((k,j)=>h('label',{class:'row small'},h('input',{type:'color',value:hex(sg.colors[j]),oninput:e=>{const v=e.target.value;sg.colors[j]=[1,3,5].map(x=>parseInt(v.slice(x,x+2),16));}}),t(k)))))))
    :null;
@@ -244,7 +249,7 @@ async function showLight(){
   if(hasSpeed&&[2,3,5].includes(m.effect)){const [out,range]=slider(m,'speed',{min:1,max:10,fmt:v=>(v/5).toFixed(1)+'×'});range.setAttribute('aria-label',t('fx.speed'));speedControls.push(h('div',{class:'stack',style:'margin-top:16px'},h('div',{class:'row between'},h('span',{class:'label',i18n:'fx.speed'}),out),range,h('div',{class:'row between help'},t('fx.slow'),t('fx.fast'))));}
   const previewSpeed=h('input',{id:'previewSpeed',type:'range',min:1,max:100,step:1,value:UI.state?.fan_on?UI.state.percentage:UI.state?.requested_speed||60,'aria-label':t('a1.speed'),
    oninput:e=>{previewTarget=Number(e.target.value);$('previewSpeedValue').textContent=e.target.value+'%';renderRing(UI.state);},
-   onchange:()=>run(previewSpeed,async()=>{try{await setSpeed(previewSpeed.value);}finally{previewTarget=null;renderRing(UI.state);}},null),
+   onchange:()=>{previewTarget=null;renderRing(UI.state);return run(previewSpeed,()=>setSpeed(previewSpeed.value),null);},
    onblur:()=>{previewTarget=null;if(UI.state)renderRing(UI.state);}});
   const previewRing=document.createElementNS('http://www.w3.org/2000/svg','svg');
   previewRing.setAttribute('class','ring ring-preview-svg');previewRing.setAttribute('viewBox','0 0 200 200');
@@ -254,8 +259,8 @@ async function showLight(){
    h('section',{class:'card'},h('div',{class:'card-head'},h('h2',{i18n:'fx.effect'})),opts,...speedControls,
     h('div',{style:'margin-top:16px'},flag(m,'follow_fan','fx.follow','fx.follow_desc')),segs,
     h('details',{class:'more'},h('summary',{i18n:'common.advanced'}),h('p',{class:'help',i18n:'fx.quality_hint'}),
-     h('div',{class:'fields'},(!fields||fields.pm25)?h('label',{class:'field'},h('span',{i18n:'fx.quality_pm'}),num(m,'quality_pm',{unit:'µg/m³',step:0.01})):null,
-      (!fields||fields.formaldehyde)?h('label',{class:'field'},h('span',{i18n:'fx.quality_hcho'}),num(m,'quality_hcho',{unit:'mg/m³',step:0.001})):null)),
+     h('div',{class:'fields'},(!fields||fields.pm25)?fieldRow('fx.quality_pm',num(m,'quality_pm',{unit:'µg/m³',step:0.01})):null,
+      (!fields||fields.formaldehyde)?fieldRow('fx.quality_hcho',num(m,'quality_hcho',{unit:'mg/m³',step:0.001})):null)),
    saveBar(async()=>{const saved=await api('/light/advanced',m);m.revision=saved.revision;advanced=clone(m);updateRingAnimation();if(UI.state)renderLight(UI.state);})));
   if(UI.state)renderRing(UI.state);
  };
@@ -263,9 +268,9 @@ async function showLight(){
 }
 
 /* ---------- Settings: M1 binding ---------- */
-async function showBinding(){
- bindingStatus=await api('/binding/status').catch(()=>bindingStatus);
- const m=await api('/binding/config');const page=document.querySelector('[data-settings-page="binding"]');
+async function showBinding(options={}){
+ const nextBinding=await api('/binding/status',undefined,options).catch(e=>{if(e.name==='AbortError')throw e;return bindingStatus;});
+ const m=await api('/binding/config',undefined,options);if(options.current&&!options.current())return;bindingStatus=nextBinding;const page=document.querySelector('[data-settings-page="binding"]');
  const capacity=Number(m.max_peers)||4;
  const save=()=>api('/binding/config',m).then(showBinding);
  const st=mac=>(bindingStatus.peers||[]).find(p=>p.mac===mac)||{};
@@ -281,10 +286,10 @@ async function showBinding(){
  const ip=h('input',{placeholder:t('bind.ip_ph'),maxLength:15});
  const opts={force_mqtt:false,recovery:true,timeout_ms:1000,recovery_seconds:60};
  const add=h('form',{class:'subcard stack'},h('h3',{i18n:'bind.add'}),
-  h('div',{class:'fields'},h('label',{class:'field'},h('span',{i18n:'bind.mac'}),mac),h('label',{class:'field'},h('span',{i18n:'bind.ip'}),ip)),
+  h('div',{class:'fields'},fieldRow('bind.mac',mac),fieldRow('bind.ip',ip)),
   h('details',{class:'more'},h('summary',{i18n:'common.advanced'}),flag(opts,'recovery','bind.recovery','bind.recovery_desc'),
-   h('div',{class:'fields'},h('label',{class:'field'},h('span',{i18n:'bind.timeout'}),num(opts,'timeout_ms',{unit:'ms',min:100})),
-    h('label',{class:'field'},h('span',{i18n:'bind.recovery_s'}),num(opts,'recovery_seconds',{unit:t('unit.s'),min:5})))),
+   h('div',{class:'fields'},fieldRow('bind.timeout',num(opts,'timeout_ms',{unit:'ms',min:100})),
+    fieldRow('bind.recovery_s',num(opts,'recovery_seconds',{unit:t('unit.s'),min:5})))),
   h('div',{class:'form-actions'},h('button',{class:'btn primary',type:'submit',disabled:m.peers.length>=capacity},icon('plus'),h('span',{},t('bind.add_btn')))));
  onSubmit(add,()=>{const id=normalizeMac(mac.value);if(!id)throw Error(t('bind.bad_mac'));
   if(m.peers.some(p=>p.mac===id))throw Error(t('bind.dup'));if(m.peers.length>=capacity)throw Error(t('common.max',{n:capacity}));
@@ -295,12 +300,12 @@ async function showBinding(){
   h('button',{type:'button',class:'btn ghost icon','aria-label':t('common.delete'),onclick:()=>{m.members.splice(i,1);save();}},icon('trash')))));
  const gmac=h('input',{placeholder:'B0:F8:93:30:31:34',maxLength:17});
  const group=h('details',{class:'card more'},h('summary',{i18n:'bind.group'}),h('p',{class:'help',i18n:'bind.group_lead'}),
-  h('label',{class:'field'},h('span',{i18n:'bind.group_name'}),h('input',{value:m.group,maxLength:32,placeholder:t('bind.group_ph'),oninput:e=>m.group=e.target.value})),
+  fieldRow('bind.group_name',h('input',{value:m.group,maxLength:32,placeholder:t('bind.group_ph'),oninput:e=>m.group=e.target.value})),
   members,h('div',{class:'row'},h('div',{class:'grow'},gmac),
    h('button',{type:'button',class:'btn',onclick:()=>{const id=normalizeMac(gmac.value);if(!id){toast(t('bind.bad_mac'),true);return;}m.members.push({mac:id,ip:''});save();}},icon('plus'),h('span',{},t('bind.member_add')))),
   flag(m,'group_force_mqtt','bind.force','bind.force_desc'),flag(m,'group_recovery','bind.recovery','bind.recovery_desc'),
-  h('div',{class:'fields'},h('label',{class:'field'},h('span',{i18n:'bind.timeout'}),num(m,'group_timeout_ms',{unit:'ms'})),
-   h('label',{class:'field'},h('span',{i18n:'bind.recovery_s'}),num(m,'group_recovery_seconds',{unit:t('unit.s')}))),
+  h('div',{class:'fields'},fieldRow('bind.timeout',num(m,'group_timeout_ms',{unit:'ms'})),
+   fieldRow('bind.recovery_s',num(m,'group_recovery_seconds',{unit:t('unit.s')}))),
   saveBar(save));
  page.replaceChildren(pageHead('nav.binding','bind.lead'),
   h('section',{class:'card'},h('div',{class:'card-head'},h('h2',{i18n:'bind.sensors'}),h('span',{class:'badge'},m.peers.length+' / '+capacity)),
@@ -309,19 +314,21 @@ async function showBinding(){
 
 /* ---------- Settings: automatic control rules ---------- */
 let linkageDraws=[];
-async function showLinkage(){
+async function showLinkage(options={}){
  const page=document.querySelector('[data-settings-page="linkage"]');
- try{bindingStatus=await api('/binding/status');}catch{}
- linkageDraws=[];page.replaceChildren();
+ let nextBinding=bindingStatus;try{nextBinding=await api('/binding/status',undefined,options);}catch(e){if(e.name==='AbortError')throw e;}
+ const staged=h('div'),draws=[];
  for(const fresh of UI.caps?.fresh_air?[false,true]:[false]){
-  const section=h('section',{class:'stack','data-auto-fan':fresh?'fresh':'primary'});page.append(section);
-  await showFanRules(fresh,section);
+  const section=h('section',{class:'stack','data-auto-fan':fresh?'fresh':'primary'});staged.append(section);
+  draws.push(await showFanRules(fresh,section,options,nextBinding));
  }
+ if(options.current&&!options.current())return;
+ bindingStatus=nextBinding;linkageDraws=draws;page.replaceChildren(...staged.childNodes);
 }
-async function showFanRules(fresh,page){
- const m=await (fresh?command('fresh_air.linkage.get',{}):api('/linkage/config'));
+async function showFanRules(fresh,page,options={},binding=bindingStatus){
+ const m=await (fresh?command('fresh_air.linkage.get',{},options):api('/linkage/config',undefined,options));
  const modern=UI.caps?.actions?.includes('fan.mode.set');
- const supportsMetric=bit=>{const available=bindingStatus.average?.fields;return available?!!available[({1:'pm25',2:'formaldehyde',4:'co2'})[bit]]:bit===4?!!bindingStatus.average?.co2_valid:!!bindingStatus.average?.valid;};
+ const supportsMetric=bit=>{const current=page.isConnected?bindingStatus:binding,available=current.average?.fields;return available?!!available[({1:'pm25',2:'formaldehyde',4:'co2'})[bit]]:bit===4?!!current.average?.co2_valid:!!current.average?.valid;};
  const draw=()=>{
   const supportsCO2=Object.hasOwn(m,'target_co2')&&supportsMetric(4);
   const availableMask=[1,2,...(supportsCO2?[4]:[])].reduce((mask,bit)=>supportsMetric(bit)?mask|bit:mask,0);
@@ -363,7 +370,7 @@ async function showFanRules(fresh,page){
     availableMask&&(m.metrics&availableMask)!==m.metrics?h('button',{type:'button',class:'btn ghost',onclick:()=>{m.metrics=(m.metrics&availableMask)||availableMask;draw();}},t('auto.available_only')):null,modes,h('div',{class:'fields'},detail)),
    supportsGate?h('section',{class:'card stack'},h('h2',{i18n:'auto.hysteresis_title'}),h('div',{class:'fields'},gate)):null,
    h('section',{class:'card stack'},h('h2',{i18n:'common.advanced'}),
-    h('label',{class:'field'},h('span',{i18n:'link.statistic'}),h('select',{onchange:e=>m.statistic=+e.target.value},[0,1,2,3,4,5].map(v=>h('option',{value:v,selected:m.statistic===v},t('link.stat.'+v))))),
+    fieldRow('link.statistic',h('select',{onchange:e=>m.statistic=+e.target.value},[0,1,2,3,4,5].map(v=>h('option',{value:v,selected:m.statistic===v},t('link.stat.'+v))))),
     h('div',{class:'fields'},field('debounce_seconds','link.debounce',{min:0,max:3600,unit:t('unit.s')}),field('min_switch_seconds','link.min_switch',{min:0,max:3600,unit:t('unit.s')}))),
    saveBar(()=>{
     if(m.enabled&&[1,2,4].some(bit=>(m.metrics&bit)&&!supportsMetric(bit)))throw Error(t('auto.unavailable_metric'));
@@ -372,7 +379,7 @@ async function showFanRules(fresh,page){
     return (fresh?command('fresh_air.linkage.set',m):api('/linkage/config',m)).then(saved=>{m.revision=saved.revision;return refresh();});
    }));
  };
- linkageDraws.push(draw);draw();
+ draw();return draw;
 }
 
 /* Accessory controls are admitted by the device capability, including cloud embeds. */
@@ -391,13 +398,13 @@ function renderFresh(s){
  // Do not replace a slider while the user is dragging it.
  if(freshCard.contains(document.activeElement)&&document.activeElement.type==='range')return;
  freshCard.replaceChildren(h('div',{class:'card-head'},h('h2',{i18n:'fresh.title'}),h('label',{class:'row'},h('span',{i18n:'fresh.enable'}),on)),mode,
-  h('label',{class:'field'},h('span',{i18n:'fresh.speed'}),input,value),
+  fieldRow('fresh.speed',input,value),
   h('p',{class:'help'},t('fresh.status',{target:s.fresh_air_target,applied:s.fresh_air_speed,duty:(s.fresh_air_pwm_milli/1000).toFixed(1),rpm:s.fresh_air_rpm})),
   h('p',{class:'help'},t('fresh.reason.'+(s.fresh_air_limit_reason||0))+(s.fresh_air_fallback?' · '+t('auto.no_sensor'):'')),
-  h('div',{class:'row'},h('a',{class:'btn',href:'#settings/freshair'},t('fresh.settings')),h('a',{class:'btn',href:'#settings/linkage'},t('fresh.auto'))));
+  ...(!UI.caps?.hub_remote?[h('div',{class:'row'},h('a',{class:'btn',href:'#settings/freshair'},t('fresh.settings')),h('a',{class:'btn',href:'#settings/linkage'},t('fresh.auto')))]:[]));
 }
-async function showFresh(){
- const m=await command('fresh_air.config.get',{}),page=document.querySelector('[data-settings-page="freshair"]');
+async function showFresh(options={}){
+ const m=await command('fresh_air.config.get',{},options);if(options.current&&!options.current())return;const page=document.querySelector('[data-settings-page="freshair"]');
  const draw=()=>{
   const field=(key,label,options={})=>h('label',{class:'field'},h('span',{},t(label)),num(m,key,options));
   const coupling=seg([[2,'fresh.independent'],[0,'fresh.cap'],[1,'fresh.boost']],v=>{m.coupling=v;draw();});coupling.set(m.coupling);
@@ -419,17 +426,21 @@ async function showFresh(){
 
 /* ---------- Boot ---------- */
 const clock=UI.clockCard({
- load:()=>api('/time/config'),
+ load:options=>api('/time/config',undefined,options),
  save:v=>api('/time/config',v),
  status:s=>[['clock.synced',t((bindingStatus&&bindingStatus.clock_valid)?'s.synced':'s.syncing'),(bindingStatus&&bindingStatus.clock_valid)?'ok':'warn'],
   ['clock.uptime',UI.duration(s.uptime_seconds||0)],['clock.memory',(Math.round((s.free_memory||0)/1024))+' KB']]});
 $('clockCard').replaceWith(clock.el);
 
 UI.start({
- capabilities(caps){if(caps.fresh_air){this.groups[1][1].push('freshair');this.nav.freshair='fresh.settings';this.pages.freshair={show:showFresh};}},
+ capabilities(caps){
+  if(caps.fresh_air){this.groups[1][1].push('freshair');this.nav.freshair='fresh.settings';this.pages.freshair={show:showFresh};}
+  if(caps.actions?.includes('light_effect.get'))api('/light/advanced').then(a=>{advanced=a;updateRingAnimation();if(UI.state)renderLight(UI.state);}).catch(e=>toast(e.message,true));
+  renderAuto();pollBinding();
+ },
  model:'A1',kindKey:'kind.a1',icon:'fan',mqttHostMax:127,factoryReset:true,
  otaName:'phicomm_a1.ota.bin.signed',haHintKey:'mqtt.ha_a1',otaHintKey:'fw.hint_a1',buttonHintKey:'sys.hint_a1',
- scheduleLead:'sch.lead_a1',interval:2000,hasButtons:true,
+ scheduleLead:'sch.lead_a1',hasButtons:true,
  groups:[['grp.network',['network','mqtt']],['grp.device',['device','light']],['grp.auto',['binding','linkage','schedule','buttons','night']],['grp.system',['firmware','diagnostics','logs','maintenance']]],
  nav:{network:'nav.wifi',mqtt:'nav.mqtt',device:'nav.general',light:'nav.light',binding:'nav.binding',linkage:'nav.linkage',schedule:'nav.schedule',buttons:'nav.buttons',night:'nav.sleep',firmware:'nav.firmware',diagnostics:'nav.diagnostics',logs:'nav.logs',maintenance:'nav.maintenance'},
  pages:{device:{show:clock.show,status:clock.status},light:{show:showLight},binding:{show:showBinding},linkage:{show:showLinkage}},
@@ -442,8 +453,12 @@ UI.start({
  chips:s=>s.child_lock?[h('span',{class:'chip'},icon('lock'),h('b',{},t('a1.child_lock')))]:[],
  onStatus:s=>{renderFan(s);renderLight(s);renderFilter(s);renderFresh(s);}
 });
-I18N.onChange(()=>{if(UI.state){renderAuto();for(const key of ['device','light','binding','linkage'])if(!document.querySelector('[data-settings-page="'+key+'"]').hidden&&UI.pages[key].show)UI.pages[key].show();}});
+I18N.onChange(()=>{if(UI.state){renderAuto();UI.showRoute();}});
 // Keep the automatic-control summary fresh even while the home page is idle.
-(async function poll(){try{if(document.hidden||($('homePage').hidden&&UI.activePage()!=='binding'&&UI.activePage()!=='linkage'))return;const previous=JSON.stringify([bindingStatus.average?.fields,bindingStatus.average?.valid,bindingStatus.average?.co2_valid]);bindingStatus=await api('/binding/status');if(previous!==JSON.stringify([bindingStatus.average?.fields,bindingStatus.average?.valid,bindingStatus.average?.co2_valid])&&UI.activePage()==='linkage')linkageDraws.forEach(draw=>draw());if(UI.state)renderFan(UI.state);renderAuto();}catch{}finally{setTimeout(poll,3000);}})();
-api('/light/advanced').then(a=>{advanced=a;updateRingAnimation();if(UI.state)renderLight(UI.state);}).catch(e=>toast(e.message,true));
+async function pollBinding(){
+ if(bindingPending||!UI.caps?.actions?.includes('binding.status.get')||document.hidden||($('homePage').hidden&&UI.activePage()!=='binding'&&UI.activePage()!=='linkage'))return;
+ bindingPending=true;
+ try{const previous=JSON.stringify([bindingStatus.average?.fields,bindingStatus.average?.valid,bindingStatus.average?.co2_valid]);bindingStatus=await api('/binding/status');if(previous!==JSON.stringify([bindingStatus.average?.fields,bindingStatus.average?.valid,bindingStatus.average?.co2_valid])&&UI.activePage()==='linkage'&&!document.querySelector('[data-settings-page="linkage"] [data-dirty="1"], [data-settings-page="linkage"][data-dirty="1"]'))linkageDraws.forEach(draw=>draw());if(UI.state)renderFan(UI.state);renderAuto();}catch{}finally{bindingPending=false;}
+}
+(async function poll(){try{await pollBinding();}finally{setTimeout(poll,5000);}})();
 })();

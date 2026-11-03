@@ -28,9 +28,10 @@ test('aborted queued reads are never sent and cancelled active reads unblock the
   const first=f.request('binding.status.get',active.signal),second=f.request('light_effect.get',queued.signal),third=f.request('status.get');
   const firstRejected=assert.rejects(first),secondRejected=assert.rejects(second);
   queued.abort();await secondRejected;assert.equal(f.sent.length,1);
-  active.abort();await firstRejected;assert.deepEqual(f.sent.map(x=>x.request.action),['binding.status.get','status.get']);
-  f.reply(f.sent[0]);assert.equal(f.sent.length,2);
-  f.reply(f.sent[1]);await third;
+  active.abort();await firstRejected;assert.deepEqual(f.sent.filter(x=>x.type==='device-command').map(x=>x.request.action),['binding.status.get','status.get']);
+  assert.deepEqual(JSON.parse(JSON.stringify(f.sent[1])),{type:'device-command-cancel',id:f.sent[0].id});
+  f.reply(f.sent[0]);assert.equal(f.sent.length,3);
+  f.reply(f.sent[2]);await third;
  }finally{f.dom.window.close();}
 });
 test('sensor source replies require the current parent and origin and are cancelled on page close',async()=>{

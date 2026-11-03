@@ -19,6 +19,7 @@ test('A1 filter rendering, lifetime edit, reset confirmation and failed writes',
    }
    return {ok:true,json:async()=>({code,data})};
   };
+ require('./legacy_device_fixture.cjs')(w);
   const scripts=[...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m=>m[1]);
   scripts.forEach((source,i)=>{
    if(i===scripts.length-1){w.UI.start=dev=>{w.UI.device=dev;};w.UI.reload=async()=>{};}

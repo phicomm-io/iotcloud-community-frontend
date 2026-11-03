@@ -4,6 +4,41 @@
 (()=>{
 'use strict';
 const D={
+"kind.s30":["Smart metering socket","电量计量插座"],
+"s30.on_count":["{n} of 1 on","1 路中 {n} 路通电"],
+"s30.ha_hint":["Home Assistant creates one outlet, voltage, current, power, energy and meter-validity entities.","Home Assistant 会创建一路插座、电压、电流、功率、累计电量和计量有效性实体。"],
+"s30.output_hint":["Shows the outlet setting; check the load to confirm power.","显示插座的输出设定，实际供电请以负载为准。"],
+"s30.lock_desc":["Disables the outlet button","锁定机身按键"],
+"s30.led_desc":["Status light on the outlet","机身状态指示灯"],
+"s30.names_desc":["Shown on this device page","显示在设备页面中"],
+"s30.energy":["Total energy","累计电量"],
+"s30.voltage":["Voltage","电压"],
+"s30.current":["Current","电流"],
+"s30.wifi_hint":["Saving restarts the device on the selected network. Hold the button for 5–10 seconds and release to clear Wi-Fi if needed.","保存后设备将重启并连接所选网络。如需清除 Wi-Fi，按住按键 5 至不足 10 秒后松开。"],
+"s30.wifi_saved":["Wi-Fi saved; restarting…","Wi-Fi 已保存，正在重启…"],
+"s30.voltage_coef":["Voltage multiplier","电压倍率"],
+"s30.current_coef":["Current multiplier","电流倍率"],
+"s30.power_coef":["Power multiplier","功率倍率"],
+"s30.boot_power":["Power after startup","上电输出"],
+"s30.boot_restore":["Restore last state","保持断电前状态"],
+"s30.boot_hint":["Restore uses the last saved output. Local button changes are saved by the background worker.","保持模式恢复最后保存的开关状态；本地按键操作由后台及时保存。"],
+"sch.power":["Power automation","功率自动化"],
+"sch.power_condition":["Trigger when power is","功率条件"],
+"sch.above":["above","高于"],
+"sch.below":["below","低于"],
+"sch.power_watts":["Threshold (W)","功率阈值（W）"],
+"sch.power_seconds":["Continuous duration (seconds)","持续时间（秒）"],
+"sch.power_summary":["{comparison} {watts} W · {seconds} s","{comparison} {watts} W · 持续 {seconds} 秒"],
+"sch.power_hint":["0 seconds triggers on the threshold. Runs once per matching period, locally without MQTT or a synced clock. Interrupted readings restart the timer; reboot starts a new timer. A local button change takes priority until the condition clears.","0 秒表示达到阈值立即触发。同一段满足条件的期间只执行一次，无需 MQTT 或校时；采样中断或重启后重新计时。本地按键优先，条件解除后才重新触发。"],
+"sch.power_total":["The threshold uses total strip power, not an individual outlet. TC1 averages local meter pulses over approximately 5 seconds.","按整排插总功率判断，不能测量单个插孔；TC1 使用约 5 秒的本地计量脉冲均值。"],
+"sch.power_invalid":["Use 0–25,000 W and 0–604,800 whole seconds.","功率范围为 0–25000 W，持续时间为 0–604800 整数秒。"],
+"s30.boot_on":["Turn the outlet on after startup","上电后开启插座"],
+"s30.no_sample":["Waiting for a fresh meter sample","等待有效计量数据"],
+"s30.calibrated":["Meter calibration saved","已保存计量校准"],
+"s30.uncalibrated":["Meter uses default calibration","计量使用默认校准值"],
+"s30.ota_hint":["Enter an HTTP URL for this device's .rbl firmware.","填写本设备 .rbl 固件的 HTTP 下载地址。"],
+"s30.button_hint":["Release after 5–10 seconds to reset Wi-Fi; release after 10 seconds to reset the device.","按住 5 至不足 10 秒后松开重置 Wi-Fi；按住至少 10 秒后松开重置设备。"],
+
 "display.title":["User readings on the device screen", "设备屏幕用户读数"],
 "display.help":["Configure both positions independently. Double-press switches the original pair and your pair together. Missing, expired or out-of-range data restores only that position’s original reading.", "两个位置可分别配置。双击会整体切换原始两路与用户两路；缺失、过期或超出显示范围的数据，只恢复对应位置的原始读数。"],
 "display.glass_help":["The screen has three digits per position. Only the original PM2.5 or formaldehyde metric at ÷1 keeps its original label and unit. Other units such as W, °C and % are hidden. Choose decimal places and scaling to fit the value.", "每个位置只有三位数字。只有原位置显示原 PM2.5 或甲醛数据且倍率为 ÷1 时，才保留原名称与单位；W、°C、% 等其他单位不会显示。请设置小数位和倍率，使读数能放入三位数字。"],
@@ -358,6 +393,7 @@ const D={
 'fw.cancel':['Cancel download','终止下载'],'fw.cancelling':['Cancelling; services will resume shortly.','正在终止，稍后恢复正常服务。'],'fw.online':['Online updates','在线更新'],'fw.check':['Check for updates','检查更新'],'fw.install_online':['Download and install','下载并安装'],'fw.notes':['Release notes','发布说明'],
 'fw.sources_help':['Choose a source to check its latest version.','选择更新来源，检查最新版本。'],'fw.source_github':['GitHub Pages (HTTPS)','GitHub Pages（HTTPS）'],'fw.source_cn':['China mirror (HTTP)','境内镜像（HTTP）'],'fw.source_global':['Global mirror (HTTP)','境外镜像（HTTP）'],
 'fw.check_idle':['Choose a source and check','选择来源后检查更新'],'fw.check_checking':['Checking…','正在检查…'],'fw.check_available':['Update available','发现新版本'],'fw.check_up_to_date':['Already up to date','当前已是最新版本'],'fw.check_failed':['Update check failed; try another source','检查失败，请重试或切换来源'],'fw.confirm_online':['Install this signed update and restart the device?','安装此签名更新并重启设备？'],
+'fw.version_path_help':['For stable updates, update 0.9.x to 1.0.0 before installing later versions. RC test releases use a separate channel.','稳定版升级路径：0.9.x 先升级到 1.0.0，再升级后续版本。RC 测试版使用独立渠道。'],
 /* Application watchdog diagnostics (A1/M1). */
 'diag.g_watchdog':['Restart & watchdog','复位与看门狗'],
 'diag.c_watchdog':['Watchdog','看门狗'],
@@ -612,6 +648,7 @@ const D={
 'tc1.names':['Socket names','插座名称'],'tc1.names_desc':['Shown here and in Home Assistant','在本页和 Home Assistant 中显示'],
 'tc1.metering':['Reporting & metering','上报与计量'],'tc1.report':['MQTT report interval','MQTT 上报间隔'],'tc1.report_help':['How often power is published to MQTT (1–3600 s).','功率发布到 MQTT 的频率（1–3600 秒）。'],
 'tc1.calibration':['Calibration','计量校准'],'tc1.coef':['Power coefficient','功率系数'],'tc1.coef_warn':['Only change this with a known calibration value. An idle reading cannot verify accuracy.','仅在已知校准值时修改；空载读数无法验证计量精度。'],
+'tc1.coef_bl0937':['BL0937 (original): 1710 (17.10)','BL0937（原厂）：1710（17.10）'],'tc1.coef_bl0937b':['BL0937B: 1395 (13.95)','BL0937B：1395（13.95）'],'tc1.coef_help':['Choose a chip preset or enter a custom integer coefficient (100–10000).','选择芯片预设，或手动输入整数系数（100–10000）。'],
 'btn.lead':['See each gesture and its action. Expand a range to edit individual gestures.','按手势查看实际动作；相同动作合并显示，展开后可逐条编辑。'],'btn.current':['What each gesture does','按下后会发生什么'],
 'btn.click_count':['Number of presses','连按次数'],'btn.hold_count':['Hold duration (seconds)','按住时长（秒）'],
 'btn.single':['Single press','单击'],'btn.click_full':['Press {n} times','连按 {n} 次'],'btn.hold_full':['Hold {n} seconds','长按 {n} 秒'],
@@ -647,9 +684,7 @@ const D={
 'd.ntp_screen_queued':['Screen time queued','屏幕时间已入队'],'d.ntp_last_success':['Last sync','最近成功校时'],'d.ntp_next_seconds':['Next sync in (s)','下次校时（秒后）'],'d.timezone_minutes':['UTC offset (min)','时区（UTC 分钟差）'],
 'd.led_visible':['Light showing','灯环显示中'],'d.led_always_on':['Always on','常亮'],'d.brightness':['Brightness','亮度'],'d.red':['Red','红'],'d.green':['Green','绿'],'d.blue':['Blue','蓝'],
 'd.config_dirty':['Saving settings','设置保存中'],'d.save_error':['Save error','保存错误'],'d.reboot_pending':['Restart pending','等待重启'],
-'d.report_seconds':['Report interval (s)','上报间隔（秒）'],'d.powerCoefficientX100':['Power coefficient (×100)','功率系数（×100）'],'d.mask':['Subnet mask','子网掩码'],'d.gateway':['Gateway','网关']
-};
-Object.assign(D,{
+'d.report_seconds':['Report interval (s)','上报间隔（秒）'],'d.powerCoefficientX100':['Power coefficient (×100)','功率系数（×100）'],'d.mask':['Subnet mask','子网掩码'],'d.gateway':['Gateway','网关'],
  'gen.language':['Device language','设备语言'],
  'gen.language_help':['Controls MQTT entity names. Your browser language is set separately.','控制 MQTT 通告的实体名称，浏览器显示语言单独设置。'],
  'mcu.version':['Sensor MCU firmware','传感器 MCU 固件'],
@@ -660,7 +695,7 @@ Object.assign(D,{
  'mcu.stock17':['Factory 17.x (including 17.1.2.3) differs substantially. Keep the factory MCU until a 17.x image has been obtained and analyzed.','原厂 17.x（包括 17.1.2.3）差异较大，请先保留原厂 MCU，等取得 17.x 固件并完成分析后再考虑刷入。'],
  'mcu.unverified':['This MCU version has not been verified. Keep its original version text when reporting an issue.','此 MCU 版本尚未验证，反馈问题时请保留完整的原始版本号。'],
  'common.retry':['Retry','重试']
-});
+};
 const KEY='phicomm.language';
 let preference='auto';try{preference=localStorage.getItem(KEY)||'auto';}catch{}
 const detect=()=>{for(const l of navigator.languages||[navigator.language||'en']){const s=l.toLowerCase();if(s.startsWith('zh'))return 'zh-CN';if(s.startsWith('en'))return 'en';}return 'en';};

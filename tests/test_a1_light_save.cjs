@@ -17,6 +17,7 @@ test('A1 light effects can be saved repeatedly without refreshing the page',asyn
    }
    return {ok:true,json:async()=>({code,data})};
   };
+ require('./legacy_device_fixture.cjs')(w);
   const scripts=[...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m=>m[1]);
   scripts.forEach((source,i)=>{
    if(i===scripts.length-1)w.UI.start=dev=>{w.UI.device=dev;};

@@ -6,12 +6,13 @@ function fixture(reply){
  const html=require('./render_page.cjs')('M1/web/index.html');
  const dom=new JSDOM(html,{pretendToBeVisual:true,runScripts:'outside-only',url:'http://device.local'}),w=dom.window,calls=[];
  w.TextEncoder=TextEncoder;w.scrollTo=()=>{};
- w.setTimeout=(fn,delay)=>delay===750?setImmediate(fn):0;w.clearTimeout=()=>{};
+ w.setTimeout=(fn,delay)=>[250,750].includes(delay)?setImmediate(fn):0;w.clearTimeout=()=>{};
  w.fetch=async(url,options)=>{
   assert.equal(url,'/api/v1/command');const request=JSON.parse(options.body);
   if(request.action==='binding.status.get')return {ok:true,status:200,json:async()=>({code:'ok',data:{peers:[],members:[]}})};
   calls.push(request);const body=await reply(request);return {ok:true,status:200,json:async()=>body};
  };
+ require('./legacy_device_fixture.cjs')(w);
  const scripts=[...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m=>m[1]);
  scripts.forEach((source,i)=>{
   if(i===scripts.length-1){w.UI.start=dev=>{w.UI.device=dev;};w.UI.reload=async()=>{render(w.UI.state.co2_display);return w.UI.state;};}

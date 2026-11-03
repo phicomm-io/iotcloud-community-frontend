@@ -8,6 +8,7 @@ import vm from 'node:vm';
 import {build} from 'esbuild';
 import {parse,compileScript} from '@vue/compiler-sfc';
 import {JSDOM,VirtualConsole} from 'jsdom';
+import {hubPowerSample} from '../src/hubMeter.js';
 
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const result=await build({
@@ -96,6 +97,34 @@ for(const language of ['en','zh-CN']){
    assert.ok(!text(f.document.querySelector('.stat-controls')).includes('总开关 总开关'));
    f.document.querySelector('.switch-btn').click();await flush();
    assert.deepEqual(plain(f.w.events.at(-1)),{type:'command',data:{mac:'aabbccddeeff',payload:'set socket aabbccddeeff 0 0'}});assert.deepEqual(f.errors,[]);
+  }finally{f.close();}
+ });
+ test(`TC1 hub watts render between clock ticks and expire independently in ${language}`,async()=>{
+  const f=await fixture(language);
+  let clock=100000;
+  f.w.Date.now=()=>clock;
+  const state={available:true,socket_states:Array(6).fill(true),sensorAt:clock};
+  try{
+   await f.w.mount('DeviceSummary',{device:{model:'tc1'},state:{...state,hubPower:hubPowerSample({power_watts:12},clock)},name:'TC1',connected:true,now:clock});
+   const watts=()=>text(f.document.querySelector('.stat'));
+   assert.equal(watts(),'12.0W');
+   // A response arrives after the parent's last one-second clock tick. Vue
+   // renders the new state immediately, while the clock prop stays unchanged.
+   clock+=650;
+   await f.w.updateProps({state:{...state,hubPower:hubPowerSample({power_watts:5.14},clock)}});
+   assert.equal(watts(),'5.1W');
+   clock+=250;
+   await f.w.updateProps({state:{...state,hubPower:hubPowerSample({power_watts:0},clock)}});
+   assert.equal(watts(),'0.0W');
+   clock=115899;
+   await f.w.updateProps({now:115000,state:{...state,sensorAt:clock,hubPower:hubPowerSample({power_watts:0},100900)}});
+   assert.equal(watts(),'0.0W');
+   clock++;
+   await f.w.updateProps({now:clock});
+   assert.equal(watts(),'—W','a fresh relay status cannot extend the meter TTL');
+   await f.w.updateProps({state:{...state,hubPower:hubPowerSample({power_watts:99},clock+1)}});
+   assert.equal(watts(),'—W','a genuinely future receipt stays invalid');
+   assert.deepEqual(f.errors,[]);
   }finally{f.close();}
  });
  test(`community ON/OFF display and administrator confirmations use ${language}`,async()=>{

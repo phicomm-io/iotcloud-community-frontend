@@ -15,6 +15,7 @@ test('LAN controls and complete settings work with MQTT disconnected, upload goe
  const actions=['status.get','config.get','config.set','fan.set','light.set','schedules.get','schedules.put','schedules.delete','schedules.enable','buttons.get','binding.get','binding.status.get','binding.set','night.get','night.set','light_effect.get','ota.sources.get'];
  await page.route(address+'/**',async route=>{
   const path=new URL(route.request().url()).pathname;
+  if(path==='/api/v1/auth/login'){await route.fulfill({status:404,contentType:'application/json',body:'{}'});return;}
   if(path==='/api/v1/ota/upload'){uploads.push(route.request().url());await route.fulfill({status:202,body:'{"code":"accepted"}'});return;}
   let data=state;
   if(path==='/api/v1/info')data={device_id:mac,model:'a1',api_version:1};

@@ -2,12 +2,10 @@
 import {t} from '../i18n.js';
 
 import {ref,computed,watch,onBeforeUnmount} from 'vue';
-import {hubMode} from '../deployment';
 import '../../../common/web/provision.js';
 const props=defineProps({connection:Object,broker:Object});
 const P=globalThis.IotProvision;
 const suggestedHost=computed(()=>{if(props.broker?.host)return props.broker.host;try{return new URL(props.connection.host).hostname;}catch{return '';}});
-const localHub=computed(()=>hubMode&&props.broker?.hub===true&&props.broker.host===location.hostname&&props.broker.port===1883);
 const expanded=ref(false),address=ref(''),host=ref(''),port=ref(''),user=ref(''),password=ref(''),trusted=ref(false),state=ref(''),error=ref(''),pending=ref(false);
 let stop=null;
 function cancel(){stop?.();stop=null;password.value='';pending.value=false;}
@@ -47,12 +45,6 @@ onBeforeUnmount(cancel);
 <template>
 <section class="card provision-device" :aria-label="t('p.59a57675ecf9')">
 <h2>{{t('p.59a57675ecf9')}}</h2>
-<template v-if="localHub">
-<p class="help">{{t('hub.provision.help')}}</p>
-<dl class="hub-broker-details"><div><dt>{{t('hub.provision.host')}}</dt><dd>{{broker.host}}</dd></div><div><dt>{{t('hub.port')}}</dt><dd>1883</dd></div><div><dt>{{t('hub.username')}}</dt><dd>{{connection.username}}</dd></div></dl>
-<p class="help">{{t('hub.provision.passwordHelp')}}</p>
-</template>
-<template v-else>
 <p class="help">{{t('p.96ec8aafd7f9')}}</p>
 <p v-if="suggestedHost" class="help">{{t('p.3ae9d76961b1')}}<strong style="overflow-wrap:anywhere">{{suggestedHost}}</strong><span v-if="broker?.port"> {{t('p.b150b246ee63')}}{{broker.port}}</span></p>
 <button type="button" class="btn" :aria-expanded="expanded" @click="edit">{{expanded?t('p.afd4b783536b'):t('p.d702657fe4b1')}}</button>
@@ -66,10 +58,8 @@ onBeforeUnmount(cancel);
 <div class="form-actions"><button class="btn primary" :disabled="pending">{{t('p.f8b047550169')}}</button><button v-if="pending" type="button" class="btn" @click="cancel();state=t('p.ada8240a84e9')">{{t('p.f007a463b503')}}</button></div>
 </form>
 <p v-if="state" role="status">{{state}}</p><p v-if="error" role="alert">{{error}}</p>
-</template>
 </section>
 </template>
 <style scoped>
-.hub-broker-details{display:grid;gap:12px;margin:0}.hub-broker-details>div{display:grid;grid-template-columns:minmax(90px,1fr) minmax(0,2fr);gap:16px;font-size:13px}.hub-broker-details dt{color:var(--muted)}.hub-broker-details dd{margin:0;overflow-wrap:anywhere}
 .provision-device{display:grid;gap:14px;padding:24px}.provision-device h2{font-size:17px}.provision-device>.btn{justify-self:start}.provision-device form{display:grid;gap:16px}.provision-device .fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.provision-device label{display:grid;gap:8px}.provision-device input{min-width:0}.provision-device .trust-device{display:flex;align-items:flex-start;font-weight:400;line-height:1.6}.trust-device input{width:18px;min-height:18px;flex-shrink:0;margin-top:3px}@media(max-width:600px){.provision-device .fields{grid-template-columns:1fr}}
 </style>

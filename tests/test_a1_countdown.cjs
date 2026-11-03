@@ -12,6 +12,7 @@ test('A1 countdown creates a typed shutdown task, edits, cancels, restarts and r
    if(req.action==='schedules.enable'){assert.equal(typeof req.params.enabled,'boolean');items[0].enabled=req.params.enabled;items[0].remaining_seconds=items[0].seconds;}
    if(req.action==='schedules.get')data={items,count:items.length,capacity:8,next:8};
    return {ok:true,json:async()=>({code:'ok',data})};};
+ require('./legacy_device_fixture.cjs')(w);
   const scripts=[...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m=>m[1]);
   scripts.forEach((source,i)=>{if(i===scripts.length-1){w.UI.start=dev=>{w.UI.device=dev;};w.UI.reload=async()=>w.UI.state;}vm.runInContext(source,dom.getInternalVMContext());});
   await flush();w.I18N.set('en');w.UI.state={time_synced:false};w.UI.caps={schedule_countdown:true,actions:['schedules.get','fan.set']};

@@ -1,4 +1,7 @@
 import {userKey,deviceKey} from './deviceProtocol.js';
+import {decodeWire,detectWire} from './wireCodec.js';
+import {applyDescriptorFeed} from './sensorDescriptorFeed.js';
+export {sensorMetadataTopic} from './sensorDescriptorFeed.js';
 
 export const typedSensorTopic=username=>`phicomm/v2/${username?userKey(username):'local'}/sensor/+/state`;
 const record=value=>value&&typeof value==='object'&&!Array.isArray(value);
@@ -36,15 +39,16 @@ function integerFields(text,data){
 // Only a new, live typed publication renews a candidate. Retained snapshots and
 // duplicate sequences must not turn an old reading into a fresh display source.
 export function applyTypedSensorFeed(feeds,topic,message,{username='',retained=false,now=Date.now(),deviceIds=[]}={}){
+ if(applyDescriptorFeed(feeds,topic,message,{username,retained,now,deviceIds}))return true;
  const prefix=typedSensorTopic(username).replace('+/state','');
  if(!topic.startsWith(prefix))return false;
  const match=/^([0-9a-f]{12})\/state$/.exec(topic.slice(prefix.length));
  if(!match)return true;
  const id=match[1];
  if(retained||!deviceIds.includes(id))return true;
- const text=String(message);let data;try{data=JSON.parse(text);}catch{return true;}
+ const format=detectWire(message),text=typeof message==='string'?message:format==='json'?new TextDecoder().decode(message):null;let data;const numeric=[];try{data=decodeWire(message,format,{onNumber:(value,integer,path)=>numeric.push({value,integer,path})});}catch{return true;}
  if(!record(data)||data.schema!==2||data.device_id!==id||!uint32(data.boot)||!uint32(data.sequence)||!record(data.sensors)||Object.keys(data.sensors).length>16)return true;
- const ages=integerFields(text,data);if(!ages)return true;
+ const ages=text!==null?integerFields(text,data):numeric.some(n=>n.path.length===1&&['schema','boot','sequence'].includes(n.path[0])&&!n.integer)?null:Object.fromEntries(numeric.filter(n=>n.path.length===3&&n.path[0]==='sensors'&&n.path[2]==='age_ms').map(n=>[n.path[1],n.integer]));if(!ages)return true;
  const previous=feeds[id],retired=previous?.retired||[];
  if(previous&&(data.boot===previous.boot?(data.sequence-previous.sequence|0)<=0:retired.includes(data.boot)))return true;
  const sensors={};
@@ -63,7 +67,7 @@ export function displaySourceCandidates(devices,states,feeds,target,username,now
  const owner=d=>d?.mqtt_username||d?.username||username||'';
  return devices.flatMap(d=>{
   if(d.version!=='v2'||d.mac===target?.mac||owner(d)!==owner(target))return [];
-  const feed=feeds[d.mac],state=states[deviceKey(d)]||{},elapsed=now-feed?.receivedAt;
+  const feed=feeds[owner(d)+':'+d.mac]||feeds[d.mac],state=states[deviceKey(d)]||{},elapsed=now-feed?.receivedAt;
   if(!feed||feed.username!==owner(target)||state.available===false||!Number.isFinite(elapsed)||elapsed<0)return [];
   return Object.entries(feed.sensors).flatMap(([field_id,sample])=>sample.age_ms+elapsed>=20000?[]:[{
    device_id:d.mac,device_name:state.name||d.name||(typeof d.model==='string'?d.model.toUpperCase():d.mac),field_id,name:sample.name,type:sample.type,unit:sample.unit,value:sample.value,age_ms:sample.age_ms+elapsed

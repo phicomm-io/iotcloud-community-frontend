@@ -6,6 +6,7 @@ test('DAIKIN uses shared metric scales, optional HCHO and expiring live data',()
  try{
   let now=100;const ticks=[];w.TextEncoder=TextEncoder;w.scrollTo=()=>{};w.setTimeout=()=>0;w.setInterval=fn=>{ticks.push(fn);return ticks.length;};
   Object.defineProperty(w.performance,'now',{value:()=>now});
+ require('./legacy_device_fixture.cjs')(w);
   const scripts=[...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m=>m[1]);
   scripts.forEach((source,i)=>{if(i===scripts.length-1)w.UI.start=dev=>{w.UI.device=dev;};vm.runInContext(source,dom.getInternalVMContext());});
   w.I18N.set('en');
@@ -48,6 +49,7 @@ function editorFixture(){
  const html=require('./render_page.cjs')('DAIKIN/web/index.html');
  const dom=new JSDOM(html,{runScripts:'outside-only',url:'http://device.local/#settings/device'}),w=dom.window;
  w.TextEncoder=TextEncoder;w.scrollTo=()=>{};w.setTimeout=()=>0;w.setInterval=()=>0;
+ require('./legacy_device_fixture.cjs')(w);
  const scripts=[...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m=>m[1]);
  scripts.forEach((source,i)=>{if(i===scripts.length-1)w.UI.start=dev=>{w.UI.device=dev;};vm.runInContext(source,dom.getInternalVMContext());});
  w.I18N.set('en');

@@ -3,13 +3,15 @@ import {readFileSync,existsSync} from 'node:fs';
 import {createRequire} from 'node:module';
 import {resolve,dirname} from 'node:path';
 
-const products={tc1:'TC1/http_server/web/index.html',a1:'A1/web/index.html',m1:'M1/web/index.html',daikin:'DAIKIN/web/index.html'};
+const products={tc1:'TC1/http_server/web/index.html',a1:'A1/web/index.html',m1:'M1/web/index.html',daikin:'DAIKIN/web/index.html','s30-v1b':'S30/web/index.html'};
 const i18nScript=/<script data-device-part="i18n.js">([\s\S]*?)<\/script>/;
 
 // Only hub builds use external resources. The ordinary device and cloud pages
 // stay self contained; every resource here is also stored on the hub itself.
 export async function buildDeviceAssets({sourceRoot,appRoot,watch=()=>{}}){
- const minifyDevice=createRequire(import.meta.url)(resolve(sourceRoot,'tools/minify_device.cjs'));
+ const require=createRequire(import.meta.url);
+ const minifyDevice=require(resolve(sourceRoot,'tools/minify_device.cjs'));
+ const authBundle=require(resolve(sourceRoot,'tools/bundle_auth.cjs'))();
  const read=file=>{watch(file);return readFileSync(file,'utf8');};
  const pages=Object.fromEntries(Object.entries(products).map(([model,path])=>{
   const file=resolve(sourceRoot,path);
@@ -21,7 +23,7 @@ export async function buildDeviceAssets({sourceRoot,appRoot,watch=()=>{}}){
   if(html.includes('@include'))throw Error('Unresolved device include: '+path);
   return [model,html.replace('</head>','<script>'+read(resolve(sourceRoot,'common/web/appearance.js'))+'</script></head>')];
  }));
- // A single dictionary covers the actual references in all four products. This
+ // A single dictionary covers the actual references in every product. This
  // retains dynamic key families while making their i18n script identical.
  const dictionary=pages.daikin.match(i18nScript)?.[1];
  if(!dictionary)throw Error('Device translation script missing');
@@ -40,6 +42,7 @@ export async function buildDeviceAssets({sourceRoot,appRoot,watch=()=>{}}){
  const script=content=>'<script src="'+resource(content,'js')+'"></script>';
  const bridge=script((await minifyDevice('<script>'+read(resolve(appRoot,'src/deviceBridge.js'))+'</script>')).slice(8,-9));
  const runtime=script((await minifyDevice('<script>'+read(resolve(appRoot,'src/deviceHomeRuntime.js'))+'</script>')).slice(8,-9));
+ const auth=script(authBundle)+script(read(resolve(sourceRoot,'common/web/auth.js')));
  const embedded={};let standalone;
  for(const [model,raw] of Object.entries(pages)){
   const html=await minifyDevice(raw.replace(i18nScript,()=>'<script data-device-part="i18n.js">'+packed+'</script>'));
@@ -48,7 +51,7 @@ export async function buildDeviceAssets({sourceRoot,appRoot,watch=()=>{}}){
   for(const match of html.matchAll(fragments)){
    normal+=html.slice(last,match.index);frame+=html.slice(last,match.index);
    const tag=match[3]===undefined?script(match[2]):'<link rel="stylesheet" href="'+resource(match[3],'css')+'">';
-   if(/data-device-part="service\.js"/.test(match[1]||''))frame+=bridge;
+   if(/data-device-part="service\.js"/.test(match[1]||'')){frame+=bridge;normal+=auth;}
    if(/data-device-part="page\.js"/.test(match[1]||''))frame+=runtime;
    normal+=tag;frame+=tag;last=match.index+match[0].length;
   }

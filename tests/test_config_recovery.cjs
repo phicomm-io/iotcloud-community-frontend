@@ -21,9 +21,12 @@ async function fixture(model='m1',setup=false,recovery=true){
  const caps={model,config_recovery:recovery,status_views:['full','live'],actions:['status.get','capabilities.get','config.get','config.set','system.reset']};
  let online=true,confirmed=true,resetFailure='',readGate=null;
  w.localStorage.setItem('phicomm.language','zh-CN');
- w.TextEncoder=TextEncoder;w.setTimeout=()=>0;w.setInterval=()=>0;w.scrollTo=()=>{};w.confirm=()=>confirmed;
+ w.TextEncoder=TextEncoder;w.TextDecoder=TextDecoder;w.setTimeout=()=>0;w.setInterval=()=>0;w.scrollTo=()=>{};w.confirm=()=>confirmed;
  w.HTMLDialogElement.prototype.showModal=undefined;
  w.fetch=async(url,options)=>{
+  // Existing firmware has no token endpoint; preserve its explicit legacy path.
+  if(url==='/api/v1/info')return {ok:true,status:200,json:async()=>({code:'ok',data:{api_version:1,device_id:'aabbccddeeff',model,version:'legacy'}})};
+  if(url==='/api/v1/auth/login')return {ok:false,status:404};
   assert.equal(url,'/api/v1/command');assert.equal(options.method,'POST');
   const request=JSON.parse(options.body);calls.push(request);
   if(!online)throw Error('disconnected');
@@ -37,7 +40,7 @@ async function fixture(model='m1',setup=false,recovery=true){
   if(request.action==='config.get')data={language:'zh-CN',migration_state:caps.config_recovery?'confirmation_required':'ready'};
   if(request.action==='system.reset'){
    assert.deepEqual(request.params,{full:true});assert(request.request_id);
-   if(resetFailure)return {ok:false,status:503,json:async()=>({code:'storage_error',message:'storage failed'})};
+   if(resetFailure)return {ok:false,status:503,headers:{get:()=> 'application/json'},json:async()=>({code:'storage_error',message:'storage failed'})};
    state.reboot_pending=true;
   }
   return {ok:true,status:200,json:async()=>({code:'ok',data})};
@@ -100,8 +103,10 @@ for(const setup of [true,false])test(`${setup?'setup':'full'}: external clear re
 for(const setup of [true,false])test(`${setup?'setup':'full'}: a read started before the reset cannot complete it`,async()=>{
  const f=await fixture('m1',setup);try{
   let release;f.holdRead(new Promise(resolve=>release=resolve));
-  const old=f.refresh();await settle();await f.clickReset();f.caps.config_recovery=false;
-  release();await old;assert.equal(f.reset().disabled,true);assert.doesNotMatch(f.text(),/配置已清空，可以重新配网/);
+  const old=f.refresh();await settle();const reset=f.clickReset();await settle();
+  assert.equal(f.writes().length,0,'reset waits for the in-flight read in the serial HTTP queue');
+  f.caps.config_recovery=false;release();await old;await reset;
+  assert.equal(f.writes().length,1);assert.equal(f.reset().disabled,true);assert.doesNotMatch(f.text(),/配置已清空，可以重新配网/);
   await f.refresh();assert.equal(f.reset().disabled,true);f.ready();await f.refresh();assert.equal(f.reset().disabled,false);
  }finally{f.dom.window.close();}
 });
