@@ -132,7 +132,7 @@ async function deviceCommand(request,reply,target=active.value,options={}){
   const password=data.params.values?.password;
   if(typeof password==='string'){webPasswords.set(key,password);transport.configure(key,captured,devicePreferences[key],password,true);transport.probe(key);}
  }
- if(captured.model==='tc1'&&data.action==='power.get'&&result.code==='ok'&&
+ if(['tc1','s30-v1b'].includes(captured.model)&&data.action==='power.get'&&result.code==='ok'&&
   (result.data?.device_id===undefined||result.data.device_id===captured.mac)&&
   list.value.some(d=>deviceKey(d)===key&&d.firmware_version===captured.firmware_version)){
   const state=(lanConnections[key]?.ready?lanStates:states)[key]||={};
@@ -261,7 +261,7 @@ function pollListMeters(){
  if(demoMode||ownerHub.value||document.hidden||page.value!=='home')return;
  for(const d of list.value){
   const key=deviceKey(d);
-  if(d.model!=='tc1'||d.version!=='v2'||meterPolls.has(key)||
+  if(!['tc1','s30-v1b'].includes(d.model)||d.version!=='v2'||meterPolls.has(key)||
    !(connected.value||lanConnections[key]?.ready)||viewStates.value[key]?.available===false||
    d.status&&d.status!=='active')continue;
   meterPolls.add(key);
