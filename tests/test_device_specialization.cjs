@@ -47,3 +47,22 @@ test('actual native product editors retain the complete firmware action upper bo
   }finally{w.close();}
  }
 });
+
+
+test('specialized S30 retains the same socket schedule actions as TC1',async()=>{
+ const cp=require('node:child_process'),raw=cp.execFileSync('python3',['common/web/page.py','S30/web/index.html'],{encoding:'utf8'});
+ const html=await minify(raw.replace('/* @device-product */null',"'s30-v1b'"));
+ const dom=new JSDOM(html,{runScripts:'outside-only',url:'http://device.local'}),w=dom.window;
+ try{
+  w.TextEncoder=TextEncoder;w.deviceParentTransport=true;w.setTimeout=()=>0;w.scrollTo=()=>{};
+  const bound=['outlet.set','child_lock.set','indicator.set','system.reboot'];
+  w.fetch=async()=>({ok:true,status:200,json:async()=>({code:'ok',data:{items:[]}})});
+  const scripts=[...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m=>m[1]);
+  scripts.forEach((s,i)=>{if(i===scripts.length-1)w.UI.start=dev=>{w.UI.device=dev;};vm.runInContext(s,dom.getInternalVMContext());});
+  w.UI.caps={model:'s30-v1b',actions:[...bound,'schedules.get'],schedule_triggers:['weekly','once','power'],outlet_count:1};
+  const page=w.automationPages(w.UI.device).schedule;
+  const actions=[...page.el.querySelectorAll('[data-value]')].map(el=>el.dataset.value).filter(value=>bound.includes(value));
+  assert.deepEqual([...new Set(actions)],bound);
+  for(let i=0;i<4;i++)await new Promise(resolve=>setImmediate(resolve));
+ }finally{w.close();}
+});
