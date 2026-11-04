@@ -14,6 +14,7 @@ import {autoConnect,setAutoConnect,rememberLogin,savedPassword,forgetLogin} from
 import {userKey,requestId,deviceKey,deviceEntry,localDevices,topics,applyMessage,statusSnapshot,command,discoveryMessage} from './deviceProtocol';
 import {createDeviceTransport,loadPreference,savePreference,localAddress} from './deviceConnection';
 import {deviceType} from './devicePresentation';
+import {hubPowerSample} from './hubMeter.js';
 import {saveDeviceName} from './deviceName';
 import DeviceSummary from './components/DeviceSummary.vue';
 import DeviceNameDialog from './components/DeviceNameDialog.vue';
@@ -60,7 +61,7 @@ const addForm=reactive({mac:'',model:'tc1',version:'v2'});
 const lanConnections=reactive({}),lanStates=reactive({}),devicePreferences=reactive({});
 const sensorFeeds=reactive({});
 const webPasswords=new Map();let preferenceScope='';
-const transport=createDeviceTransport({records:lanConnections,onStatus:(key,state)=>{const snapshot=statusSnapshot(state);if(snapshot)lanStates[key]={...snapshot,available:true,lan_connected:true};}});
+const transport=createDeviceTransport({records:lanConnections,onStatus:(key,state)=>{const snapshot=statusSnapshot(state);if(snapshot)lanStates[key]={...(lanStates[key]?.hubPower?{hubPower:lanStates[key].hubPower}:{}),...snapshot,available:true,lan_connected:true};}});
 const ownerHub=computed(()=>hubMode&&!localMode&&!thirdParty.value);
 const hubClient=hubMode?createHubDeviceClient({request:api,onStatus:(key,snapshot)=>{states[key]={...snapshot,capabilities:states[key]?.capabilities,available:true,hub_connected:true};},onCapabilities:(key,caps)=>{(states[key]||={}).capabilities=caps;}}):null;
 const viewStates=computed(()=>Object.fromEntries(list.value.map(d=>{const k=deviceKey(d);return [k,lanConnections[k]?.ready?{...states[k],...lanStates[k]}:states[k]||{}];})));
@@ -131,6 +132,12 @@ async function deviceCommand(request,reply,target=active.value,options={}){
   const password=data.params.values?.password;
   if(typeof password==='string'){webPasswords.set(key,password);transport.configure(key,captured,devicePreferences[key],password,true);transport.probe(key);}
  }
+ if(['tc1','s30-v1b'].includes(captured.model)&&data.action==='power.get'&&result.code==='ok'&&
+  (result.data?.device_id===undefined||result.data.device_id===captured.mac)&&
+  list.value.some(d=>deviceKey(d)===key&&d.firmware_version===captured.firmware_version)){
+  const state=(lanConnections[key]?.ready?lanStates:states)[key]||={};
+  state.hubPower=hubPowerSample(result.data);
+ }
  reply(result);
 }
 const active=computed(()=>{const d=list.value.find(x=>deviceKey(x)===selected.value);return d?{...viewStates.value[deviceKey(d)],...d}:null;});
@@ -149,7 +156,7 @@ const displaySources=computed(()=>displaySourceCandidates(list.value,viewStates.
 watch(page,value=>track('pageview',thirdParty.value?(value==='settings'?'/guest/settings':'/guest'):(value==='settings'?'/settings':'/')));
 watch(()=>active.value?deviceKey(active.value):'',value=>{if(value)track('device_view',thirdParty.value?'/guest':'/',active.value.model);});
 let client,timer,poll,lanPoll;
-function visibilityProbe(){if(document.hidden){if(ownerHub.value)hubClient.cancelReads();return;}updateConnections(true);if(ownerHub.value)pollHubStates();}
+function visibilityProbe(){if(document.hidden){if(ownerHub.value)hubClient.cancelReads();return;}updateConnections(true);if(ownerHub.value)pollHubStates();else pollListMeters();}
 const replies=new Map();
 async function mqttCommand(request,reply,target=active.value,{timeoutMs=20000}={}){
  // A newly mounted device page can request data before MQTT finishes connecting.
@@ -247,9 +254,23 @@ async function pollHubStates(){
  })();
  try{return await hubPollPending;}finally{hubPollPending=null;}
 }
+// Meter reads are independent from the selected iframe and inventory refresh.
+// A slow/offline device must not block other list cards or accumulate reads.
+const meterPolls=new Set();
+function pollListMeters(){
+ if(demoMode||ownerHub.value||document.hidden||page.value!=='home')return;
+ for(const d of list.value){
+  const key=deviceKey(d);
+  if(!['tc1','s30-v1b'].includes(d.model)||d.version!=='v2'||meterPolls.has(key)||
+   !(connected.value||lanConnections[key]?.ready)||viewStates.value[key]?.available===false||
+   d.status&&d.status!=='active')continue;
+  meterPolls.add(key);
+  deviceCommand({action:'power.get'},()=>{},d,{timeoutMs:4500}).catch(()=>{}).finally(()=>meterPolls.delete(key));
+ }
+}
 function connect(){if(demoMode){connected.value=true;busy.value=false;for(const d of list.value)Object.assign(states[deviceKey(d)]||={},demoDevices[d.model].state);return;}if(!thirdParty.value&&connection.password)rememberLogin(account.username,connection.password);disconnect();error.value='';if(location.protocol==='https:'&&!connection.host.startsWith('wss://')){error.value=t('p.22211d965247');return;}if(!/^wss?:\/\//.test(connection.host)){error.value=t('p.5da207244bf4');return;}busy.value=true;
  client=mqtt.connect(connection.host,{username:connection.username,password:connection.password,clientId:'web_'+requestId(),connectTimeout:5000,reconnectPeriod:3000,clean:true});
- client.on('connect',()=>{connected.value=true;busy.value=false;subscribe();track('mqtt_connect',thirdParty.value?'/guest':'/');});
+ client.on('connect',()=>{connected.value=true;busy.value=false;subscribe();pollListMeters();track('mqtt_connect',thirdParty.value?'/guest':'/');});
  client.on('close',()=>{connected.value=false;busy.value=false;});client.on('error',()=>{error.value=t('p.cc9962611a5b');busy.value=false;});
  client.on('message',receiveDeviceMessage);
  if(thirdParty.value)localStorage.setItem('tmcp_broker',JSON.stringify({host:connection.host,username:connection.username}));
@@ -300,7 +321,7 @@ watch([page,selected],()=>{
  // reads. The iframe joins this request instead of waiting behind list polling.
  if(page.value==='home'&&!document.hidden&&device&&hubDeviceReadable(device))hubClient.dispatch(device,{action:'capabilities.get'}).catch(()=>{});
 });
-onMounted(async()=>{if(!localMode&&route.name!=='Guest')await restoreAccount();try{aliases.value=JSON.parse(localStorage.getItem('phicomm.names.'+scopeKey()+':'+(account.username||'guest'))||'{}');}catch{}await changeMode();if(route.query.github==='linked')notice.value=t('p.034b28c46590');else if(route.query.github==='login'&&!connection.password)notice.value=t('p.dfcf6ba14455');timer=setInterval(()=>now.value=Date.now(),1000);lanPoll=setInterval(()=>{if(!document.hidden)updateConnections();},30000);document.addEventListener('visibilitychange',visibilityProbe);window.addEventListener('phicomm-session-expired',hubSessionLost);poll=setInterval(()=>{if(ownerHub.value)pollHubStates();else if(!thirdParty.value&&!document.hidden)refresh();},5000);});
+onMounted(async()=>{if(!localMode&&route.name!=='Guest')await restoreAccount();try{aliases.value=JSON.parse(localStorage.getItem('phicomm.names.'+scopeKey()+':'+(account.username||'guest'))||'{}');}catch{}await changeMode();if(route.query.github==='linked')notice.value=t('p.034b28c46590');else if(route.query.github==='login'&&!connection.password)notice.value=t('p.dfcf6ba14455');timer=setInterval(()=>now.value=Date.now(),1000);lanPoll=setInterval(()=>{if(!document.hidden)updateConnections();},30000);document.addEventListener('visibilitychange',visibilityProbe);window.addEventListener('phicomm-session-expired',hubSessionLost);poll=setInterval(()=>{if(ownerHub.value)pollHubStates();else{if(!thirdParty.value&&!document.hidden)refresh();pollListMeters();}},5000);});
 onBeforeUnmount(()=>{disconnect();clearInterval(timer);clearInterval(poll);clearInterval(lanPoll);hubClient?.stop();transport.stop();webPasswords.clear();document.removeEventListener('visibilitychange',visibilityProbe);window.removeEventListener('phicomm-session-expired',hubSessionLost);});
 </script>
 <template>

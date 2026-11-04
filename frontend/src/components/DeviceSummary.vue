@@ -11,7 +11,7 @@ const outletCount=computed(()=>props.device.model==='s30-v1b'?1:6);
 const sockets=computed(()=>socketStates(props.state,outletCount.value));
 const knownSockets=computed(()=>live.value&&sockets.value.every(v=>typeof v==='boolean'));
 const pm=computed(()=>props.device.model==='daikin'?props.state?.sensors?.pm25?.value:props.state?.pm25);
-const freshAir=computed(()=>live.value&&props.state?.sensorAt&&(props.device.model==='daikin'?props.state?.sensors?.pm25?.valid&&props.now-props.state.sensorAt+(props.state.sensors.pm25.age_ms||0)<20000:props.state?.sensor_valid&&props.now-props.state.sensorAt<=15000)&&valid(pm.value));
+const freshAir=computed(()=>live.value&&props.state?.sensorAt&&(props.device.model==='daikin'?props.state?.sensors?.pm25?.valid&&props.now-props.state.sensorAt+(props.state.sensors.pm25.age_ms||0)<20000:props.state?.sensor_valid&&props.now-props.state.sensorAt+(props.state.age_ms||0)<15000)&&valid(pm.value));
 const co2=computed(()=>{if(props.device.model==='daikin'){const c=props.state?.sensors?.co2;return live.value&&c?.valid&&typeof c.value==='number'&&props.now-props.state.sensorAt+c.age_ms<20000?Math.round(c.value):null;}const s=props.state?.scd40;return live.value&&s?.ready&&s.valid&&s.age_ms<20000&&props.state?.sensorAt&&props.now-props.state.sensorAt<20000&&typeof s.co2_ppm==='number'?Math.round(s.co2_ppm):null;});
 const pressure=computed(()=>live.value?pressureReading(props.state,props.now):null);
 const power=computed(()=>hubPowerReading(props.state,Math.max(props.now,Date.now())));
@@ -31,7 +31,7 @@ function reading(v,digits=0){return live.value&&valid(v)?Number(v).toFixed(digit
  <span class="rack-head"><span class="presence-pill" :class="presence.tone" role="status">{{presence.label}}</span><b :title="name">{{name}}</b></span>
  <span v-if="['tc1','s30-v1b'].includes(device.model)" class="rack-body tc1-body">
   <span class="stat">{{reading(power,1)}}<small>W</small></span>
-  <span class="socket-info"><span class="sockets" role="img" :aria-label="sockets.map((v,i)=>t('p.adb6a3f989a5',{v0:(i+1),v1:t(!live||v===undefined?'state.unknown':v?'state.on':'state.off')})).join('; ')"><i v-for="i in outletCount" :key="i" :class="{on:live&&sockets[i-1]===true,unknown:!live||sockets[i-1]===undefined}"/></span><small v-if="device.model==='s30-v1b'" class="rack-detail meter-readings"><span>{{reading(meterReading(state,'voltage'),1)}} V</span><span>{{reading(meterReading(state,'current'),3)}} A</span></small></span>
+  <span class="socket-info"><span class="sockets" role="img" :aria-label="sockets.map((v,i)=>t('p.adb6a3f989a5',{v0:(i+1),v1:t(!live||v===undefined?'state.unknown':v?'state.on':'state.off')})).join('; ')"><i v-for="i in outletCount" :key="i" :class="{on:live&&sockets[i-1]===true,unknown:!live||sockets[i-1]===undefined}"/></span><small v-if="device.model==='s30-v1b'" class="rack-detail meter-readings"><span>{{reading(meterReading(state,'voltage',Math.max(now,Date.now())),1)}} V</span><span>{{reading(meterReading(state,'current',Math.max(now,Date.now())),3)}} A</span></small></span>
  </span>
  <span v-else-if="['m1','daikin'].includes(device.model)" class="rack-body m1-body">
   <span class="ring-mini"><span>{{quality}}</span></span><span class="sensor-copy"><span class="stat">{{freshAir?Math.round(Number(pm)):'—'}}<small>μg/m³</small></span></span><small class="rack-detail sensor-details"><span>PM2.5</span><span v-if="co2!==null"> · CO₂ {{co2}} ppm</span><span v-if="pressure!==null" :title="state.barometer.model"> · {{pressure.toFixed(1)}} hPa</span></small>
