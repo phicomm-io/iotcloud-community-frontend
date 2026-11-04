@@ -2,6 +2,7 @@
 import {t} from './i18n.js';
 import {encodeWire,decodeWire,detectWire} from './wireCodec.js';
 import {verifyCapabilities} from './deviceWire.js';
+import {hubPowerSample} from './hubMeter.js';
 export const requestId = () => Array.from(crypto.getRandomValues(new Uint8Array(16)), b=>b.toString(16).padStart(2,"0")).join("");
 export const userKey = username => "u_" + [...new TextEncoder().encode(username)].map(b => b.toString(16).padStart(2,"0")).join("");
 export const deviceKey = d => d.namespace === "account" ? `account:${d.username}:${d.mqtt_username || d.username}:${d.mac}` : d.mac;
@@ -73,6 +74,7 @@ const merge = (state, data) => {
         "sensorFresh",
         "co2SensorAt",
         "co2Scd40At",
+        "hubPower",
       ].includes(key)
     )
       if (/^plug_[0-5]$/.test(key) && value && typeof value === "object") {
@@ -101,6 +103,7 @@ function mergeStatus(state,data,now){
  if(state.co2SensorAt===undefined&&state.sensors?.co2)state.co2SensorAt=state.sensorAt??null;
  if(state.co2Scd40At===undefined&&state.scd40)state.co2Scd40At=state.sensorAt??null;
  merge(state,data);
+ if(data.metering&&typeof data.metering==='object'&&!Array.isArray(data.metering))state.hubPower=hubPowerSample(data,now);
  if(data.sensors?.co2&&typeof data.sensors.co2==='object'&&Object.hasOwn(data.sensors.co2,'value'))state.co2SensorAt=now;
  if(data.scd40&&typeof data.scd40==='object'&&Object.hasOwn(data.scd40,'co2_ppm'))state.co2Scd40At=now;
  const measurements=['temperature','humidity','pm25','formaldehyde','co2','pm10','tvoc','pressure','power_watts','energy_kwh'].some(key=>Number.isFinite(data[key]))||
@@ -113,7 +116,7 @@ function mergeStatus(state,data,now){
 // previous MQTT representation cannot supply its timestamp after the merge.
 export function statusSnapshot(data,now=Date.now()){
  if(!data||typeof data!=='object'||Array.isArray(data))return null;
- return {...data,sensorAt:now,sensorFresh:data.sensor_valid===true,
+ return {...data,...(data.metering?{hubPower:hubPowerSample(data,now)}:{}),sensorAt:now,sensorFresh:data.sensor_valid===true,
   co2SensorAt:data.sensors?.co2&&typeof data.sensors.co2==='object'&&Object.hasOwn(data.sensors.co2,'value')?now:null,
   co2Scd40At:data.scd40&&typeof data.scd40==='object'&&Object.hasOwn(data.scd40,'co2_ppm')?now:null};
 }
@@ -123,9 +126,9 @@ export function applyMessage(d, state, topic, message, now = Date.now()) {
   const leaf=topic.slice(base.length+1);let data=null;
   try{if(leaf!=='availability')data=decodeWire(message,commandFormat(d));}catch{}
   if(leaf === "availability") {state.available=String(message)==="online"; if(!state.available)state.sensorFresh=false;}
-  else if(leaf === "state" && data) mergeStatus(state,data,now);
+  else if(leaf === "state" && data) {const status=businessPayload(data);if(status)mergeStatus(state,status,now);}
   else if(leaf === "sensor" && data) {merge(state,data);if(d.model==="tc1"){state.power_watts=Number(data.power);state.energy_kwh=Number(data.powerConsumption);}}
-  else if(leaf === "capabilities" && data) {try{if(commandFormat(d)==='msgpack')verifyCapabilities(data,{device_id:d.mac,model:d.model,firmware_version:d.firmware_version,variant:d.variant||d.firmware_variant});state.capabilities=data;}catch{delete state.capabilities;}}
+  else if(leaf === "capabilities" && data) {try{const caps=businessPayload(data);if(!caps)throw Error('Invalid capabilities');if(commandFormat(d)==='msgpack')verifyCapabilities(caps,{device_id:d.mac,model:d.model,firmware_version:d.firmware_version,variant:d.variant||d.firmware_variant});state.capabilities=caps;}catch{delete state.capabilities;}}
   else if(leaf === "result" && data) {if(data.code==='ok'&&state.pending?.[data.request_id]==='capabilities.get'&&commandFormat(d)==='msgpack'){try{verifyCapabilities(data.data,{device_id:d.mac,model:d.model,firmware_version:d.firmware_version,variant:d.variant||d.firmware_variant});}catch{data={...data,code:'identity_mismatch',data:{}};}}state.result=data; const payload=data.data; if(data.code==="ok" && state.pending?.[data.request_id]==="status.get" && payload && typeof payload==="object" && !Array.isArray(payload)) mergeStatus(state,payload,now);}
   return true;
  }
@@ -156,6 +159,15 @@ export function applyMessage(d, state, topic, message, now = Date.now()) {
  else if(["sensor","state"].includes(p[3])) {const data=json(String(message));if(!data)return false;merge(state,data);legacyMeters(state,data);}
  else return false;
  return true;
+}
+
+// ESP8266 firmwares publish API envelopes on business state/capabilities
+// topics; other models publish the payload directly. Failed replies are not
+// state snapshots, and result envelopes retain their request correlation.
+function businessPayload(data){
+ if(typeof data!=='object'||Array.isArray(data))return null;
+ if(!Object.hasOwn(data,'code'))return data;
+ return data.code==='ok'&&data.data&&typeof data.data==='object'&&!Array.isArray(data.data)?data.data:null;
 }
 
 export function command(d, cmd) {

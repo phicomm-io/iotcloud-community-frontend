@@ -103,3 +103,41 @@ test('A1 filter state survives MQTT replay and refresh, and filter controls use 
   assert.deepEqual(JSON.parse(request.payload),{request_id:'filter-test',action,params});
  }
 });
+
+test('periodic ESP business envelopes refresh M1 measurements without selecting the device',async()=>{
+ const {encodeWire}=await import('./wireCodec.js');
+ for(const format of ['json','msgpack']){
+  const d=deviceEntry({mac:'aabbccddeeff',model:'m1',wire_format:format,wire_version:1,firmware_version:'rc5',variant:'full'}),state={};
+  const publish=(data,now)=>applyMessage(d,state,baseTopic(d)+'/state',encodeWire(data,format),now);
+  publish({code:'ok',data:{sensor_valid:true,pm25:39,age_ms:1000,scd40:{ready:true,valid:true,co2_ppm:454,age_ms:500}}},1000);
+  assert.equal(state.pm25,39);assert.equal(state.sensorAt,1000);assert.equal(state.data,undefined);
+  publish({code:'ok',data:{sensor_valid:true,pm25:40,age_ms:500}},21000);
+  assert.equal(state.pm25,40);assert.equal(state.sensorAt,21000);assert.equal(state.co2Scd40At,1000);
+  for(const data of [{code:'busy',data:{pm25:999}},{code:'ok',data:[]},{code:'ok',data:null},{code:'ok',data:'bad'}])publish(data,22000);
+  assert.equal(state.pm25,40);assert.equal(state.sensorAt,21000);
+  publish({code:'ok',data:{sensor_valid:false,pm25:40}},23000);assert.equal(state.sensor_valid,false);
+  const caps={model:d.model,device_id:d.mac,firmware_version:'rc5',variant:'full',actions:['status.get']};
+  applyMessage(d,state,baseTopic(d)+'/capabilities',encodeWire({code:'ok',data:caps},format));
+  assert.deepEqual(state.capabilities,caps);
+  if(format==='msgpack'){
+   applyMessage(d,state,baseTopic(d)+'/capabilities',encodeWire({code:'ok',data:{...caps,device_id:'112233445566'}},format));
+   assert.equal(state.capabilities,undefined);
+  }
+ }
+});
+
+test('S30 relay booleans never become watts; status samples expire independently of relay receipts',async()=>{
+ const {encodeWire}=await import('./wireCodec.js');
+ const {hubPowerReading}=await import('./hubMeter.js');
+ const {meterReading}=await import('./devicePresentation.js');
+ const d=deviceEntry({mac:'aabbccddeeff',model:'s30-v1b',wire_format:'msgpack',wire_version:1,firmware_version:'rc5',variant:'full'}),state={};
+ const publish=(data,now)=>applyMessage(d,state,baseTopic(d)+'/state',encodeWire(data,'msgpack'),now);
+ publish({power:true,socket_states:[true],metering:{valid:true,valid_fields:7,active_power:5.25,voltage:230.4,current:.054}},1000);
+ assert.equal(hubPowerReading(state,1000),5.25);assert.equal(meterReading(state,'current',1000),.054);
+ publish({power:true,socket_states:[true],hubPower:{valid:true,power_watts:999,receivedAt:16000,age_ms:0}},16000);
+ assert.equal(hubPowerReading(state,16000),null);assert.equal(meterReading(state,'voltage',16000),null);
+ publish({power:false,metering:{valid:false,valid_fields:5,active_power:0,voltage:230.4,current:0}},17000);
+ assert.equal(hubPowerReading(state,17000),0);assert.equal(meterReading(state,'current',17000),null);assert.equal(meterReading(state,'voltage',17000),230.4);
+ publish({power:true,metering:{valid:false,valid_fields:1,active_power:99,voltage:230.4,current:99}},18000);
+ assert.equal(hubPowerReading(state,18000),null);assert.equal(meterReading(state,'current',18000),null);
+});
