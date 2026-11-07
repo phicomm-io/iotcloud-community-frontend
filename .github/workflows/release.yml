@@ -69,7 +69,23 @@ jobs:
           node tests/test_daikin.cjs
           node --test tests/test_ota_conversion.cjs
           node tests/test_m1_pressure.cjs
-      - run: NODE_PATH=frontend/node_modules node --test tests/test_screen_editor.cjs tests/test_screen_appearance.cjs tests/test_screen_diagnostics.cjs
+      - uses: actions/checkout@v4
+        with:
+          repository: phicomm-io/iotcloud-bry88bba15g-screenmcu
+          ref: 3467a5a4cb4ba6bb7c5d12ab6fd07534e2f2e7ca
+          path: build/screen-source
+      - uses: actions/checkout@v4
+        with:
+          repository: DaveGamble/cJSON
+          ref: v1.7.19
+          path: build/cjson
+      - run: cmake -S build/screen-source -B build/screen-codec -DSCREEN_BUILD_PREVIEW=OFF -DCJSON_DIR="$PWD/build/cjson" && cmake --build build/screen-codec -j4
+      - name: Verify screen editor against the released MCU codecs
+        env:
+          NODE_PATH: frontend/node_modules
+          SCREEN_SCENE_CODEC: ${{ github.workspace }}/build/screen-codec/scene_codec
+          SCREEN_APPEARANCE_CODEC: ${{ github.workspace }}/build/screen-codec/appearance_codec
+        run: node --test tests/test_screen_editor.cjs tests/test_screen_appearance.cjs tests/test_screen_diagnostics.cjs
       - run: python3 tools/build_release.py
       - run: npx --prefix frontend playwright install --with-deps chromium webkit
       - run: NODE_PATH=frontend/node_modules node tests/test_status_reload_browser.cjs
