@@ -44,14 +44,18 @@ const server=http.createServer((req,res)=>{let file=path.resolve(root,'.'+new UR
    await frame.locator('#filterReset').click();await frame.getByRole('dialog').getByRole('button',{name:/Reset after replacing|更换滤芯后重置/}).click();
    await frame.locator('body').evaluate(()=>new Promise((resolve,reject)=>{let n=0;const check=()=>{if(UI.state.filter.used_seconds===0)resolve();else if(++n>100)reject(Error('platform filter reset failed'));else setTimeout(check,50);};check();}));
    await page.locator('.device-select').nth(5).click();
+   await frame.locator('[data-tab="settings"]').click();
    await frame.locator('#side a[href="#settings/screen"]').click();
+   await frame.locator('#screenEditor').evaluate(el=>el.querySelectorAll('details').forEach(d=>d.open=true));
    await frame.locator('#screenLoad').click();
    await frame.locator('#screenGrid .screen-tile').first().waitFor({state:'visible'});
    await frame.locator('#screenSave').click();
    await page.waitForFunction(()=>document.querySelector('iframe.device-home')?.contentWindow.UI.state.screen.layout_revision===2);
   }
   else if(model==='daikin-g3'){
+   await page.locator('[data-tab="settings"]').click();
    await page.locator('#side a[href="#settings/screen"]').click();
+   await page.locator('#screenEditor').evaluate(el=>el.querySelectorAll('details').forEach(d=>d.open=true));
    await page.locator('#screenLoad').click();
    await page.waitForSelector('#screenGrid .screen-tile');
    assert.equal(await page.locator('#screenGrid .screen-tile').count(),3);
