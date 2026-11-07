@@ -110,6 +110,7 @@ summary::-webkit-details-marker{display:none}
 .summary dt{font-size:12px;color:var(--muted)}.summary dd{margin:2px 0 0;font-weight:600;overflow-wrap:anywhere;display:flex;align-items:center;gap:6px}
 
 /* Settings layout */
+.settings>#pages{min-width:0}
 .settings{display:grid;grid-template-columns:200px minmax(0,1fr);gap:24px;align-items:start}
 .side{position:sticky;top:12px;display:flex;flex-direction:column;gap:2px}
 .side .group{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin:14px 10px 4px;font-weight:700}
@@ -348,3 +349,94 @@ pre{overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;bac
 .prefs{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
 .prefs select,.prefs button{height:32px;min-height:32px;width:auto;white-space:nowrap;flex-shrink:0}
 .s30-home .tiles{grid-template-columns:minmax(0,1fr)}
+
+/* BRY88 uses the MCU's full 480x854 canvas and exact component bounds. */
+.screen-grid{position:relative;width:100%;max-width:480px;aspect-ratio:480/854;container-type:inline-size;background:#09181f;border-radius:12px;overflow:hidden;justify-self:start}
+.screen-cell,.screen-tile,.screen-chrome,.screen-page-dot{position:absolute}
+.screen-cell{background:#14252e;border-radius:3.75cqw;pointer-events:auto}
+.screen-tile{z-index:1;min-width:0;min-height:0;margin:0;overflow:hidden;background:#14252e;color:#e9f5ef;border:1px solid #344851;border-radius:3.75cqw;padding:3.333333cqw;display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-start;gap:3.333333cqw;text-align:start;touch-action:manipulation;line-height:1.3}
+.screen-tile.selected{outline:2px solid #67dbc1;outline-offset:-3px}
+.screen-tile small{font-size:3.333333cqw;font-weight:400;color:#96aab1;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.screen-tile strong{font-size:3.333333cqw;font-weight:500}
+.screen-chrome{font-size:3.333333cqw;line-height:1.3;color:#96aab1;overflow:hidden;white-space:nowrap;pointer-events:none}
+.screen-brand{color:#67dbc1}.screen-page-title{color:#e9f5ef}
+.screen-page-dot{background:#344851;border-radius:1cqw;pointer-events:none}.screen-page-dot.active{background:#67dbc1}
+#screenEditor details>summary{cursor:pointer;padding-block:6px}#screenEditor textarea{width:100%;min-height:76px}#screenEditor .row{flex-wrap:wrap}#screenEditor input,#screenEditor select{min-width:0;max-width:100%}
+/* BRY88 native 480x854 composition: 16px margins, 4x6, 8px gaps. */
+#screenEditor .screen-grid{--screen-bg:#101611;--screen-card:#1b251d;--screen-ink:#f0f3e8;--screen-muted:#b1bbab;--screen-accent:#b7dca5;background:var(--screen-bg);max-width:480px;isolation:isolate;border-radius:12px}
+#screenEditor .screen-cell{background:transparent;border:1px dashed #354335;border-radius:2.5cqw}
+#screenEditor .screen-tile{display:block;z-index:1;border:0;background:var(--screen-card);color:var(--screen-ink);border-radius:2.5cqw;padding:2.5cqw;line-height:1.15;cursor:pointer;touch-action:pan-y;gap:0;user-select:none}
+#screenEditor .screen-tile.clock-tile{background:transparent}
+#screenEditor .editing .screen-tile{touch-action:none;cursor:move}
+#screenEditor .screen-tile:focus-visible,#screenEditor .screen-tile.selected{outline:2px solid var(--screen-accent);outline-offset:-3px}
+#screenEditor .screen-widget-label{display:block;color:var(--screen-muted);font-size:6.666667cqw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#screenEditor .screen-widget-value{display:block;font-size:13.333333cqw;font-weight:400;margin-top:3.333333cqw;white-space:nowrap;letter-spacing:-.35cqw}
+#screenEditor .screen-widget-value.accent{color:var(--screen-accent)}
+#screenEditor .screen-widget-unit{display:block;font-size:6.666667cqw;color:var(--screen-muted);margin-top:1cqw}
+#screenEditor .screen-widget-clock{display:block;font-size:30cqw;font-weight:400;letter-spacing:-.7cqw;text-align:center;margin:0 -2.5cqw;white-space:nowrap;line-height:1.15}
+#screenEditor .screen-widget-clock.half{font-size:15cqw;margin-top:2cqw}
+#screenEditor .screen-widget-date{display:block;text-align:center;font-size:6.666667cqw;color:var(--screen-muted);margin-top:2cqw}
+#screenEditor .screen-widget-body{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:4;overflow:hidden;font-size:6.666667cqw;margin-top:3.333333cqw;white-space:pre-wrap;line-height:1.3;overflow-wrap:anywhere}
+#screenEditor .screen-widget-chart{position:absolute;inset:0;pointer-events:none}#screenEditor .screen-widget-chart svg{display:block;width:100%;height:100%;font-family:system-ui,sans-serif}
+#screenEditor .screen-number-content{position:absolute;inset:0;overflow:hidden}
+#screenEditor .screen-number-content .screen-widget-label{color:var(--screen-ink)}
+#screenEditor .screen-number-content .screen-widget-value{font-family:"DejaVu Sans",sans-serif;font-variant-numeric:tabular-nums}
+#screenEditor .screen-number-content span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#screenEditor .screen-weather{height:100%;overflow:hidden}
+#screenEditor .screen-weather-heading{display:flex;align-items:center;justify-content:space-between;gap:1.25cqw;height:8.333333cqw}
+#screenEditor .screen-weather-heading .screen-widget-label{min-width:0;flex:1}
+#screenEditor .screen-weather-icon{width:8.333333cqw;height:8.333333cqw;flex-shrink:0}
+#screenEditor .screen-weather-icon svg,#screenEditor .screen-weather-day svg{width:100%;height:100%;display:block}
+#screenEditor .screen-weather-temperature{display:block;font-size:16.666667cqw;font-weight:400;line-height:1.1;margin-top:3.333333cqw;white-space:nowrap;color:var(--screen-accent)}
+#screenEditor .screen-weather-condition{display:block;font-size:5.833333cqw;color:var(--screen-muted);line-height:1.3;margin-top:2.083333cqw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#screenEditor .screen-weather.full>.screen-weather-icon{width:20.833333cqw;height:20.833333cqw;margin:2.5cqw auto 0}
+#screenEditor .screen-weather.full .screen-weather-temperature{font-size:21.666667cqw;text-align:center;margin-top:2.916667cqw}
+#screenEditor .screen-weather.full .screen-weather-condition{text-align:center;font-size:6.666667cqw;margin-top:2.5cqw}
+#screenEditor .screen-weather-summary{display:flex;justify-content:space-around;border-block:1px solid #354335;margin-top:7.5cqw;padding:3.333333cqw 0;gap:1.25cqw}
+#screenEditor .screen-weather-summary>div{display:flex;flex-direction:column;align-items:center;gap:2.5cqw;font-size:6.666667cqw;white-space:nowrap}
+#screenEditor .screen-weather-summary span{font-size:5cqw;color:var(--screen-muted)}
+#screenEditor .screen-weather-summary b{font-weight:400}
+#screenEditor .screen-weather-day{display:grid;grid-template-columns:25cqw 10cqw 1fr;align-items:center;gap:2.5cqw;font-size:6.666667cqw;margin-top:4.583333cqw;white-space:nowrap}
+#screenEditor .screen-weather-day i{display:block;width:10cqw;height:10cqw}
+#screenEditor .screen-weather-day>span:last-child{text-align:right}
+#screenEditor .screen-weather-extra{display:flex;flex-direction:column;gap:6.666667cqw;border-top:1px solid #354335;margin-top:6.25cqw;padding-top:4.166667cqw;font-size:6.666667cqw;color:var(--screen-muted)}
+#screenEditor .screen-chrome{font-size:6.666667cqw;line-height:1.2;color:var(--screen-muted)}
+#screenEditor .screen-page-title{color:var(--screen-muted)}#screenEditor .screen-status{text-align:right;color:var(--screen-muted)}
+#screenEditor .screen-page-dot.active{background:var(--screen-accent)}
+#screenEditor .screen-resize{position:absolute;bottom:0;right:0;z-index:2;display:grid;place-items:center;width:36px;height:36px;min-width:6.666667cqw;min-height:6.666667cqw;background:#30483e;color:#b8f6dc;border-radius:10px 0 0;cursor:nwse-resize;font-size:20px;touch-action:none}
+#screenEditor .screen-plan{padding:12px;border:1px solid var(--border,#536169);border-radius:12px;min-width:0}
+#screenEditor [data-component-field="x"],#screenEditor [data-component-field="y"],#screenEditor [data-component-field="w"],#screenEditor [data-component-field="h"]{max-width:120px}
+#screenEditor .field-row{min-width:0}#screenEditor #screenPolicyState{overflow-wrap:anywhere}
+#screenEditor .screen-workspace{display:grid;grid-template-columns:minmax(0,480px) minmax(200px,1fr);gap:24px;align-items:start}
+#screenEditor .screen-stage{min-width:0;display:grid;gap:8px}
+#screenEditor .screen-inspector{min-width:0}
+#screenEditor .screen-preview-meta{font-size:12px;color:var(--muted);text-align:center}
+#screenEditor .screen-technical{font-size:13px;color:var(--muted);border-top:1px solid var(--border);padding-top:6px}
+#screenEditor .screen-technical[open]{display:grid;gap:10px}
+#screenEditor .help:empty{display:none}
+#screenEditor #screenComponent:empty{display:none}
+@media(max-width:760px){#screenEditor .screen-workspace{grid-template-columns:minmax(0,1fr)}#screenEditor .screen-stage{justify-items:center}#screenEditor .screen-inspector{border-top:1px solid var(--border);padding-top:16px}}
+
+/* APP1: alpha applies only to card surfaces; text remains opaque. */
+#screenEditor .screen-tile{color:var(--component-body,var(--screen-ink))}
+#screenEditor .screen-tile .screen-widget-label{color:var(--component-title,var(--screen-ink))}
+#screenEditor .screen-tile .screen-widget-value,#screenEditor .screen-tile .screen-widget-value.accent,#screenEditor .screen-tile .screen-widget-clock,#screenEditor .screen-tile .screen-weather-temperature,#screenEditor .screen-tile .screen-weather-summary b,#screenEditor .screen-tile .screen-weather-day>span:last-child{color:var(--component-value,var(--screen-ink))}
+#screenEditor .screen-tile .screen-widget-unit,#screenEditor .screen-tile .screen-widget-date,#screenEditor .screen-tile .screen-weather-summary span{color:var(--component-unit,var(--screen-muted))}
+#screenEditor .screen-tile .screen-widget-body,#screenEditor .screen-tile .screen-weather-condition,#screenEditor .screen-tile .screen-weather-day,#screenEditor .screen-tile .screen-weather-extra{color:var(--component-body,var(--screen-ink))}
+#screenEditor .screen-weather-summary,#screenEditor .screen-weather-extra{border-color:var(--appearance-line)}
+#screenEditor .screen-page-dot{background:var(--screen-muted);border-radius:0;z-index:3}
+#screenEditor .screen-theme-choices{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+#screenEditor .screen-theme{background:var(--swatch-bg);color:var(--swatch-accent);border:2px solid transparent;min-height:44px}
+#screenEditor .screen-theme[aria-pressed="true"]{border-color:var(--swatch-accent)}
+#screenEditor .screen-color-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+#screenEditor input[type=color]{width:48px;height:36px;padding:2px}
+#screenEditor #screenAppearance progress{width:100%}
+@media(max-width:540px){#screenEditor .screen-color-fields{grid-template-columns:1fr}}
+
+/* Screen settings keep layout editing separate from display and network services. */
+#screenEditor .screen-tabs{display:flex;gap:6px;overflow-x:auto;padding-bottom:6px}
+#screenEditor .screen-tabs [role="tab"]{white-space:nowrap;flex-shrink:0}
+#screenEditor .screen-tabs [aria-selected="true"]{background:var(--accent);color:var(--bg);font-weight:600}
+#screenEditor .screen-weather.titleless .screen-weather-heading{height:0;margin:0;min-height:0}
+#screenEditor .screen-weather.titleless:not(.full) .screen-weather-heading .screen-weather-icon{position:absolute;right:0;top:0}
+#screenEditor .screen-weather.titleless .screen-weather-temperature{margin-top:.833333cqw}

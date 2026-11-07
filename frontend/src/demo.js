@@ -1,8 +1,11 @@
 import '../../M1/web/display-format.js';
+import '../../DAIKIN/web/screen-appearance.js';
+import '../../DAIKIN/web/screen-layout.js';
+import '../../common/web/demo-screen.js';
 import '../../common/web/demo.js';
 import {watchEffect} from 'vue';
 import {t,language} from './i18n.js';
-const devices=['tc1','m1','a1','daikin','s30-v1b'].map((model,i)=>({model,mac:'aabbccddee0'+(i+1),version:'v2',username:'demo',mqtt_username:'demo',status:'active',name:model.toUpperCase()}));
+const devices=['tc1','m1','a1','daikin','s30-v1b','daikin-g3'].map((demo_model,i)=>({model:demo_model==='daikin-g3'?'daikin':demo_model,demo_model,hardware_model:demo_model==='daikin-g3'?'BRY88BBA15G':undefined,mac:'aabbccddee0'+(i+1),version:'v2',username:'demo',mqtt_username:'demo',status:'active',name:demo_model.toUpperCase()}));
 window.fetch=async(url,options={})=>{
  let path=String(url).split('?')[0],data={};
  if(!path.startsWith('/api/'))throw Error(t('demo.networkBlocked'));

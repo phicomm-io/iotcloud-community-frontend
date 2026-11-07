@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta name="referrer" content="no-referrer"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>DAIKIN BRY88AX151K</title>
+<title>DAIKIN G1/G2</title>
 <style>/* @include style.css */</style>
 </head>
 <body>
@@ -33,6 +33,7 @@
    <section class="card stack" id="co2Settings"></section>
    <div data-slot="auth"></div>
   </div>
+  <div data-settings-page="screen" class="stack" hidden><section id="screenEditor" class="stack" hidden></section></div>
   <div data-settings-page="binding" class="stack"></div>
  </div>
 </div>
@@ -45,6 +46,9 @@
 <script>/* @include ui.js */</script>
 <script>/* @include automation.js */</script>
 <script>/* @include sensor.js */</script>
+<script>/* @include screen-appearance.js */</script>
+<script>/* @include screen-layout.js */
+/* @include screen.js */</script>
 <script>/* @include page.js */</script>
 </body>
 </html>

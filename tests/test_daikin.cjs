@@ -45,6 +45,27 @@ test('DAIKIN uses shared metric scales, optional HCHO and expiring live data',()
 });
 
 function rulesFixture(){return {co2:[{threshold:1000,op:'gt',mode:'slow'},{threshold:1500,op:'gte',mode:'fast'}],tvoc:[{threshold:300,op:'gt',mode:'on'}],pm_source:'pm25',pm:[{threshold:50,op:'gt',mode:'on'}],formaldehyde:[]};}
+test('BRY88BBA15G displays TVOC concentration in ppb, including zero and stale samples',()=>{
+ const {dom,w,state}=editorFixture();
+ try{
+  const card=w.document.querySelector('[data-sensor="tvoc"]');
+  const show=(value,valid=true,age_ms=0)=>w.UI.device.onStatus({...state,hardware_model:'BRY88BBA15G',indicator_enabled:false,indicator_rules_supported:false,sensors:{tvoc:{unit:'ppb',valid,value,age_ms}}});
+  w.I18N.set('zh-CN');
+  for(const value of [0,132,2000]){
+   show(value);assert.equal(card.querySelector('.num').textContent,String(value));
+   assert.equal(card.querySelector('.stat small').textContent,'ppb');
+   assert.equal(card.querySelector('.stat small').hidden,false);
+   assert.equal(card.querySelector('.metric-reference').hidden,false);
+  }
+  w.I18N.set('en');show(132);assert.equal(card.querySelector('.num').textContent,'132');
+  show(132,false);assert.equal(card.querySelector('.num').textContent,'—');
+  show(132,true,20000);
+  assert.equal(card.querySelector('.num').textContent,'—');
+  w.UI.device.onStatus(state);assert.equal(card.querySelector('.num').textContent,'400');
+  assert.equal(card.querySelector('.stat small').hidden,false);
+  assert.equal(card.querySelector('.metric-reference').hidden,false);
+ }finally{dom.window.close();}
+});
 function editorFixture(){
  const html=require('./render_page.cjs')('DAIKIN/web/index.html');
  const dom=new JSDOM(html,{runScripts:'outside-only',url:'http://device.local/#settings/device'}),w=dom.window;

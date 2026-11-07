@@ -69,6 +69,7 @@ jobs:
           node tests/test_daikin.cjs
           node --test tests/test_ota_conversion.cjs
           node tests/test_m1_pressure.cjs
+      - run: NODE_PATH=frontend/node_modules node --test tests/test_screen_editor.cjs tests/test_screen_appearance.cjs tests/test_screen_diagnostics.cjs
       - run: python3 tools/build_release.py
       - run: npx --prefix frontend playwright install --with-deps chromium webkit
       - run: NODE_PATH=frontend/node_modules node tests/test_status_reload_browser.cjs

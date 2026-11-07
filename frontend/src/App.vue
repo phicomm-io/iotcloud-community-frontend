@@ -33,12 +33,12 @@ import InstallApp from './components/InstallApp.vue';
 
 const iconURL=import.meta.env.BASE_URL+'icons/iotcloud.svg';
 const demoMode=import.meta.env.VITE_DEMO === '1';
-const demoDevices=demoMode?Object.fromEntries(['tc1','m1','a1','daikin','s30-v1b'].map(m=>[m,window.PhicommDemo.create(m)])):null;
+const demoDevices=demoMode?Object.fromEntries(['tc1','m1','a1','daikin','s30-v1b','daikin-g3'].map(m=>[m,window.PhicommDemo.create(m)])):null;
 const route=useRoute(),router=useRouter();
 const localMode=route.name==='Local';
 const installApp=ref(null),listReady=ref(false);
 const home=ref(null),devicePicker=ref(null),nameDialog=ref(null),aliases=ref({});
-function displayName(d){const name=aliases.value[deviceKey(d)]||viewStates.value[deviceKey(d)]?.name||d.name;if(name)return name;const peers=list.value.filter(x=>x.model===d.model);return deviceType(d)+(peers.length>1?' '+(peers.findIndex(x=>deviceKey(x)===deviceKey(d))+1):'');}
+function displayName(d){const name=aliases.value[deviceKey(d)]||viewStates.value[deviceKey(d)]?.name||d.name;if(name)return name;const peers=list.value.filter(x=>x.model===d.model);return deviceType(d,viewStates.value[deviceKey(d)])+(peers.length>1?' '+(peers.findIndex(x=>deviceKey(x)===deviceKey(d))+1):'');}
 function renameDevice(d,name,done){
  if(d.version==='v1'){
   if(name)aliases.value[deviceKey(d)]=name;else delete aliases.value[deviceKey(d)];
@@ -169,7 +169,7 @@ async function mqttCommand(request,reply,target=active.value,{timeoutMs=20000}={
   });
  }
 
- if(demoMode&&target){const data=demoDevices[target.model].command(request.action,request.params);Object.assign(states[deviceKey(target)]||={},demoDevices[target.model].state);reply({code:request.action.endsWith('.get')?'ok':'accepted',data});return;}
+ if(demoMode&&target){const data=demoDevices[target.demo_model||target.model].command(request.action,request.params);Object.assign(states[deviceKey(target)]||={},demoDevices[target.demo_model||target.model].state);reply({code:request.action.endsWith('.get')?'ok':'accepted',data});return;}
  if(!connected.value||!target){reply({code:'offline',message:t('p.2779217ebc7d')});return;}
  if(target.version==='v1'){legacyRequest(request,reply,target);return;}
  const signature=JSON.stringify([deviceKey(target),request.action,request.params||{}]);
@@ -268,7 +268,7 @@ function pollListMeters(){
   deviceCommand({action:'power.get'},()=>{},d,{timeoutMs:4500}).catch(()=>{}).finally(()=>meterPolls.delete(key));
  }
 }
-function connect(){if(demoMode){connected.value=true;busy.value=false;for(const d of list.value)Object.assign(states[deviceKey(d)]||={},demoDevices[d.model].state);return;}if(!thirdParty.value&&connection.password)rememberLogin(account.username,connection.password);disconnect();error.value='';if(location.protocol==='https:'&&!connection.host.startsWith('wss://')){error.value=t('p.22211d965247');return;}if(!/^wss?:\/\//.test(connection.host)){error.value=t('p.5da207244bf4');return;}busy.value=true;
+function connect(){if(demoMode){connected.value=true;busy.value=false;for(const d of list.value)Object.assign(states[deviceKey(d)]||={},demoDevices[d.demo_model||d.model].state);return;}if(!thirdParty.value&&connection.password)rememberLogin(account.username,connection.password);disconnect();error.value='';if(location.protocol==='https:'&&!connection.host.startsWith('wss://')){error.value=t('p.22211d965247');return;}if(!/^wss?:\/\//.test(connection.host)){error.value=t('p.5da207244bf4');return;}busy.value=true;
  client=mqtt.connect(connection.host,{username:connection.username,password:connection.password,clientId:'web_'+requestId(),connectTimeout:5000,reconnectPeriod:3000,clean:true});
  client.on('connect',()=>{connected.value=true;busy.value=false;subscribe();pollListMeters();track('mqtt_connect',thirdParty.value?'/guest':'/');});
  client.on('close',()=>{connected.value=false;busy.value=false;});client.on('error',()=>{error.value=t('p.cc9962611a5b');busy.value=false;});

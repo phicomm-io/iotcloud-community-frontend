@@ -260,7 +260,7 @@ function renderBanners(s,lost){
  if(s.save_error)add('bad','alert',t('banner.save_error',{e:s.save_error}));
  if(s.ap_active&&!s.wifi_connected)add('warn','wifi',t('banner.hotspot',{n:s.ap_name}));
 }
-function settingsAvailable(key){return !!UI.pages[key]&&(!UI.caps?.hub_remote||key==='diagnostics'&&UI.caps.actions?.includes('diagnostics.get'));}
+function settingsAvailable(key){return !!UI.pages[key]&&UI.pages[key].available?.()!==false&&(!UI.caps?.hub_remote||key==='diagnostics'&&UI.caps.actions?.includes('diagnostics.get'));}
 function buildNav(dev){
  const side=$('side');side.replaceChildren();
  for(const [groupKey,keys] of dev.groups){

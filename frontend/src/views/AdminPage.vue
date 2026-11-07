@@ -141,7 +141,7 @@ function bind() {
             >{{t('p.322408c53bed')}}<select v-model="model" :aria-label="t('p.322408c53bed')">
               <option value="tc1">TC1</option>
               <option value="m1">M1</option>
-              <option value="a1">A1</option><option value="daikin">DAIKIN BRY88AX151K</option>
+              <option value="a1">A1</option><option value="daikin">DAIKIN G1/G2/G3</option>
             </select></label
           ><label v-if="model === 'tc1'">{{t('p.ab2f31f30acf')}}<select v-model="version">
             <option value="v1">Legacy</option>
