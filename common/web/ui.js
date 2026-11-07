@@ -479,10 +479,11 @@ function firmwarePage(dev){
  const mcu=mayM1&&dev.model==='M1'?mcuVersionPanel():null;
  const comparison=h('a',{id:'otaCompare',class:'btn',target:'_blank',rel:'noopener noreferrer'},h('span',{i18n:'fw.compare'}),icon('external'));
  let identity=null,targetVersion=null;
+ function releaseModel(){return (identity?.hardware_model||UI.caps?.hardware_model)==='BRY88BBA15G'?'bry88bba15g':String(identity?.model||UI.caps?.model||'').toLowerCase();}
  function comparisonLink(){
   const path=I18N.lang==='en'?'guides/en/release-log.html':'guides/release-log.html';
   const link=new URL(path,'https://phicomm-io.github.io/');link.searchParams.set('view','compare');
-  const model=identity?.model||UI.caps?.model,variant=identity?.firmware_variant||UI.caps?.firmware_variant;
+  const model=releaseModel(),variant=identity?.firmware_variant||UI.caps?.firmware_variant;
   if(model&&variant&&identity?.version){
    for(const [key,value] of Object.entries({model,variant,from:identity.version,...(targetVersion?{to:targetVersion}:{})}))link.searchParams.set(key,value);
   }
@@ -522,7 +523,7 @@ function firmwarePage(dev){
     if(!identity?.version||!targetVersion)throw Error();
     await loadReleaseNotes();
     const snapshot=await ReleaseNotesClient.snapshot('https://phicomm-io.github.io');
-    const result=ReleaseNotes.compare(snapshot.manifest,{from:identity.version,to:targetVersion,model:String(identity.model||UI.caps.model).toLowerCase(),variant:identity.firmware_variant||UI.caps.firmware_variant||'full',locale:I18N.lang},snapshot.catalog);
+    const result=ReleaseNotes.compare(snapshot.manifest,{from:identity.version,to:targetVersion,model:releaseModel(),variant:identity.firmware_variant||UI.caps.firmware_variant||'full',locale:I18N.lang},snapshot.catalog);
     if(!result.ok||key!==[identity?.version,targetVersion,I18N.lang].join('/'))throw Error();
     notesText.textContent=[...result.upgrade_notices,...result.changes].map(row=>row.title+'\n'+row.description).join('\n\n')||t('fw.check_up_to_date');comparisonReady=key;return true;
    }catch{comparisonReady='';notesText.textContent=t('fw.notes_unavailable');return false;}

@@ -103,3 +103,12 @@ test('wire identity change cancels a waiting old write before new capabilities a
   assert.equal(draft.value,'draft before login');assert(f.d.querySelector('#settingsPage').hasAttribute('inert'));
  }finally{f.dom.window.close();}
 });
+
+test('G3 upgrade comparison selects the G3 release model',async()=>{
+ const f=await fixture(null);try{
+  f.state.hardware_model='BRY88BBA15G';f.state.version='1.0.0-rc.5';
+  f.w.dispatchEvent(new f.w.HashChangeEvent('hashchange'));
+  for(let i=0;i<12;i++)await flush();
+  assert.equal(new URL(f.d.querySelector('#otaCompare').href).searchParams.get('model'),'bry88bba15g');
+ }finally{f.dom.window.close();}
+});
