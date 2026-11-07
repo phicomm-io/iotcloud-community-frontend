@@ -372,3 +372,27 @@ test('startup control protects fault recovery, offline MCU and active OTA, and r
   click('#screenRecoveryResume');await flush();assert.equal(resumes,0);
  }finally{dom.window.close();}
 });
+
+for(const mode of ['verified','wrong-hash','failed-stage','wrong-model','invalid-path'])test('online screen update: '+mode,async()=>{
+ const {dom,w,writes,flush,click}=fixture({capabilities:0x1ffffd});try{
+  const data=Buffer.alloc(421888,7),sha=require('node:crypto').createHash('sha256').update(data).digest('hex');
+  const screen={target:mode==='wrong-model'?'other':'BRY88BBA15G-screen',version:'1.0.0-rc.6',firmware:{path:mode==='invalid-path'?'/admin/upload':'/releases/v1.0.0-rc.6/screen.bin',size:data.length,sha256:sha}};
+  let downloads=0,uploads=0;w.fetch=async url=>{
+   if(url.endsWith('/index.json'))return {ok:true,json:async()=>({releases:[]})};
+   if(url.endsWith('/candidates.json'))return {ok:true,json:async()=>({releases:[{version:'1.0.0-rc.6',screen}]})};
+   assert.equal(url,'https://phicomm-io.github.io/releases/v1.0.0-rc.6/screen.bin');downloads++;return {ok:true,headers:{get:()=>String(data.length)},arrayBuffer:async()=>data};
+  };
+  w.UI.confirm=async()=>true;w.DeviceSession.fetch=async (url,options)=>{uploads++;assert.equal(url,'/api/v1/screen/ota/upload');assert.equal(options.body.length,data.length);return {ok:true,json:async()=>({code:'ok',data:{sha256:mode==='wrong-hash'?'0'.repeat(64):sha}})};};
+  const command=w.command;w.command=async(action,params)=>{
+   if(action==='screen.update.get'){writes.push({action,params});return {ota:{state:mode==='failed-stage'?'failed':'staged_verified'}};}
+   return command(action,params);
+  };
+  click('#screenOnlineCheck');await flush();assert.equal(w.document.querySelector('#screenOnlineFirmware').disabled,mode==='wrong-model');
+  if(mode==='wrong-model')return;
+  click('#screenOnlineFirmware');await flush();await flush();
+  assert.equal(downloads,mode==='invalid-path'?0:1);assert.equal(uploads,mode==='invalid-path'?0:1);
+  assert.equal(writes.filter(v=>v.action==='screen.update.start').length,['wrong-hash','invalid-path'].includes(mode)?0:1,w.document.body.textContent.slice(-1500));
+  const install=writes.filter(v=>v.action==='screen.update.install');assert.equal(install.length,mode==='verified'?1:0);
+  if(install.length)assert.equal(install[0].params.sha256,sha);
+ }finally{dom.window.close();}
+});

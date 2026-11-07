@@ -18,9 +18,9 @@ window.ScreenDemo={create(state){
   const title=['时钟','空气质量','变化趋势','天气','提醒事项','外部数据'];
   const widget=(id,p,type,binding,x,y,w,h,label,unit='',extra={})=>({id,page:p,type,binding,x,y,w,h,title:label,unit,source:0,...extra});
   scene=window.ScreenLayout.encode({schema:3,revision:1,pages:title.map((title,i)=>({id:i+1,enabled:true,title})),items:[
-   widget(1,0,0,6,0,0,4,4,'时钟'),widget(2,0,1,0,0,4,2,2,'PM2.5','µg/m³'),widget(3,0,1,1,2,4,2,2,'CO₂','ppm'),
-   ...[[0,'PM2.5','µg/m³'],[1,'CO₂','ppm'],[2,'温度','°C'],[3,'湿度','%'],[4,'TVOC','ppb']].map(([b,l,u],i)=>widget(4+i,1,1,b,i%2*2,Math.floor(i/2)*2,2,2,l,u)),
-   widget(10,2,3,0,0,0,4,2,'PM2.5','µg/m³',{hours:24,points:128}),widget(11,2,3,1,0,2,4,2,'CO₂','ppm',{hours:24,points:128}),widget(12,2,3,4,0,4,4,2,'TVOC','ppb',{hours:24,points:128}),
+   widget(1,0,0,6,0,0,4,4,'时钟'),widget(2,0,1,3,0,4,2,2,'PM2.5','µg/m³'),widget(3,0,1,2,2,4,2,2,'CO₂','ppm'),
+   ...[[3,'PM2.5','µg/m³'],[2,'CO₂','ppm'],[0,'温度','°C'],[1,'湿度','%'],[4,'TVOC','ppb']].map(([b,l,u],i)=>widget(4+i,1,1,b,i%2*2,Math.floor(i/2)*2,2,2,l,u)),
+   widget(10,2,3,3,0,0,4,2,'PM2.5','µg/m³',{hours:24,points:128}),widget(11,2,3,2,0,2,4,2,'CO₂','ppm',{hours:24,points:128}),widget(12,2,3,4,0,4,4,2,'TVOC','ppb',{hours:24,points:128}),
    widget(13,3,6,6,0,0,4,6,'天气','',{hide_title:1}),widget(14,4,7,6,0,0,4,6,'提醒事项','',{hide_title:1}),
    widget(15,5,2,6,0,0,4,2,'API','',{source:1,text:'外部 API 数据'}),widget(16,5,4,6,0,2,4,4,'用量统计','kWh',{source:1,chart:4,additive:1,series_count:3})]});
   appearance=window.ScreenAppearance.defaults();
@@ -28,7 +28,7 @@ window.ScreenDemo={create(state){
  function status(){
   // The cloud loads its embedded device page lazily; defer codec use until then.
   const revision=scene?new DataView(scene.buffer,scene.byteOffset).getUint32(4,true):1;
-  Object.assign(state,{hardware_model:'BRY88BBA15G',name:'DAIKIN G3',free_memory:96000,largest_free_block:44000});
+  Object.assign(state,{hardware_model:'BRY88BBA15G',free_memory:96000,largest_free_block:44000});
   state.screen={extension_supported:true,capabilities:0x1ffffd,layout_revision:revision,mcu_layout_revision:revision,layout_sync:'applied',storage:'owned',
    settings:clone(settings),settings_request:clone(request),brightness:{supported:true,available:true,requested_percent:settings.display.luminance,target_percent:settings.display.luminance,applied_percent:settings.display.luminance,ceiling_percent:100,asleep:false,age_ms:0},
    display:clone(policy),startup:clone(startup),recovery:clone(recovery),page:clone(page),module:clone(module),
@@ -77,7 +77,7 @@ window.ScreenDemo={create(state){
   else if(action==='screen.reminders.ack'){const n=reminders.notices.find(n=>n.id===p.id);if(n)n.unread=false;}
   else if(action==='screen.diagnostics.start'){generation++;result={request:generation};}
   else if(action==='screen.diagnostics.get'||action==='screen.diagnostics.read')return {supported:true,available:true,ready:true,request:generation,generation,status:0,active:false,waiting:false,frame_period_us:20000,flush_count:22,flush_total_us:140000,flush_max_us:8000,elapsed_us:680000,monitor_count:1,monitor_total_ms:680,records:[],total:0};
-  else if(action==='screen.update.get')return clone(state.screen.ota);
+  else if(action==='screen.update.get')return {ota:clone(state.screen.ota)};
   else if(!actions.includes(action))throw Error('unsupported');
   status();return result;
  }
