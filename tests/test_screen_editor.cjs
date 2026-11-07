@@ -108,6 +108,25 @@ test('one-row readouts and 4x2 charts round-trip with the MCU and require respon
   const it=s.items.at(-1);it.h=1;assert.throws(()=>w.ScreenLayout.encode(s));
  }finally{dom.window.close();}
 });
+test('compact weather, clock and readings round-trip only with the negotiated MCU capability',async()=>{
+ const {dom,w,writes,current,flush,click}=fixture({capabilities:2097152|509});try{
+  await w.ScreenUI.load();w.ScreenUI.status({hardware_model:'BRY88BBA15G',screen:{capabilities:2097152|509,extension_supported:true}});const d=w.document;click('#screenEdit');click('#screenAddPage');
+  const field=(k,v)=>{const el=d.querySelector(`[data-component-field="${k}"]`);el.value=String(v);el.dispatchEvent(new w.Event('change'));};
+  const add=async(type,width,height)=>{d.querySelector('#screenAddType').value=String(type);click('#screenAddItem');await flush();[...d.querySelectorAll('[data-component]')].at(-1).click();field('w',width);field('h',height);};
+  await add(0,4,1);assert.equal(d.querySelector('[data-compact-layout]').dataset.compactLayout,'clock-row');
+  await add(6,4,1);assert.equal(d.querySelector('[data-compact-layout="weather-row"]')!==null,true);
+  await add(6,4,2);assert.equal(d.querySelector('[data-compact-layout="weather-wide"]')!==null,true);
+  await add(1,2,1);assert.equal(d.querySelector('[data-component-field="h"]').min,'1');
+  assert.equal([...d.querySelectorAll('[data-value-layout]')].at(-1).dataset.valueLayout,'row');
+  click('#screenSave');await flush();const saved=w.ScreenLayout.decode(current());
+  assert.deepEqual(JSON.parse(JSON.stringify(saved.items.filter(it=>it.page===saved.pages.length-1).map(it=>[it.type,it.w,it.h]))),[[0,4,1],[6,4,1],[6,4,2],[1,2,1]]);
+  if(codec){const tmp=fs.mkdtempSync(path.join(os.tmpdir(),'screen-compact-'));try{const p=path.join(tmp,'scene.bin');fs.writeFileSync(p,current());cp.execFileSync(codec,[p]);}finally{fs.rmSync(tmp,{recursive:true});}}
+  const before=writes.filter(x=>x.action==='screen.layout.begin').length;
+  w.ScreenUI.status({hardware_model:'BRY88BBA15G',screen:{capabilities:509,extension_supported:true}});click('#screenSave');await flush();
+  assert.equal(writes.filter(x=>x.action==='screen.layout.begin').length,before);
+  assert.equal(d.querySelector('[data-component-field="h"]').min,'2');
+ }finally{dom.window.close();}
+});
 test('screen rejects overlapping and invalid UTF-8 sized layouts; load respects cancellation',async()=>{
  const {dom,w,writes,current,flush,click}=fixture();try{
   await w.ScreenUI.load();const scene=w.ScreenLayout.decode(current());

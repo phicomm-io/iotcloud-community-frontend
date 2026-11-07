@@ -3,7 +3,7 @@
 'use strict';
 const {h,fieldRow,run}=UI,{t}=I18N,encoder=new TextEncoder(),decoder=new TextDecoder('utf-8',{fatal:true});
 const types=['clock','value','text','line','bar','pie','weather','reminders'];
-const {encode,decode,crc,txt}=window.ScreenLayout;
+const {encode,decode,crc,txt,requiresCompact,minimumHeight}=window.ScreenLayout;
 const isChart=it=>[3,4,5].includes(it.type),num=v=>Number.isInteger(v),copy=o=>UI.clone(o);
 const b64=data=>btoa(String.fromCharCode(...data)),unb64=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
 const root=document.querySelector('#screenEditor');if(!root)return;
@@ -156,6 +156,7 @@ const save=button('screen.save_device',async()=>{
  if(candidate.items.some(it=>it.points)&&!(lastStatus?.capabilities&65536))throw Error(t('screen.points_unsupported'));
  if(candidate.items.some(it=>it.hide_title)&&!(lastStatus?.capabilities&8192))throw Error(t('screen.hide_title_unsupported'));
  if(candidate.items.some(it=>(isChart(it)&&it.h<4)||(it.type===1&&it.h===1))&&!(lastStatus?.capabilities&256))throw Error(t('screen.responsive_unsupported'));
+ if(candidate.items.some(requiresCompact)&&!(lastStatus?.capabilities&2097152))throw Error(t('screen.responsive_unsupported'));
  if(candidate.items.some(hasMultiUnits)&&!(lastStatus?.capabilities&4096))throw Error(t('screen.chart_upgrade'));
  if(candidate.items.some(it=>it.value_mode)&&!(lastStatus?.capabilities&128))throw Error(t('screen.value_mode_unsupported'));
  await command('screen.layout.begin',{revision:candidate.revision,total:wire.length,crc:crc(wire)});
@@ -201,7 +202,30 @@ function numberPreview(it,title,unit,value){
  return node;
 }
 function weatherIcon(){const p=A.resolve(appearance);return `<svg viewBox="0 0 100 100" aria-hidden="true"><g fill="none" stroke-width="4" stroke-linecap="round"><circle cx="30" cy="30" r="19" stroke="${p.chartC}"/><path d="M32 77a20 20 0 1 1 5-39 25 25 0 0 1 48 12 14 14 0 0 1-7 27Z" stroke="${p.value}"/></g></svg>`;}
+function compactPreview(it,clock=false){
+ const ow=it.w*screenGeometry.column-screenGeometry.gap,oh=it.h*screenGeometry.row-screenGeometry.gap,pad=clock?0:12,w=ow-pad*2,hh=oh-24;
+ const node=h('div',{class:'screen-compact-content','data-compact-layout':clock?'clock-row':it.h===1?'weather-row':'weather-wide'});
+ const part=(cls,text,x,y,width,height,size,align='left')=>h('span',{class:cls,style:`position:absolute;left:${(x+pad)/ow*100}%;top:${(y+12)/oh*100}%;width:${width/ow*100}%;height:${height/oh*100}%;font-size:${size/480*100}cqw;line-height:1.12;text-align:${align};margin:0;letter-spacing:0;overflow:hidden`},text);
+ const icon=(x,y,size)=>{const el=part('screen-weather-icon','',x,y,size,size,0);el.innerHTML=weatherIcon();node.append(el);};
+ const condition=appearance.language==='en'?'Mainly clear':'晴间多云';
+ if(clock){
+  const tw=Math.floor(w*3/5),date=appearance.language==='en'?'Nov 6 · Fri':'11月6日 · 周五',dw=w-tw-12;let size=28;while(size>24&&textWidth(date,size)>dw)size-=4;
+  node.append(part('screen-widget-clock','18:42',0,(hh-84)/2,tw,84,72,'center'),part('screen-widget-date',date,tw+12,(hh-40)/2,dw,40,size,'center'));
+ }else if(it.h===1){
+  node.append(part('screen-widget-label',it.hide_title?'':screenText(it.title),0,4,130,36,28),part('screen-weather-condition',condition,0,it.hide_title?32:56,130,36,24));icon(142,(hh-64)/2,64);
+  node.append(part('screen-weather-temperature','26°',220,(hh-84)/2,w-220,84,72,'right'));
+ }else{
+  node.classList.add('weather-wide');
+  const top=it.hide_title?0:48;
+  node.append(part('screen-widget-label',it.hide_title?'':screenText(it.title),0,0,w,40,32));icon(0,top+8,88);
+  node.append(part('screen-weather-temperature','26°',108,top,150,96,80),part('screen-weather-condition',condition,270,top+12,w-270,72,28));
+  const names=appearance.language==='en'?['Feels like','Humidity','Wind m/s']:['体感','湿度','风速 m/s'];
+  ['27°','62%','2.4'].forEach((value,i)=>node.append(part('screen-widget-unit',names[i],Math.floor(i*w/3),top+100,Math.floor(w/3),32,24,'center'),part('screen-widget-value',value,Math.floor(i*w/3),top+132,Math.floor(w/3),40,32,'center')));
+ }
+ return node;
+}
 function weatherPreview(it){
+ if(it.w===4&&it.h<=2&&(lastStatus?.capabilities&2097152))return compactPreview(it);
  const full=it.w===4&&it.h===6,icon=h('div',{class:'screen-weather-icon'});icon.innerHTML=weatherIcon();
  const body=h('div',{class:'screen-weather'+(full?' full':'')},h('div',{class:'screen-weather-heading'},h('span',{class:'screen-widget-label'},it.hide_title?'':screenText(it.title)),...(!full?[icon]:[])),...(full?[icon]:[]),h('strong',{class:'screen-weather-temperature'},'26°'),h('span',{class:'screen-weather-condition'},appearance.language==='en'?'Partly cloudy':'晴间多云'));
  if(full){body.append(h('div',{class:'screen-weather-summary'},...[['screen.feels','27°'],['m.humidity','62%'],['screen.wind','2.4']].map(([key,value])=>h('div',{},h('span',{},appearance.language==='en'?({'screen.feels':'Feels like','m.humidity':'Humidity','screen.wind':'Wind'}[key]):({'screen.feels':'体感','m.humidity':'湿度','screen.wind':'风速'}[key])),h('b',{},value)))));for(const [day,value] of [['11-07','23 / 28°'],['11-08','21 / 25°']]){const symbol=h('i',{});symbol.innerHTML=weatherIcon();body.append(h('div',{class:'screen-weather-day'},h('span',{},day),symbol,h('span',{},value)));}}
@@ -212,7 +236,7 @@ function weatherPreview(it){
 function preview(it){
  const tvocNumber=it.binding===4&&it.value_mode===1,grade=it.value_mode===2||(it.binding===4&&!tvocNumber),full=it.w===4&&it.h===6,label=h('span',{class:'screen-widget-label'},it.hide_title||(full&&it.title===scene.pages[page].title)?'':screenText(it.title)),value=h('strong',{class:'screen-widget-value'+([2,3,4].includes(it.binding)?' accent':'')},tvocNumber?'375':grade?screenText('优'):readings[it.binding]||'--'),unit=h('span',{class:'screen-widget-unit'},grade?'':tvocNumber?'ppb':it.unit||unitNames[it.binding]||'');
  if(isChart(it)){const svg=h('div',{class:'screen-widget-chart'});svg.innerHTML=previewChart(it);return [svg];}
- if(it.type===0)return [h('strong',{class:'screen-widget-clock'+(it.w<4?' half':'')},'18:42'),h('span',{class:'screen-widget-date'},appearance.language==='en'?'Nov 6 · Fri':'11月6日  周五')];
+ if(it.type===0)return it.h===1?[compactPreview(it,true)]:[h('strong',{class:'screen-widget-clock'+(it.w<4?' half':'')},'18:42'),h('span',{class:'screen-widget-date'},appearance.language==='en'?'Nov 6 · Fri':'11月6日  周五')];
  if(it.type===1)return [numberPreview(it,it.hide_title?'':screenText(it.title),unit.textContent,value.textContent)];
  if(it.type===2)return [...(it.hide_title?[]:[label]),h('span',{class:'screen-widget-body'},it.text||'--')];
  if(it.type===6)return [weatherPreview(it)];
@@ -254,7 +278,7 @@ function componentForm(){
  const fields={title:input(it.title),unit:input(it.unit),binding:select(['temperature','humidity','co2','pm25','tvoc','formaldehyde'].map((v,i)=>[i,'m.'+v]).concat([[6,'screen.external']]),it.binding)};
  if(it.type!==0){fields.hide_title=input('','checkbox',{checked:!!it.hide_title});}
  if(it.type===1&&[4,6].includes(it.binding))fields.value_mode=select([[0,'screen.mode_auto'],[1,'screen.mode_number'],[2,'screen.mode_grade']],it.value_mode||0);
- for(const k of ['x','y','w','h'])fields[k]=input(it[k],'number',{min:k==='w'?(isChart(it)?4:2):k==='h'?(it.type===1&&it.w===4?1:2):0,max:['x','w'].includes(k)?4:6,step:1});
+ for(const k of ['x','y','w','h'])fields[k]=input(it[k],'number',{min:k==='w'?(isChart(it)?4:2):k==='h'?((lastStatus?.capabilities&2097152)?minimumHeight(it):it.type===1&&it.w===4?1:2):0,max:['x','w'].includes(k)?4:6,step:1});
  if(it.type===2){fields.text=h('textarea',{},it.text||'');}
  if(isChart(it)){
   fields.chart=select(Array.from({length:7},(_,i)=>[i,'screen.chart'+i]),it.chart??0);

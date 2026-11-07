@@ -6,6 +6,8 @@ const txt=(data,at,n)=>{const part=data.slice(at,at+n),end=part.indexOf(0);retur
 const put=(data,at,n,text,lines=false)=>{const s=encoder.encode(text);if(s.length>=n||(lines?/[\x00-\x09\x0b-\x1f\x7f]/:/[\x00-\x1f\x7f]/).test(text))throw Error(t('screen.invalid'));data.set(s,at);};
 const crc=data=>{let c=0xffffffff;for(const b of data){c^=b;for(let i=0;i<8;i++)c=(c>>>1)^((c&1)?0xedb88320:0);}return (c^0xffffffff)>>>0;};
 const isChart=it=>[3,4,5].includes(it.type),num=v=>Number.isInteger(v);
+const requiresCompact=it=>it.h===1&&((it.type===1&&it.w===2)||(it.w===4&&[0,6].includes(it.type)));
+const minimumHeight=it=>(it.type===1&&[2,4].includes(it.w))||(it.w===4&&[0,6].includes(it.type))?1:2;
 function decode(data){
  if(data.length!==9520||txt(data,0,4)!=='SCN3')throw Error(t('screen.invalid'));
  const v=new DataView(data.buffer,data.byteOffset,data.length),s={schema:3,revision:v.getUint32(4,true),pages:[],items:[]};
@@ -22,7 +24,7 @@ function encode(s){
  data.set(encoder.encode('SCN3'));v.setUint32(4,s.revision,true);data[8]=s.pages.length;data[9]=s.items.length;
  s.pages.forEach((p,i)=>{const a=16+36*i,id=p.id??i+1;if((!num(id)||id<1||id>0xffffff||pids.has(id)))throw Error(t('screen.invalid'));pids.add(id);data[a]=p.enabled?1:0;{data[a+1]=id;data[a+2]=id>>8;data[a+3]=id>>16;}put(data,a+4,32,p.title);});
  s.items.forEach((it,i)=>{
-  if(![it.id,it.page,it.type,it.binding,it.x,it.y,it.w,it.h,it.source].every(num)||it.id<1||it.id>65535||ids.has(it.id)||it.page<0||it.page>=s.pages.length||it.type<0||it.type>7||it.binding<0||it.binding>6||it.source<0||it.source>2||it.x<0||it.y<0||it.w<(isChart(it)?4:2)||it.h<(it.type===1&&it.w===4?1:2)||it.x+it.w>4||it.y+it.h>6||++counts[it.page]>8)throw Error(t('screen.invalid'));
+  if(![it.id,it.page,it.type,it.binding,it.x,it.y,it.w,it.h,it.source].every(num)||it.id<1||it.id>65535||ids.has(it.id)||it.page<0||it.page>=s.pages.length||it.type<0||it.type>7||it.binding<0||it.binding>6||it.source<0||it.source>2||it.x<0||it.y<0||it.w<(isChart(it)?4:2)||it.h<minimumHeight(it)||it.x+it.w>4||it.y+it.h>6||++counts[it.page]>8)throw Error(t('screen.invalid'));
   const chart=it.chart??0,hours=it.hours??24,series=it.series_count??1,b2=it.binding2??0,b3=it.binding3??0,add=it.additive??0;
   const points=it.points??0;if(![0,32,64,128,256].includes(points))throw Error(t('screen.invalid'));
   const hide=it.hide_title??0;if(![0,1,false,true].includes(hide))throw Error(t('screen.invalid'));
@@ -34,5 +36,5 @@ function encode(s){
   {data.set([chart,hours,series,b2,b3,add],a+10);put(data,a+88,193,it.text||'',true);data[a+82]=mode;data[a+83]=+hide;v.setUint16(a+84,points,true);}
  });return data;
 }
-window.ScreenLayout={encode,decode,crc,txt};
+window.ScreenLayout={encode,decode,crc,txt,requiresCompact,minimumHeight};
 })();

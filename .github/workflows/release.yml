@@ -72,7 +72,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: phicomm-io/iotcloud-bry88bba15g-screenmcu
-          ref: 3467a5a4cb4ba6bb7c5d12ab6fd07534e2f2e7ca
+          ref: 45dc408429a4a5f451b68d2d87da558a6eee69aa
           path: build/screen-source
       - uses: actions/checkout@v4
         with:
