@@ -516,8 +516,8 @@ async function fontOperation(action,params={}){
   if(state.state==='complete'&&state.code===0)return state;if(['timeout','mcu_rejected'].includes(state.state))throw Error(t('screen.font_failed'));await pause(120);}
  throw Error(t('screen.font_failed'));
 }
-async function uploadFont(){
- const f=fontFile.files?.[0];if(!f||f.size<32||f.size>0x1fe000||!(lastStatus?.capabilities&16384))throw Error(t('screen.invalid'));
+async function uploadFont(f=fontFile.files?.[0]){
+ if(!f||f.size<32||f.size>0x1fe000||!(lastStatus?.capabilities&16384))throw Error(t('screen.invalid'));
  if(appearanceBusy)return;
  const data=new Uint8Array(await f.arrayBuffer()),v=new DataView(data.buffer);
  if(txt(data,0,8)!=='IOTFNT02'||v.getUint32(8,true)!==data.length||crc(data.slice(32))!==v.getUint32(12,true)||crc(data.slice(0,28))!==v.getUint32(28,true))throw Error(t('screen.invalid'));
@@ -531,6 +531,38 @@ async function uploadFont(){
 }
 const fontUpload=button('screen.font_upload',uploadFont,{id:'screenFontUpload',disabled:true});
 const fontSection=section('screen.font',fontFile,fontUpload,fontProgress,fontState);fontSection.open=true;
+let onlineRelease=null;
+const onlineState=h('p',{id:'screenOnlineState',class:'help',role:'status'});
+const releaseOrigin='https://phicomm-io.github.io';
+function releaseRank(v){const m=/^(\d+)\.(\d+)\.(\d+)(?:-rc(?:\.(\d+))?)?$/.exec(v);return m?[+m[1],+m[2],+m[3],v.includes('-rc')?0:1,+(m[4]||0)]:[];}
+async function checkScreenOnline(){
+ onlineRelease=null;onlineFirmware.disabled=onlineFont.disabled=true;
+ const catalogs=await Promise.allSettled(['index','candidates'].map(async kind=>{const r=await fetch(releaseOrigin+'/releases/'+kind+'.json',{cache:'no-store'});if(!r.ok)throw Error('unavailable');return r.json();}));
+ const releases=catalogs.flatMap(r=>r.status==='fulfilled'?(r.value.releases||[]):[]).filter(r=>r.screen?.target==='BRY88BBA15G-screen'&&releaseRank(r.version).length);
+ releases.sort((a,b)=>{const x=releaseRank(a.version),y=releaseRank(b.version);for(let i=0;i<x.length;i++)if(x[i]!==y[i])return y[i]-x[i];return 0;});
+ onlineRelease=releases[0]?.screen||null;if(!onlineRelease)throw Error(t('screen.online_none'));
+ onlineState.textContent=onlineRelease.version;onlineFirmware.disabled=false;onlineFont.disabled=!onlineRelease.font;
+}
+async function onlineAsset(kind){
+ const asset=onlineRelease?.[kind];if(!asset||!/^\/releases\/v\d+\.\d+\.\d+(?:-rc(?:\.\d+)?)?\/[A-Za-z0-9_.-]+$/.test(asset.path)||!Number.isInteger(asset.size)||asset.size<32||asset.size>(kind==='firmware'?421888:0x1fe000)||!/^[a-f0-9]{64}$/.test(asset.sha256))throw Error(t('screen.invalid'));
+ const r=await fetch(releaseOrigin+asset.path,{cache:'no-store'});if(!r.ok||Number(r.headers.get('Content-Length'))!==asset.size)throw Error(t('screen.invalid'));
+ const bytes=new Uint8Array(await r.arrayBuffer());if(bytes.length!==asset.size)throw Error(t('screen.invalid'));return {bytes,asset};
+}
+const onlineFirmware=button('screen.online_firmware',async()=>{
+ if(!await UI.confirm({title:t('screen.ota'),body:t('screen.online_confirm'),ok:t('screen.online_firmware')}))return;
+ const {bytes,asset}=await onlineAsset('firmware');
+ const response=await deviceFetch('/api/v1/screen/ota/upload',{method:'POST',headers:{'Content-Type':'application/octet-stream','X-IotCloud-Target':'BRY88BBA15G-screen'},body:bytes});
+ const reply=await DeviceAuth.decodeResponse(response);if(!response.ok||reply.code!=='ok'||reply.data.sha256!==asset.sha256)throw Error(t('screen.invalid'));
+ uploadHash.textContent=asset.sha256;await command('screen.update.start',{mode:'stage'});
+ const until=Date.now()+300000;
+ while(Date.now()<until){const r=await command('screen.update.get'),s=r.ota||r.screen?.ota;
+  if(s?.state==='staged_verified'){await command('screen.update.install',{sha256:asset.sha256});onlineState.textContent=t('screen.online_installing');return;}
+  if(s&&['failed','timeout','cancelled','upload_failed'].includes(s.state))throw Error(s.state);await pause(1000);
+ }throw Error(t('screen.online_timeout'));
+},{id:'screenOnlineFirmware',disabled:true});
+const onlineFont=button('screen.online_font',async()=>{const {bytes,asset}=await onlineAsset('font');if(crc(bytes)!==asset.crc32)throw Error(t('screen.invalid'));await uploadFont(new File([bytes],'screen-zh32.iotfnt'));},{id:'screenOnlineFont',disabled:true});
+const onlineSection=section('screen.online',button('screen.online_check',checkScreenOnline,{id:'screenOnlineCheck'}),onlineState,h('div',{class:'row'},onlineFirmware,onlineFont),h('p',{class:'help',i18n:'screen.online_local'}));
+
 // Diagnostic trace is paged over the existing negotiated UART extension.
 let diagBusy=false,diagReport=null,diagWaiting=false;
 const diagMode=select([['current','screen.diag_current'],['next','screen.diag_next'],['page','screen.diag_page']],'current'),
@@ -592,7 +624,7 @@ I18N.onChange(()=>{if(diagWaiting)diagInfo.textContent=t('screen.diag_wait');els
 const diagnosticSection=section('screen.diag_title',h('div',{class:'row'},diagMode,diagPage,diagStart,diagRead,diagExport),diagInfo,h('p',{class:'help',i18n:'screen.diag_source'}),h('div',{style:'overflow:auto'},diagTable));
 layout.id='screenLayout';reminder.id='screenReminders';weather.id='screenWeather';ota.id='screenOta';
 const tabBar=h('div',{class:'screen-tabs',role:'tablist','aria-label':t('screen.title_main')}),tabPanels=h('div',{class:'screen-tab-panels'});
-const screenTabs={layout:[layout],appearance:[appearanceSection],display:[remotePageSection,languageSection,brightness,displayPolicy],services:[weather,reminder],resources:[recoverySection,fontSection,ota],advanced:[moduleControl],diagnostics:[diagnosticSection]};
+const screenTabs={layout:[layout],appearance:[appearanceSection],display:[remotePageSection,languageSection,brightness,displayPolicy],services:[weather,reminder],resources:[onlineSection,recoverySection,fontSection,ota],advanced:[moduleControl],diagnostics:[diagnosticSection]};
 function showScreenTab(key,focus=false){
  for(const [k]of Object.entries(screenTabs)){const active=k===key,button=document.querySelector('#screenTab_'+k),panel=document.querySelector('#screenPanel_'+k);button.setAttribute('aria-selected',String(active));button.tabIndex=active?0:-1;panel.hidden=!active;if(active&&focus)button.focus();}
 }
