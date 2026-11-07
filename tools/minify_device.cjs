@@ -62,7 +62,7 @@ function packTranslations(html, dictionaryScript) {
   return html.replace(source, () => packed);
 }
 
-async function minifyDevice(html, {trimDeviceExports=false,deviceModel=null}={}) {
+async function minifyDevice(html, {trimDeviceExports=false,deviceModel=null,screen=true}={}) {
   if(deviceModel!==null&&!['a1','m1','tc1'].includes(deviceModel))throw Error('Unknown native device model');
   if(deviceModel)html=html.replace(/\/\* @device-product \*\/null/g,JSON.stringify(deviceModel));
   if (trimDeviceExports) html = trimExports(html).html;
@@ -89,11 +89,11 @@ async function minifyDevice(html, {trimDeviceExports=false,deviceModel=null}={})
     html=html.replace(match[0],()=>match[1]+result.code+match[3]);
   }
   return html.replace(/(<style\b[^>]*>)([\s\S]*?)(<\/style\s*>)/gi,
-    (_, open, css, close) => open + esbuild.transformSync(deviceModel?trimStyles(css,deviceModel):css, {
+    (_, open, css, close) => open + esbuild.transformSync(screen?(deviceModel?trimStyles(css,deviceModel):css):trimStyles.withoutScreen(deviceModel?trimStyles(css,deviceModel):css), {
       loader:'css', charset:'utf8', minify:true,
       target:['chrome90','firefox90','safari14'], legalComments:'none'
     }).code + close);
 }
 module.exports = minifyDevice;
 module.exports.packTranslations = packTranslations;
-if (require.main === module) minifyDevice(fs.readFileSync(0,'utf8'), {trimDeviceExports:process.argv.includes('--trim-device-exports'),deviceModel:process.argv.find(value=>value.startsWith('--device-model='))?.split('=')[1]||null}).then(result=>process.stdout.write(result)).catch(error=>{console.error(error);process.exitCode=1;});
+if (require.main === module) minifyDevice(fs.readFileSync(0,'utf8'), {trimDeviceExports:process.argv.includes('--trim-device-exports'),deviceModel:process.argv.find(value=>value.startsWith('--device-model='))?.split('=')[1]||null,screen:!process.argv.includes('--without-screen')}).then(result=>process.stdout.write(result)).catch(error=>{console.error(error);process.exitCode=1;});

@@ -21,6 +21,22 @@ test('product style pruning retains common rules, optional hardware, and functio
  assert.equal(styles(css,null),css);
 });
 
+test('screen styling is omitted only for builds without a screen',()=>{
+ const css='.common,.screen-tile{color:red}@media(max-width:700px){.screen-grid{display:grid}.common:not(.screen-tile){color:blue}}';
+ const packed=styles.withoutScreen(css);
+ assert(packed.includes('.common{color:red}'));assert(!packed.includes('.screen-grid'));
+ assert(packed.includes(':not(.screen-tile)'));
+});
+
+test('G1/G2 exports exclude the screen editor while G3 retains it',()=>{
+ const cp=require('node:child_process');
+ const run=screen=>cp.execFileSync('python3',['-c',`import sys;sys.path.insert(0,'common/web');from page import render_page;sys.stdout.buffer.write(render_page('DAIKIN/web/index.html',minify=True,screen=${screen}))`],{encoding:'utf8'});
+ const g1=run('False'),g3=run('True');
+ assert(!g1.includes('screenBrightnessSettings'));assert(!g1.includes('screen-grid{'));assert(!g1.includes('window.ScreenLayout='));
+ assert(g1.includes('co2CalibrationForm'));assert(g1.includes('indicatorRulesForm'));
+ assert(g3.includes('screenBrightnessSettings'));assert(g3.includes('screen-grid{'));
+});
+
 test('actual native product editors retain the complete firmware action upper bounds',async()=>{
  const cp=require('node:child_process');
  const bounds={a1:['fan.panel','fan.mode.set','fan.mode.toggle','fan.set','light.set','child_lock.set','system.reboot','light_effect.next','light_effect.select','filter.reset','light_always.set'],m1:['display.set','system.reboot','wake_alarm.start'],tc1:['outlet.set','child_lock.set','indicator.set','system.reboot']};

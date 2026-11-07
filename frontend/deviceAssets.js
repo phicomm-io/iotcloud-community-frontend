@@ -11,14 +11,19 @@ const i18nScript=/<script data-device-part="i18n.js">([\s\S]*?)<\/script>/;
 export async function buildDeviceAssets({sourceRoot,appRoot,watch=()=>{}}){
  const require=createRequire(import.meta.url);
  const minifyDevice=require(resolve(sourceRoot,'tools/minify_device.cjs'));
+ const withoutScreen=require(resolve(sourceRoot,'tools/trim_device_styles.cjs')).withoutScreen;
  const authBundle=require(resolve(sourceRoot,'tools/bundle_auth.cjs'))();
  const read=file=>{watch(file);return readFileSync(file,'utf8');};
  const pages=Object.fromEntries(Object.entries(products).map(([model,path])=>{
   const file=resolve(sourceRoot,path);
   let html=read(file).replace(/<script>\s*\/\* @include ([\w.-]+) \*\/\s*<\/script>/g,(_,name)=>'<script data-device-part="'+name+'">/* @include '+name+' */</script>');
   html=html.replace(/\/\* @include ([\w.-]+) \*\//g,(_,name)=>{
+   // The physical gateway is G1/G2. Remote pages expose business controls
+   // and diagnostics only (hubCapabilities.js), never the G3 screen editor.
+   if(['screen-appearance.js','screen-layout.js','screen.js'].includes(name))return '';
    const shared=resolve(sourceRoot,'common/web',name);
-   return read(existsSync(shared)?shared:resolve(dirname(file),name));
+   const content=read(existsSync(shared)?shared:resolve(dirname(file),name));
+   return name==='style.css'?withoutScreen(content):content;
   });
   if(html.includes('@include'))throw Error('Unresolved device include: '+path);
   return [model,html.replace('</head>','<script>'+read(resolve(sourceRoot,'common/web/appearance.js'))+'</script></head>')];

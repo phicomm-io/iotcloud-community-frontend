@@ -31,6 +31,8 @@ test('shared device assets keep all products and share the standalone DAIKIN cod
  assert.equal(new Set(dictionaries).size,1,'all products must load the same translation dictionary');
  for(const [name,content] of output.assets){
   assert(name.includes(createHash('sha256').update(content).digest('hex').slice(0,20)));
+  assert(!content.includes('screenBrightnessSettings'),'gateway assets exclude G3 screen management');
+  assert(!content.includes('.screen-grid{'),'gateway assets exclude G3 preview styles');
  }
 });
 
