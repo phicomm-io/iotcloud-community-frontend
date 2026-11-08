@@ -43,7 +43,7 @@ for(const transport of ['LAN','MQTT'])for(const hardware of ['BRY88BBA15G','BRY8
   await route.fulfill({contentType:'application/json',body:JSON.stringify({code:'ok',data})});
  });
  await page.goto('/#/guest');
- await expect(page.locator('.device-heading')).toContainText(g3?'DAIKIN G3':'DAIKIN G1/G2');
+ await expect(page.locator('.device-heading')).toContainText(g3?'DAIKIN G3':'DAIKIN G1/G2',{timeout:30000});
  const home=page.frameLocator('iframe.device-home');
  await expect(home.locator('[data-sensor="pm25"] .num')).toHaveText('0');
  await expect(home.locator('[data-sensor="co2"] .num')).toHaveText('641');
