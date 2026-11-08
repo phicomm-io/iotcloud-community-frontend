@@ -6,6 +6,7 @@ from pathlib import Path
 import tarfile
 import tempfile
 import unittest
+from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location('fetch_release', Path(__file__).resolve().parents[1] / 'tools/fetch_release.py')
 consumer = importlib.util.module_from_spec(spec)
@@ -42,6 +43,32 @@ def fixture(commit='a'*40, extra=None, symlink=False):
 
 
 class ConsumerTests(unittest.TestCase):
+    def test_api_download_is_verified_against_the_lock(self):
+        data, lock = fixture()
+        release = dict(draft=False, tag_name=lock['release'],
+                       assets=[dict(name=lock['asset'], state='uploaded', id=123)])
+        with tempfile.TemporaryDirectory() as tmp, \
+                patch.object(consumer, 'urlopen', side_effect=[
+                    io.BytesIO(json.dumps(release).encode()), io.BytesIO(data)]) as request:
+            tmp = Path(tmp)
+            (tmp/'lock.json').write_text(json.dumps(lock))
+            consumer.fetch(tmp/'lock.json', tmp/'out')
+            self.assertEqual((tmp/'out/platform/index.html').read_bytes(), b'platform')
+        self.assertEqual(request.call_args_list[0].args[0].full_url,
+                         f"https://api.github.com/repos/{lock['repository']}/releases/tags/{lock['release']}")
+        self.assertEqual(request.call_args_list[1].args[0].full_url,
+                         f"https://api.github.com/repos/{lock['repository']}/releases/assets/123")
+        self.assertEqual(request.call_args_list[1].args[0].get_header('Accept'), 'application/octet-stream')
+
+    def test_draft_release_is_not_downloaded(self):
+        _, lock = fixture()
+        release = dict(draft=True, tag_name=lock['release'],
+                       assets=[dict(name=lock['asset'], state='uploaded', id=123)])
+        with patch.object(consumer, 'urlopen', return_value=io.BytesIO(json.dumps(release).encode())) as request:
+            with self.assertRaisesRegex(ValueError, 'published locked asset'):
+                consumer.download(lock)
+        self.assertEqual(request.call_count, 1)
+
     def test_verified_bundle(self):
         data, lock = fixture()
         with tempfile.TemporaryDirectory() as tmp:
