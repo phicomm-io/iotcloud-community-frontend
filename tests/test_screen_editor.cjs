@@ -392,26 +392,68 @@ test('startup control protects fault recovery, offline MCU and active OTA, and r
  }finally{dom.window.close();}
 });
 
-for(const mode of ['verified','wrong-hash','failed-stage','wrong-model','invalid-path'])test('online screen update: '+mode,async()=>{
+for(const [source,mcu,mode] of [
+ ['online','community','verified'],['online','factory','verified'],
+ ['upload','community','verified'],['upload','factory','verified'],
+ ['online','community','wrong-hash'],['online','community','failed-stage'],
+ ['online','community','wrong-model'],['online','community','invalid-path'],
+ ['upload','community','read-error'],['upload','unknown','verified']
+])test('screen installation: '+[source,mcu,mode].join(' / '),async()=>{
  const {dom,w,writes,flush,click}=fixture({capabilities:0x1ffffd});try{
-  const data=Buffer.alloc(421888,7),sha=require('node:crypto').createHash('sha256').update(data).digest('hex');
+  const crypto=require('node:crypto'),data=Buffer.alloc(421888,7),sha=crypto.createHash('sha256').update(data).digest('hex'),md5=crypto.createHash('md5').update(data).digest('hex');
   const screen={target:mode==='wrong-model'?'other':'BRY88BBA15G-screen',version:'1.0.0-rc.6',firmware:{path:mode==='invalid-path'?'/admin/upload':'/releases/v1.0.0-rc.6/screen.bin',size:data.length,sha256:sha}};
-  let downloads=0,uploads=0;w.fetch=async url=>{
+  let downloads=0,uploads=0,gets=0;w.fetch=async url=>{
    if(url.endsWith('/index.json'))return {ok:true,json:async()=>({releases:[]})};
    if(url.endsWith('/candidates.json'))return {ok:true,json:async()=>({releases:[{version:'1.0.0-rc.6',screen}]})};
    assert.equal(url,'https://phicomm-io.github.io/releases/v1.0.0-rc.6/screen.bin');downloads++;return {ok:true,headers:{get:()=>String(data.length)},arrayBuffer:async()=>data};
   };
-  w.UI.confirm=async()=>true;w.DeviceSession.fetch=async (url,options)=>{uploads++;assert.equal(url,'/api/v1/screen/ota/upload');assert.equal(options.body.length,data.length);return {ok:true,json:async()=>({code:'ok',data:{sha256:mode==='wrong-hash'?'0'.repeat(64):sha}})};};
+  w.setTimeout=fn=>{setImmediate(fn);return 0;};w.UI.confirm=async()=>true;
+  w.DeviceSession.fetch=async (url,options)=>{uploads++;assert.equal(url,'/api/v1/screen/ota/upload');assert.equal(source==='online'?options.body.length:options.body.size,data.length);return {ok:true,json:async()=>({code:'ok',data:{sha256:mode==='wrong-hash'?'0'.repeat(64):sha,md5}})};};
   const command=w.command;w.command=async(action,params)=>{
-   if(action==='screen.update.get'){writes.push({action,params});return {ota:{state:mode==='failed-stage'?'failed':'staged_verified'}};}
+   if(action==='status.get')return {screen:{mcu_version:mcu==='factory'?'SV.04.00.04.00':mcu==='community'?'iotcloud-screen-1.0.0-rc.6':'',extension_supported:mcu==='community',recovery:{available:mcu==='community',session:mcu==='community'?11:0}}};
+   if(action==='screen.update.get'){
+    writes.push({action,params});gets++;
+    return {ota:{sha256:sha,state:mode==='failed-stage'?'failed':mode==='read-error'?'read_error':gets===1?(mcu==='factory'?'factory_installing':'staged_verified'):'installed'},recovery:{available:true,session:gets===1?11:42,image_md5:md5,mode:gets===1?'window':'normal'}};
+   }
    return command(action,params);
   };
-  click('#screenOnlineCheck');await flush();assert.equal(w.document.querySelector('#screenOnlineFirmware').disabled,mode==='wrong-model');
-  if(mode==='wrong-model')return;
-  click('#screenOnlineFirmware');await flush();await flush();
-  assert.equal(downloads,mode==='invalid-path'?0:1);assert.equal(uploads,mode==='invalid-path'?0:1);
-  assert.equal(writes.filter(v=>v.action==='screen.update.start').length,['wrong-hash','invalid-path'].includes(mode)?0:1,w.document.body.textContent.slice(-1500));
-  const install=writes.filter(v=>v.action==='screen.update.install');assert.equal(install.length,mode==='verified'?1:0);
+  if(source==='online'){
+   click('#screenOnlineCheck');await flush();assert.equal(w.document.querySelector('#screenOnlineFirmware').disabled,mode==='wrong-model');
+   if(mode==='wrong-model')return;
+   click('#screenOnlineFirmware');
+  }else{
+   Object.defineProperty(w.document.querySelector('#screenFirmwareFile'),'files',{value:[new w.File([data],'screen.bin')]});click('#screenFirmwareInstall');
+  }
+  for(let i=0;i<12;i++)await flush();
+  const valid=mcu!=='unknown'&&!['wrong-hash','invalid-path'].includes(mode);
+  assert.equal(downloads,source==='online'&&mode!=='invalid-path'?1:0);assert.equal(uploads,mcu==='unknown'||mode==='invalid-path'?0:1);
+  const starts=writes.filter(v=>v.action==='screen.update.start');assert.equal(starts.length,valid?1:0,w.document.body.textContent.slice(-1500));
+  if(starts.length)assert.deepEqual(starts[0].params,mcu==='factory'?{mode:'factory-bootstrap',sha256:sha}:{mode:'stage'});
+  const install=writes.filter(v=>v.action==='screen.update.install');assert.equal(install.length,mode==='verified'&&mcu==='community'?1:0);
   if(install.length)assert.equal(install[0].params.sha256,sha);
+  assert.match(w.document.querySelector('#screenOtaState').textContent,mode==='verified'&&mcu!=='unknown'?/installed and running/:/failed/);
+  if(mode==='verified'&&mcu!=='unknown')assert.equal(gets,2,'wait for the reboot and installed image announcement');
+  assert.equal(w.document.querySelector('#screenFirmwareInstall').disabled,false);
+ }finally{dom.window.close();}
+});
+test('screen installation waits for a fresh matching MCU image before reporting success',async()=>{
+ const {dom,w,click,flush}=fixture();try{
+  const sha='a'.repeat(64),md5='b'.repeat(32);let resume,polls=0;
+  w.UI.confirm=async()=>true;w.setTimeout=fn=>{resume=fn;return 0;};
+  Object.defineProperty(w.document.querySelector('#screenFirmwareFile'),'files',{value:[new w.File([new Uint8Array(421888)],'screen.bin')]});
+  w.DeviceSession.fetch=async()=>({ok:true,json:async()=>({code:'ok',data:{sha256:sha,md5}})});
+  w.command=async action=>{
+   if(action==='status.get')return {screen:{recovery:{available:true,session:11}}};
+   if(action==='screen.update.get'){
+    polls++;return {ota:{state:polls===1?'staged_verified':'installed',sha256:sha},recovery:{available:true,session:polls<=2?11:42,image_md5:polls===3?'c'.repeat(32):md5,mode:'normal'}};
+   }return {};
+  };
+  click('#screenFirmwareInstall');await flush();
+  for(let i=0;i<3;i++){
+   assert.equal(w.document.querySelector('#screenFirmwareInstall').disabled,true);
+   assert.doesNotMatch(w.document.querySelector('#screenOtaState').textContent,/installed and running/);
+   resume();await flush();
+  }
+  assert.equal(polls,4);assert.match(w.document.querySelector('#screenOtaState').textContent,/installed and running/);
  }finally{dom.window.close();}
 });

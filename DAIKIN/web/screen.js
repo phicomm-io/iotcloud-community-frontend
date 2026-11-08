@@ -485,8 +485,42 @@ const verifyTls=input('','checkbox',{id:'screenWeatherVerifyTls'});
 async function loadWeather(){const r=await command('screen.weather.get'),c=r.config||{};provider.value=c.provider||'openmeteo';weatherEnabled.checked=!!c.enabled;verifyTls.checked=c.verify_tls===true;host.value=c.host||'';key.value='';key.placeholder=c.key_set?t('screen.key_saved'):'';clearKey.checked=false;lat.value=c.latitude??0;lon.value=c.longitude??0;place.value=c.label||'';interval.value=c.interval||900;weatherProviderFields();weatherState.textContent=[r.provider,r.location,r.text,r.temperature==null?'':r.temperature+' °C',r.error].filter(Boolean).join(' · ');}
 Object.entries({screenWeatherProvider:provider,screenWeatherEnabled:weatherEnabled,screenWeatherHost:host,screenWeatherKey:key,screenWeatherClear:clearKey,screenWeatherLat:lat,screenWeatherLon:lon,screenWeatherPlace:place,screenWeatherInterval:interval}).forEach(([id,el])=>el.id=id);
 const weather=section('screen.weather',button('screen.load',loadWeather),fieldRow('screen.enabled',weatherEnabled),fieldRow('screen.provider',provider),hostRow,keyRow,clearKeyRow,fieldRow('screen.latitude',lat),fieldRow('screen.longitude',lon),fieldRow('screen.location',place),fieldRow('screen.interval',interval),fieldRow('screen.verify_tls',verifyTls),h('div',{class:'row'},button('common.save',async()=>{const free=provider.value==='openmeteo',c={enabled:weatherEnabled.checked,provider:provider.value,latitude:Number(lat.value),longitude:Number(lon.value),label:place.value,interval:Number(interval.value),verify_tls:verifyTls.checked,clear_key:free||clearKey.checked};if(provider.value==='qweather')c.host=host.value;if(!free&&key.value)c.key=key.value;await command('screen.weather.set',c);await loadWeather();}),button('screen.refresh',async()=>{await command('screen.weather.refresh');await loadWeather();})),weatherState,h('p',{class:'help'},h('a',{href:'https://open-meteo.com/',target:'_blank',rel:'noopener'},'Open-Meteo · CC BY 4.0'),' · ',h('a',{href:'https://www.qweather.com/',target:'_blank',rel:'noopener'},'QWeather'),' · ',h('a',{href:'https://www.seniverse.com/',target:'_blank',rel:'noopener'},'Seniverse'),' · ',h('a',{href:'https://openweathermap.org/',target:'_blank',rel:'noopener'},'OpenWeather')));
-const file=input('','file',{accept:'.bin'}),otaState=h('p',{class:'help',id:'screenOtaState'});
+const file=input('','file',{accept:'.bin',id:'screenFirmwareFile'}),otaState=h('p',{class:'help',id:'screenOtaState',role:'status'});
 const uploadHash=h('p',{class:'help',id:'screenUploadHash'});
+let firmwareBusy=false,firmwareMessage=false;
+function firmwareButtons(){uploadFirmware.disabled=firmwareBusy;onlineFirmware.disabled=firmwareBusy||!onlineRelease;}
+async function installFirmware(load){
+ if(firmwareBusy)return;
+ firmwareBusy=true;firmwareButtons();
+ try{
+  if(!await UI.confirm({title:t('screen.ota'),body:t('screen.online_confirm'),ok:t('screen.online_firmware')}))return;
+  firmwareMessage=true;
+  const current=(await command('status.get')).screen||{},before=current.recovery||{};
+  const factory=!before.available&&!current.extension_supported&&/^SV\./.test(current.mcu_version||'');
+  if(!before.available&&!factory)throw Error(t('screen.recovery_unavailable'));
+  otaState.textContent=t('screen.firmware_uploading');
+  const {bytes,sha256}=await load();
+  const response=await deviceFetch('/api/v1/screen/ota/upload',{method:'POST',headers:{'Content-Type':'application/octet-stream','X-IotCloud-Target':'BRY88BBA15G-screen'},body:bytes});
+  const reply=await DeviceAuth.decodeResponse(response),image=reply.data;
+  if(!response.ok||reply.code!=='ok'||!/^[a-f0-9]{64}$/.test(image?.sha256)||!/^[a-f0-9]{32}$/.test(image?.md5)||(sha256&&image.sha256!==sha256))throw Error(t('screen.invalid'));
+  uploadHash.textContent=image.sha256;
+  await command('screen.update.start',factory?{mode:'factory-bootstrap',sha256:image.sha256}:{mode:'stage'});
+  otaState.textContent=t('screen.online_installing');
+  const until=Date.now()+300000;let installing=factory;
+  while(Date.now()<until){
+   const r=await command('screen.update.get'),s=r.ota,recovery=r.recovery||{};
+   if(!s||s.sha256!==image.sha256)throw Error(t('screen.changed'));
+   if(['failed','timeout','cancelled','upload_failed','read_error','write_error'].includes(s.state))throw Error(s.state);
+   if(!installing&&s.state==='staged_verified'){await command('screen.update.install',{sha256:image.sha256});installing=true;}
+   if(installing&&recovery.available&&recovery.session!==before.session&&recovery.image_md5===image.md5){
+    if(recovery.mode==='fault_recovery')throw Error(t('screen.recovery_fault_recovery'));
+    if(s.state==='installed'&&recovery.mode==='normal'){otaState.textContent=t('screen.firmware_installed');return;}
+   }
+   await pause(1000);
+  }throw Error(t('screen.online_timeout'));
+ }catch(error){otaState.textContent=t('screen.firmware_failed')+' · '+error.message;throw error;}
+ finally{firmwareBusy=false;firmwareButtons();}
+}
 let recoveryBusy=false,recoveryData=null;
 const recoveryState=h('p',{class:'help',id:'screenRecoveryState',role:'status'});
 function renderRecovery(r){
@@ -529,10 +563,11 @@ async function saveStartup(){
 }
 const startupSave=button('common.save',null,{id:'screenStartupSave',disabled:true,onclick:async e=>{await run(e.currentTarget,saveStartup);renderStartup();}});
 const recoverySection=section('screen.recovery',button('screen.refresh',async()=>{renderRecovery(await command('screen.recovery.get'));await loadStartup();}),fieldRow('screen.startup_auto',startupAuto),startupSave,startupState,h('div',{class:'row'},recoveryResume,recoveryHold),recoveryState);
-const ota=section('screen.ota',fieldRow('screen.file',file),button('screen.upload',async()=>{
+const uploadFirmware=button('screen.upload',()=>installFirmware(async()=>{
  const f=file.files?.[0];if(!f||f.size!==421888)throw Error(t('screen.invalid'));
- const response=await deviceFetch('/api/v1/screen/ota/upload',{method:'POST',headers:{'Content-Type':'application/octet-stream','X-IotCloud-Target':'BRY88BBA15G-screen'},body:f});const reply=await DeviceAuth.decodeResponse(response);if(!response.ok||reply.code!=='ok')throw Error(reply.code||String(response.status));uploadHash.textContent=reply.data.sha256;
-}),button('screen.stage',()=>command('screen.update.start',{mode:'stage'})),otaState,uploadHash);
+ return {bytes:f};
+}),{id:'screenFirmwareInstall'});
+const ota=section('screen.ota',fieldRow('screen.file',file),uploadFirmware,otaState,uploadHash);
 const fontFile=input('','file',{accept:'.iotfnt',id:'screenFontFile'}),fontProgress=h('progress',{max:1,value:0,id:'screenFontProgress',hidden:true}),fontState=h('p',{class:'help',id:'screenFontState',role:'status'});
 async function fontOperation(action,params={}){
  const receipt=await command('screen.font.'+action,params),until=Date.now()+22000;
@@ -565,25 +600,17 @@ async function checkScreenOnline(){
  const releases=catalogs.flatMap(r=>r.status==='fulfilled'?(r.value.releases||[]):[]).filter(r=>r.screen?.target==='BRY88BBA15G-screen'&&releaseRank(r.version).length);
  releases.sort((a,b)=>{const x=releaseRank(a.version),y=releaseRank(b.version);for(let i=0;i<x.length;i++)if(x[i]!==y[i])return y[i]-x[i];return 0;});
  onlineRelease=releases[0]?.screen||null;if(!onlineRelease)throw Error(t('screen.online_none'));
- onlineState.textContent=onlineRelease.version;onlineFirmware.disabled=false;onlineFont.disabled=!onlineRelease.font;
+ onlineState.textContent=onlineRelease.version;firmwareButtons();onlineFont.disabled=!onlineRelease.font;
 }
 async function onlineAsset(kind){
  const asset=onlineRelease?.[kind];if(!asset||!/^\/releases\/v\d+\.\d+\.\d+(?:-rc(?:\.\d+)?)?\/[A-Za-z0-9_.-]+$/.test(asset.path)||!Number.isInteger(asset.size)||asset.size<32||asset.size>(kind==='firmware'?421888:0x1fe000)||!/^[a-f0-9]{64}$/.test(asset.sha256))throw Error(t('screen.invalid'));
  const r=await fetch(releaseOrigin+asset.path,{cache:'no-store'});if(!r.ok||Number(r.headers.get('Content-Length'))!==asset.size)throw Error(t('screen.invalid'));
  const bytes=new Uint8Array(await r.arrayBuffer());if(bytes.length!==asset.size)throw Error(t('screen.invalid'));return {bytes,asset};
 }
-const onlineFirmware=button('screen.online_firmware',async()=>{
- if(!await UI.confirm({title:t('screen.ota'),body:t('screen.online_confirm'),ok:t('screen.online_firmware')}))return;
+const onlineFirmware=button('screen.online_firmware',()=>installFirmware(async()=>{
  const {bytes,asset}=await onlineAsset('firmware');
- const response=await deviceFetch('/api/v1/screen/ota/upload',{method:'POST',headers:{'Content-Type':'application/octet-stream','X-IotCloud-Target':'BRY88BBA15G-screen'},body:bytes});
- const reply=await DeviceAuth.decodeResponse(response);if(!response.ok||reply.code!=='ok'||reply.data.sha256!==asset.sha256)throw Error(t('screen.invalid'));
- uploadHash.textContent=asset.sha256;await command('screen.update.start',{mode:'stage'});
- const until=Date.now()+300000;
- while(Date.now()<until){const r=await command('screen.update.get'),s=r.ota||r.screen?.ota;
-  if(s?.state==='staged_verified'){await command('screen.update.install',{sha256:asset.sha256});onlineState.textContent=t('screen.online_installing');return;}
-  if(s&&['failed','timeout','cancelled','upload_failed'].includes(s.state))throw Error(s.state);await pause(1000);
- }throw Error(t('screen.online_timeout'));
-},{id:'screenOnlineFirmware',disabled:true});
+ return {bytes,sha256:asset.sha256};
+}),{id:'screenOnlineFirmware',disabled:true});
 const onlineFont=button('screen.online_font',async()=>{const {bytes,asset}=await onlineAsset('font');if(crc(bytes)!==asset.crc32)throw Error(t('screen.invalid'));await uploadFont(new File([bytes],'screen-zh32.iotfnt'));},{id:'screenOnlineFont',disabled:true});
 const onlineSection=section('screen.online',button('screen.online_check',checkScreenOnline,{id:'screenOnlineCheck'}),onlineState,h('div',{class:'row'},onlineFirmware,onlineFont),h('p',{class:'help',i18n:'screen.online_local'}));
 
@@ -659,5 +686,5 @@ for(const [key,sections]of Object.entries(screenTabs)){
  b.onclick=()=>showScreenTab(key);b.onkeydown=e=>{const keys=Object.keys(screenTabs),i=keys.indexOf(key);if(['ArrowLeft','ArrowRight','Home','End'].includes(e.key)){e.preventDefault();showScreenTab(keys[e.key==='Home'?0:e.key==='End'?keys.length-1:(i+(e.key==='ArrowRight'?1:keys.length-1))%keys.length],true);}};tabBar.append(b);
 }
 root.append(h('h2',{i18n:'screen.title_main'}),tabBar,tabPanels);
-window.ScreenUI={status(s){root.hidden=s.hardware_model!=='BRY88BBA15G';if(root.hidden)return;deviceKey=s.device_id||s.id||deviceKey;const capsBefore=lastStatus?.capabilities;lastStatus=s.screen||{};if(!remotePageBusy)remotePageData=lastStatus.page;renderRemotePage();if(!diagBusy)diagStart.disabled=diagRead.disabled=!(lastStatus.capabilities&524288);if(capsBefore!==lastStatus.capabilities){componentForm();renderAppearance();}fontUpload.disabled=appearanceBusy||!(lastStatus.capabilities&16384);if(appearanceSection.hidden===appearanceSupported())renderAppearance();moduleData=lastStatus.module;renderModule();if(policyPending&&!policyDirty&&lastStatus.display?.applied_revision===policyPending){policyState.textContent=t('screen.policy_applied',{revision:policyPending});policyPending=0;}info.textContent=t(lastStatus.extension_supported?'screen.extension':'screen.factory')+' · '+t('screen.revisions',{saved:lastStatus.layout_revision||0,applied:lastStatus.mcu_layout_revision||0});otaState.textContent=lastStatus.ota?.state||'';renderRecovery(lastStatus.recovery);renderStartup(lastStatus.startup);applyBrightnessData({settings:lastStatus.settings,request:lastStatus.settings_request,brightness:lastStatus.brightness});},load:loadLayout,enter:async()=>{if(!scene&&!loading)await loadLayout();},loadBrightness,loadPolicy,loadStartup,undo};
+window.ScreenUI={status(s){root.hidden=s.hardware_model!=='BRY88BBA15G';if(root.hidden)return;deviceKey=s.device_id||s.id||deviceKey;const capsBefore=lastStatus?.capabilities;lastStatus=s.screen||{};if(!remotePageBusy)remotePageData=lastStatus.page;renderRemotePage();if(!diagBusy)diagStart.disabled=diagRead.disabled=!(lastStatus.capabilities&524288);if(capsBefore!==lastStatus.capabilities){componentForm();renderAppearance();}fontUpload.disabled=appearanceBusy||!(lastStatus.capabilities&16384);if(appearanceSection.hidden===appearanceSupported())renderAppearance();moduleData=lastStatus.module;renderModule();if(policyPending&&!policyDirty&&lastStatus.display?.applied_revision===policyPending){policyState.textContent=t('screen.policy_applied',{revision:policyPending});policyPending=0;}info.textContent=t(lastStatus.extension_supported?'screen.extension':'screen.factory')+' · '+t('screen.revisions',{saved:lastStatus.layout_revision||0,applied:lastStatus.mcu_layout_revision||0});if(!firmwareBusy&&!firmwareMessage)otaState.textContent=lastStatus.ota?.state||'';renderRecovery(lastStatus.recovery);renderStartup(lastStatus.startup);applyBrightnessData({settings:lastStatus.settings,request:lastStatus.settings_request,brightness:lastStatus.brightness});},load:loadLayout,enter:async()=>{if(!scene&&!loading)await loadLayout();},loadBrightness,loadPolicy,loadStartup,undo};
 })();
