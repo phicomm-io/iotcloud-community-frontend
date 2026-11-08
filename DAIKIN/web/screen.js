@@ -604,7 +604,8 @@ async function checkScreenOnline(){
 }
 async function onlineAsset(kind){
  const asset=onlineRelease?.[kind];if(!asset||!/^\/releases\/v\d+\.\d+\.\d+(?:-rc(?:\.\d+)?)?\/[A-Za-z0-9_.-]+$/.test(asset.path)||!Number.isInteger(asset.size)||asset.size<32||asset.size>(kind==='firmware'?421888:0x1fe000)||!/^[a-f0-9]{64}$/.test(asset.sha256))throw Error(t('screen.invalid'));
- const r=await fetch(releaseOrigin+asset.path,{cache:'no-store'});if(!r.ok||Number(r.headers.get('Content-Length'))!==asset.size)throw Error(t('screen.invalid'));
+ const r=await fetch(releaseOrigin+asset.path,{cache:'no-store'});if(!r.ok)throw Error(t('screen.invalid'));
+ // Fetch returns decoded bytes; Content-Length may describe compressed transfer.
  const bytes=new Uint8Array(await r.arrayBuffer());if(bytes.length!==asset.size)throw Error(t('screen.invalid'));return {bytes,asset};
 }
 const onlineFirmware=button('screen.online_firmware',()=>installFirmware(async()=>{

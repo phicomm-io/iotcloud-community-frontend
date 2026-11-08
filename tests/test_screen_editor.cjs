@@ -397,6 +397,8 @@ for(const [source,mcu,mode] of [
  ['upload','community','verified'],['upload','factory','verified'],
  ['online','community','wrong-hash'],['online','community','failed-stage'],
  ['online','community','wrong-model'],['online','community','invalid-path'],
+ ['online','factory','compressed-transfer'],['online','factory','no-content-length'],
+ ['online','factory','wrong-size'],
  ['upload','community','read-error'],['upload','unknown','verified']
 ])test('screen installation: '+[source,mcu,mode].join(' / '),async()=>{
  const {dom,w,writes,flush,click}=fixture({capabilities:0x1ffffd});try{
@@ -405,7 +407,7 @@ for(const [source,mcu,mode] of [
   let downloads=0,uploads=0,gets=0;w.fetch=async url=>{
    if(url.endsWith('/index.json'))return {ok:true,json:async()=>({releases:[]})};
    if(url.endsWith('/candidates.json'))return {ok:true,json:async()=>({releases:[{version:'1.0.0-rc.6',screen}]})};
-   assert.equal(url,'https://phicomm-io.github.io/releases/v1.0.0-rc.6/screen.bin');downloads++;return {ok:true,headers:{get:()=>String(data.length)},arrayBuffer:async()=>data};
+   assert.equal(url,'https://phicomm-io.github.io/releases/v1.0.0-rc.6/screen.bin');downloads++;return {ok:true,headers:{get:()=>mode==='compressed-transfer'?'145475':mode==='no-content-length'?null:String(data.length)},arrayBuffer:async()=>mode==='wrong-size'?data.subarray(0,data.length-1):data};
   };
   w.setTimeout=fn=>{setImmediate(fn);return 0;};w.UI.confirm=async()=>true;
   w.DeviceSession.fetch=async (url,options)=>{uploads++;assert.equal(url,'/api/v1/screen/ota/upload');assert.equal(source==='online'?options.body.length:options.body.size,data.length);return {ok:true,json:async()=>({code:'ok',data:{sha256:mode==='wrong-hash'?'0'.repeat(64):sha,md5}})};};
@@ -425,14 +427,15 @@ for(const [source,mcu,mode] of [
    Object.defineProperty(w.document.querySelector('#screenFirmwareFile'),'files',{value:[new w.File([data],'screen.bin')]});click('#screenFirmwareInstall');
   }
   for(let i=0;i<12;i++)await flush();
-  const valid=mcu!=='unknown'&&!['wrong-hash','invalid-path'].includes(mode);
-  assert.equal(downloads,source==='online'&&mode!=='invalid-path'?1:0);assert.equal(uploads,mcu==='unknown'||mode==='invalid-path'?0:1);
+  const valid=mcu!=='unknown'&&!['wrong-hash','invalid-path','wrong-size'].includes(mode);
+  const installed=['verified','compressed-transfer','no-content-length'].includes(mode)&&mcu!=='unknown';
+  assert.equal(downloads,source==='online'&&mode!=='invalid-path'?1:0);assert.equal(uploads,mcu==='unknown'||['invalid-path','wrong-size'].includes(mode)?0:1);
   const starts=writes.filter(v=>v.action==='screen.update.start');assert.equal(starts.length,valid?1:0,w.document.body.textContent.slice(-1500));
   if(starts.length)assert.deepEqual(starts[0].params,mcu==='factory'?{mode:'factory-bootstrap',sha256:sha}:{mode:'stage'});
   const install=writes.filter(v=>v.action==='screen.update.install');assert.equal(install.length,mode==='verified'&&mcu==='community'?1:0);
   if(install.length)assert.equal(install[0].params.sha256,sha);
-  assert.match(w.document.querySelector('#screenOtaState').textContent,mode==='verified'&&mcu!=='unknown'?/installed and running/:/failed/);
-  if(mode==='verified'&&mcu!=='unknown')assert.equal(gets,2,'wait for the reboot and installed image announcement');
+  assert.match(w.document.querySelector('#screenOtaState').textContent,installed?/installed and running/:/failed/);
+  if(installed)assert.equal(gets,2,'wait for the reboot and installed image announcement');
   assert.equal(w.document.querySelector('#screenFirmwareInstall').disabled,false);
  }finally{dom.window.close();}
 });
