@@ -44,6 +44,7 @@ def main():
     for model, source in [('tc1', 'TC1/http_server/web/index.html'), ('m1', 'M1/web/index.html'), ('a1', 'A1/web/index.html'), ('daikin', 'DAIKIN/web/index.html'), ('daikin-g3', 'DAIKIN/web/index.html'), ('s30-v1b', 'S30/web/index.html')]:
         data = render_page(ROOT / source, minify=True, screen=model not in ('tc1', 'm1', 'a1', 'daikin', 's30-v1b'))
         if model == 'daikin-g3':
+            data = data.replace(b'DAIKIN G1/G2', b'DAIKIN G3').replace(b'daikin_BRY88AX151K.ota.bin.signed', b'daikin_BRY88BBA15G.ota.bin.signed')
             data = data.replace(b'</head>', b'<style>#indicatorSettings,#climateSettings,#co2Settings,section.card:has(#indicator){display:none!important}</style></head>')
         device = out / 'devices' / model
         device.mkdir(parents=True)

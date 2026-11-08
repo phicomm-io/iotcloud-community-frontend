@@ -8,7 +8,10 @@ const props=defineProps({device:Object,rawResources:{type:Boolean,default:true},
 const emit=defineEmits(['command','settings','upload','resource']);
 const uploads=new Map();
 const reads=new Map();
-const documentHTML=computed(()=>props.rawResources?pages[props.device.model]:pages[props.device.model].replace('</head>','<style>.card:has([data-i18n="backup.title"]){display:none!important}</style></head>'));
+const documentHTML=computed(()=>{
+ const model=props.device.model==='daikin'&&props.device.hardware_model==='BRY88BBA15G'&&pages['daikin-g3']?'daikin-g3':props.device.model;
+ return props.rawResources?pages[model]:pages[model].replace('</head>','<style>.card:has([data-i18n="backup.title"]){display:none!important}</style></head>');
+});
 const frame=ref(),height=ref(700);
 function receive(event){
  if(event.source!==frame.value?.contentWindow||event.origin!==location.origin)return;
