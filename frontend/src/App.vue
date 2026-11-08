@@ -64,7 +64,14 @@ const webPasswords=new Map();let preferenceScope='';
 const transport=createDeviceTransport({records:lanConnections,onStatus:(key,state)=>{const snapshot=statusSnapshot(state);if(snapshot)lanStates[key]={...(lanStates[key]?.hubPower?{hubPower:lanStates[key].hubPower}:{}),...snapshot,available:true,lan_connected:true};}});
 const ownerHub=computed(()=>hubMode&&!localMode&&!thirdParty.value);
 const hubClient=hubMode?createHubDeviceClient({request:api,onStatus:(key,snapshot)=>{states[key]={...snapshot,capabilities:states[key]?.capabilities,available:true,hub_connected:true};},onCapabilities:(key,caps)=>{(states[key]||={}).capabilities=caps;}}):null;
-const viewStates=computed(()=>Object.fromEntries(list.value.map(d=>{const k=deviceKey(d);return [k,lanConnections[k]?.ready?{...states[k],...lanStates[k]}:states[k]||{}];})));
+const viewStates=computed(()=>Object.fromEntries(list.value.map(d=>{
+ const k=deviceKey(d),mqtt=states[k]||{},lan=lanStates[k];
+ if(!lanConnections[k]?.ready)return [k,mqtt];
+ // DAIKIN publishes complete sensor snapshots every 5 s; a LAN probe runs
+ // every 30 s. An older LAN snapshot must not hide fresh MQTT measurements.
+ return [k,d.model==='daikin'&&mqtt.sensorAt>lan?.sensorAt
+  ?{...lan,...mqtt,available:true,lan_connected:true}:{...mqtt,...lan}];
+})));
 const activeConnected=computed(()=>!!active.value&&(connected.value||lanConnections[deviceKey(active.value)]?.ready));
 function updateConnections(force=false){
  const scope=localMode?localScope():scopeKey()+':'+connectionOwner();
