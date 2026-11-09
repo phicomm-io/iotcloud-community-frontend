@@ -15,6 +15,7 @@ import {userKey,requestId,deviceKey,deviceEntry,localDevices,topics,applyMessage
 import {createDeviceTransport,loadPreference,savePreference,localAddress} from './deviceConnection';
 import {deviceType} from './devicePresentation';
 import {hubPowerSample} from './hubMeter.js';
+import {createMqttStatusCache} from './mqttStatus.js';
 import {saveDeviceName} from './deviceName';
 import DeviceSummary from './components/DeviceSummary.vue';
 import DeviceNameDialog from './components/DeviceNameDialog.vue';
@@ -165,6 +166,7 @@ watch(()=>active.value?deviceKey(active.value):'',value=>{if(value)track('device
 let client,timer,poll,lanPoll;
 function visibilityProbe(){if(document.hidden){if(ownerHub.value)hubClient.cancelReads();return;}updateConnections(true);if(ownerHub.value)pollHubStates();else pollListMeters();}
 const replies=new Map();
+const mqttStatus=createMqttStatusCache();
 async function mqttCommand(request,reply,target=active.value,{timeoutMs=20000}={}){
  // A newly mounted device page can request data before MQTT finishes connecting.
  // Wait only for reads; never queue a device write for a later connection.
@@ -179,13 +181,14 @@ async function mqttCommand(request,reply,target=active.value,{timeoutMs=20000}={
  if(demoMode&&target){const data=demoDevices[target.mac].command(request.action,request.params);Object.assign(states[deviceKey(target)]||={},demoDevices[target.mac].state);reply({code:request.action.endsWith('.get')?'ok':'accepted',data});return;}
  if(!connected.value||!target){reply({code:'offline',message:t('p.2779217ebc7d')});return;}
  if(target.version==='v1'){legacyRequest(request,reply,target);return;}
+ const complete=result=>reply(mqttStatus.reply(target,request,result));
  const signature=JSON.stringify([deviceKey(target),request.action,request.params||{}]);
- if(request.action.endsWith('.get')){const existing=[...replies.values()].find(p=>p.signature===signature);if(existing){const previous=existing.reply;existing.reply=value=>{previous(value);reply(value);};return;}}
+ if(request.action.endsWith('.get')){const existing=[...replies.values()].find(p=>p.signature===signature);if(existing){const previous=existing.reply;existing.reply=value=>{previous(value);complete(value);};return;}}
  const id=request.request_id||requestId(),d={...target};
  let c;try{c=command(d,{...request,request_id:id});}catch(error){reply({code:error.code||'discovery_required',message:error.message});return;}
  const state=states[deviceKey(d)]||={};(state.pending||={})[id]=request.action;
  const timeout=setTimeout(()=>{const pending=replies.get(id);replies.delete(id);delete state.pending[id];pending?.reply({code:'timeout',message:t('p.f9ce625a07fc')});},timeoutMs);
- replies.set(id,{reply,timeout,key:deviceKey(d),signature});
+ replies.set(id,{reply:complete,timeout,key:deviceKey(d),signature});
  client.publish(c.topic,c.payload,{qos:1,retain:false},e=>{if(e){clearTimeout(timeout);const pending=replies.get(id);replies.delete(id);delete state.pending[id];pending?.reply({code:'error',message:t('p.ac77953a1e06')});}});
 }
 const guestKey=()=>localMode?localListKey:'iotcloud.devices.'+encodeURIComponent(connection.host)+'/'+encodeURIComponent(connection.username);
@@ -202,7 +205,7 @@ function reorder(device,direction){saveOrder({mode:'custom',order:moveDevice(ord
 
 function manualDisconnect(){setAutoConnect(connectionOwner(),false);disconnect();}
 function manualConnect(){setAutoConnect(connectionOwner(),true);connect();}
-function disconnect(){busy.value=false;for(const {reply,timeout} of replies.values()){clearTimeout(timeout);reply({code:'offline',message:t('p.d830845257a1')});}replies.clear();for(const key of Object.keys(sensorFeeds))delete sensorFeeds[key];client?.end(true);client=null;connected.value=false;}
+function disconnect(){busy.value=false;mqttStatus.clear();for(const {reply,timeout} of replies.values()){clearTimeout(timeout);reply({code:'offline',message:t('p.d830845257a1')});}replies.clear();for(const key of Object.keys(sensorFeeds))delete sensorFeeds[key];client?.end(true);client=null;connected.value=false;}
 function subscribe(){
  if(demoMode)return;
  const owners=new Set([connection.username,...list.value.map(d=>d.mqtt_username||d.username||connection.username)]);
@@ -222,10 +225,10 @@ function receiveDeviceMessage(topic,payload,packet){
   if(d.model!==announcement.model)return;
   const changed=d.firmware_version!==announcement.firmware_version||d.variant!==announcement.variant||d.wire_format!==announcement.wire_format;
   Object.assign(d,{wire_format:announcement.wire_format,wire_version:announcement.wire_version,firmware_version:announcement.firmware_version,variant:announcement.variant});
-  if(changed){const state=states[deviceKey(d)];if(state)delete state.capabilities;delete sensorFeeds[owner+':'+mac];if(sensorFeeds[mac]?.username===owner)delete sensorFeeds[mac];for(const [id,pending] of replies)if(pending.key===deviceKey(d)){clearTimeout(pending.timeout);replies.delete(id);pending.reply({code:'identity_changed',message:'Device firmware changed; refresh the page'});}}
+  if(changed){mqttStatus.invalidate(d);const state=states[deviceKey(d)];if(state)delete state.capabilities;delete sensorFeeds[owner+':'+mac];if(sensorFeeds[mac]?.username===owner)delete sensorFeeds[mac];for(const [id,pending] of replies)if(pending.key===deviceKey(d)){clearTimeout(pending.timeout);replies.delete(id);pending.reply({code:'identity_changed',message:'Device firmware changed; refresh the page'});}}
   updateConnections();if(thirdParty.value)localStorage.setItem(guestKey(),JSON.stringify(list.value));sendTo(d,'status.get');return;
  }
- for(const d of list.value){const state=states[deviceKey(d)] ||= {};if(!applyMessage(d,state,topic,payload))continue;if(state.ip)updateConnections();if(topic.endsWith('/result')){const pending=replies.get(state.result?.request_id);if(pending&&pending.key===deviceKey(d)){clearTimeout(pending.timeout);replies.delete(state.result.request_id);pending.reply(state.result);}delete state.pending?.[state.result?.request_id];}break;}
+ for(const d of list.value){const state=states[deviceKey(d)] ||= {};if(!applyMessage(d,state,topic,payload))continue;mqttStatus.observe(d,topic,payload,packet);if(state.ip)updateConnections();if(topic.endsWith('/result')){const pending=replies.get(state.result?.request_id);if(pending&&pending.key===deviceKey(d)){clearTimeout(pending.timeout);replies.delete(state.result.request_id);pending.reply(state.result);}delete state.pending?.[state.result?.request_id];}break;}
 }
 
 let refreshPending;
@@ -278,7 +281,7 @@ function pollListMeters(){
 function connect(){if(demoMode){connected.value=true;busy.value=false;for(const d of list.value)Object.assign(states[deviceKey(d)]||={},demoDevices[d.mac].state);return;}if(!thirdParty.value&&connection.password)rememberLogin(account.username,connection.password);disconnect();error.value='';if(location.protocol==='https:'&&!connection.host.startsWith('wss://')){error.value=t('p.22211d965247');return;}if(!/^wss?:\/\//.test(connection.host)){error.value=t('p.5da207244bf4');return;}busy.value=true;
  client=mqtt.connect(connection.host,{username:connection.username,password:connection.password,clientId:'web_'+requestId(),connectTimeout:5000,reconnectPeriod:3000,clean:true});
  client.on('connect',()=>{connected.value=true;busy.value=false;subscribe();pollListMeters();track('mqtt_connect',thirdParty.value?'/guest':'/');});
- client.on('close',()=>{connected.value=false;busy.value=false;});client.on('error',()=>{error.value=t('p.cc9962611a5b');busy.value=false;});
+ client.on('close',()=>{mqttStatus.clear();connected.value=false;busy.value=false;});client.on('error',()=>{error.value=t('p.cc9962611a5b');busy.value=false;});
  client.on('message',receiveDeviceMessage);
  if(thirdParty.value)localStorage.setItem('tmcp_broker',JSON.stringify({host:connection.host,username:connection.username}));
 }
