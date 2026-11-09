@@ -19,7 +19,6 @@ export function loadPreference(scope,key,storage=localStorage){
 export function savePreference(scope,key,value,storage=localStorage){
  const p={mode:value.mode==='mqtt'?'mqtt':'auto',address:localAddress(value.address||''),lastAddress:localAddress(value.lastAddress||'')};storage.setItem(storageKey(scope,key),JSON.stringify(p));return p;
 }
-export function basicPassword(password){return 'Basic '+btoa(String.fromCharCode(...new TextEncoder().encode('admin:'+password)));}
 export function createDeviceTransport({fetcher=globalThis.fetch,records={},onStatus=()=>{}}={}){
  let active=0,disposed=false;const entries=new Map(),queue=[];
  const drain=()=>{while(active<2&&queue.length){active++;queue.shift()();}};
