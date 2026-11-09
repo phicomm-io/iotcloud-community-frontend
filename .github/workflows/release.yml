@@ -105,6 +105,11 @@ jobs:
       - run: NODE_PATH=frontend/node_modules node tests/test_demos.cjs
       - run: NODE_PATH=frontend/node_modules node tests/test_daikin_indicators_browser.cjs
       - run: NODE_PATH=frontend/node_modules node tests/test_daikin_co2_browser.cjs
+      - name: Test G3 calibration conditions and result reporting
+        env:
+          NODE_PATH: frontend/node_modules
+          SCREEN_SCENE_CODEC: ${{ github.workspace }}/build/screen-codec/scene_codec
+        run: node tests/test_screen_calibration_browser.cjs
       - run: NODE_PATH=frontend/node_modules node tests/test_binding_layout.cjs
       - run: NODE_PATH=frontend/node_modules node tests/test_a1_effect_countdown_browser.cjs
       - run: NODE_PATH=frontend/node_modules node tests/test_interaction_layout.cjs

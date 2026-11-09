@@ -71,6 +71,33 @@ brightnessInput.oninput=queueBrightness;brightnessInput.onchange=()=>run(null,sa
 const brightness=section('screen.brightness',fieldRow('screen.brightness_level',h('div',{class:'row'},brightnessInput,brightnessValue)),brightnessReadback,brightnessLimit,h('div',{class:'row'},button('screen.load',loadBrightness,{id:'screenBrightnessLoad'}),brightnessSave),brightnessNotice);
 brightness.id='screenBrightnessSettings';
 I18N.onChange(renderBrightness);
+let calibrationData=null,calibrationBusy=false;
+const calibrationChannel=select([['co2','screen.cal_co2'],['tvoc','screen.cal_tvoc']],'co2');calibrationChannel.id='screenCalibrationChannel';
+const calibrationConfirmed=input('','checkbox',{id:'screenCalibrationConfirmed'}),calibrationHelp=h('p',{class:'help',id:'screenCalibrationHelp'}),calibrationState=h('p',{id:'screenCalibrationState',role:'status'});
+function renderCalibration(data){
+ if(data)calibrationData=data;
+ const d=calibrationData||{},channel=calibrationChannel.value,job=d[channel]||{},pending=d.pending||0;
+ calibrationHelp.textContent=t('screen.cal_help_'+channel);
+ calibrationStart.disabled=calibrationBusy||!d.available||pending!==0||d.request?.state==='pending'||!job.ready||!calibrationConfirmed.checked;
+ calibrationCancel.disabled=calibrationBusy||!d.available||!pending||['co2','tvoc'].some(key=>(pending&(key==='co2'?1:2))&&['command_sent','acknowledged'].includes(d[key]?.state))||d.request?.state==='pending';
+ calibrationState.textContent=!d.supported?t('screen.cal_upgrade'):!d.available?t('screen.cal_offline'):
+  ['pending','timeout','rejected'].includes(d.request?.state)?t('screen.cal_request_'+d.request.state):
+  ['co2','tvoc'].map(key=>{const j=d[key]||{};return t('screen.cal_'+key)+' · '+t('screen.cal_state_'+(j.state||'idle'),{seconds:j.warmup_seconds||0,samples:j.samples||0});}).join('；');
+}
+calibrationChannel.onchange=()=>{calibrationConfirmed.checked=false;renderCalibration();};
+calibrationConfirmed.onchange=()=>renderCalibration();
+async function calibrationAction(start){
+ if(calibrationBusy)return;
+ if(start&&!await UI.confirm({title:t('screen.cal_start'),body:t('screen.cal_help_'+calibrationChannel.value),ok:t('screen.cal_start')}))return;
+ calibrationBusy=true;renderCalibration();
+ try{await command('screen.calibration.'+(start?'start':'cancel'),start?{channel:calibrationChannel.value,environment_confirmed:calibrationConfirmed.checked}:{});
+  renderCalibration(await command('screen.calibration.get'));
+ }finally{calibrationConfirmed.checked=false;calibrationBusy=false;renderCalibration();}
+}
+const calibrationStart=button('screen.cal_start',()=>calibrationAction(true),{id:'screenCalibrationStart',disabled:true}),calibrationCancel=button('screen.cal_cancel',()=>calibrationAction(false),{id:'screenCalibrationCancel',disabled:true});
+const calibrationSection=section('screen.calibration',fieldRow('screen.cal_sensor',calibrationChannel),calibrationHelp,h('label',{class:'check'},calibrationConfirmed,h('span',{i18n:'screen.cal_confirmed'})),h('div',{class:'row'},calibrationStart,calibrationCancel,button('screen.refresh',async()=>renderCalibration(await command('screen.calibration.get')))),calibrationState);
+calibrationSection.id='screenCalibration';
+I18N.onChange(()=>renderCalibration());
 let remotePageData=null,remotePageBusy=false,remotePageChosen=false;
 const remotePageSelect=h('select',{id:'screenRemotePage'}),remotePageInfo=h('p',{id:'screenRemotePageInfo',role:'status'});
 function renderRemotePage(){
@@ -676,7 +703,7 @@ I18N.onChange(()=>{if(diagWaiting)diagInfo.textContent=t('screen.diag_wait');els
 const diagnosticSection=section('screen.diag_title',h('div',{class:'row'},diagMode,diagPage,diagStart,diagRead,diagExport),diagInfo,h('p',{class:'help',i18n:'screen.diag_source'}),h('div',{style:'overflow:auto'},diagTable));
 layout.id='screenLayout';reminder.id='screenReminders';weather.id='screenWeather';ota.id='screenOta';
 const tabBar=h('div',{class:'screen-tabs',role:'tablist','aria-label':t('screen.title_main')}),tabPanels=h('div',{class:'screen-tab-panels'});
-const screenTabs={layout:[layout],appearance:[appearanceSection],display:[remotePageSection,languageSection,brightness,displayPolicy],services:[weather,reminder],resources:[onlineSection,recoverySection,fontSection,ota],advanced:[moduleControl],diagnostics:[diagnosticSection]};
+const screenTabs={layout:[layout],appearance:[appearanceSection],display:[remotePageSection,languageSection,brightness,displayPolicy],services:[weather,reminder,calibrationSection],resources:[onlineSection,recoverySection,fontSection,ota],advanced:[moduleControl],diagnostics:[diagnosticSection]};
 function showScreenTab(key,focus=false){
  for(const [k]of Object.entries(screenTabs)){const active=k===key,button=document.querySelector('#screenTab_'+k),panel=document.querySelector('#screenPanel_'+k);button.setAttribute('aria-selected',String(active));button.tabIndex=active?0:-1;panel.hidden=!active;if(active&&focus)button.focus();}
 }
@@ -687,5 +714,5 @@ for(const [key,sections]of Object.entries(screenTabs)){
  b.onclick=()=>showScreenTab(key);b.onkeydown=e=>{const keys=Object.keys(screenTabs),i=keys.indexOf(key);if(['ArrowLeft','ArrowRight','Home','End'].includes(e.key)){e.preventDefault();showScreenTab(keys[e.key==='Home'?0:e.key==='End'?keys.length-1:(i+(e.key==='ArrowRight'?1:keys.length-1))%keys.length],true);}};tabBar.append(b);
 }
 root.append(h('h2',{i18n:'screen.title_main'}),tabBar,tabPanels);
-window.ScreenUI={status(s){root.hidden=s.hardware_model!=='BRY88BBA15G';if(root.hidden)return;deviceKey=s.device_id||s.id||deviceKey;const capsBefore=lastStatus?.capabilities;lastStatus=s.screen||{};if(!remotePageBusy)remotePageData=lastStatus.page;renderRemotePage();if(!diagBusy)diagStart.disabled=diagRead.disabled=!(lastStatus.capabilities&524288);if(capsBefore!==lastStatus.capabilities){componentForm();renderAppearance();}fontUpload.disabled=appearanceBusy||!(lastStatus.capabilities&16384);if(appearanceSection.hidden===appearanceSupported())renderAppearance();moduleData=lastStatus.module;renderModule();if(policyPending&&!policyDirty&&lastStatus.display?.applied_revision===policyPending){policyState.textContent=t('screen.policy_applied',{revision:policyPending});policyPending=0;}info.textContent=t(lastStatus.extension_supported?'screen.extension':'screen.factory')+' · '+t('screen.revisions',{saved:lastStatus.layout_revision||0,applied:lastStatus.mcu_layout_revision||0});if(!firmwareBusy&&!firmwareMessage)otaState.textContent=lastStatus.ota?.state||'';renderRecovery(lastStatus.recovery);renderStartup(lastStatus.startup);applyBrightnessData({settings:lastStatus.settings,request:lastStatus.settings_request,brightness:lastStatus.brightness});},load:loadLayout,enter:async()=>{if(!scene&&!loading)await loadLayout();},loadBrightness,loadPolicy,loadStartup,undo};
+window.ScreenUI={status(s){root.hidden=s.hardware_model!=='BRY88BBA15G';if(root.hidden)return;deviceKey=s.device_id||s.id||deviceKey;const capsBefore=lastStatus?.capabilities;lastStatus=s.screen||{};if(!remotePageBusy)remotePageData=lastStatus.page;renderRemotePage();if(!diagBusy)diagStart.disabled=diagRead.disabled=!(lastStatus.capabilities&524288);if(capsBefore!==lastStatus.capabilities){componentForm();renderAppearance();}fontUpload.disabled=appearanceBusy||!(lastStatus.capabilities&16384);if(appearanceSection.hidden===appearanceSupported())renderAppearance();moduleData=lastStatus.module;renderModule();renderCalibration(lastStatus.calibration);if(policyPending&&!policyDirty&&lastStatus.display?.applied_revision===policyPending){policyState.textContent=t('screen.policy_applied',{revision:policyPending});policyPending=0;}info.textContent=t(lastStatus.extension_supported?'screen.extension':'screen.factory')+' · '+t('screen.revisions',{saved:lastStatus.layout_revision||0,applied:lastStatus.mcu_layout_revision||0});if(!firmwareBusy&&!firmwareMessage)otaState.textContent=lastStatus.ota?.state||'';renderRecovery(lastStatus.recovery);renderStartup(lastStatus.startup);applyBrightnessData({settings:lastStatus.settings,request:lastStatus.settings_request,brightness:lastStatus.brightness});},load:loadLayout,enter:async()=>{if(!scene&&!loading)await loadLayout();},loadBrightness,loadPolicy,loadStartup,undo};
 })();
