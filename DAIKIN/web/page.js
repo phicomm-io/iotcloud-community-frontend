@@ -203,7 +203,7 @@ function climateSettings(){
 }
 const climateEditor=climateSettings();
 $('indicator').onchange=()=>run($('indicator'),()=>UI.control('indicator.set',{enabled:$('indicator').checked},{indicator_enabled:$('indicator').checked}));
-UI.start({model:'DAIKIN G1/G2',kindKey:'daikin.kind',icon:'air',factoryReset:true,mqttHostMax:127,diagnosticPages:['device'],
+UI.start({model:'BRY88AX151K',kindKey:'daikin.kind',icon:'air',factoryReset:true,mqttHostMax:127,diagnosticPages:['device'],
  otaName:'daikin_BRY88AX151K.ota.bin.signed',haHintKey:'daikin.ha',otaHintKey:'daikin.ota',buttonHintKey:'daikin.button',
  groups:[['grp.network',['network','mqtt']],['grp.device',['device','screen','binding']],['grp.system',['firmware','diagnostics','maintenance']]],
  nav:{screen:'screen.title_main',network:'nav.wifi',mqtt:'nav.mqtt',device:'nav.general',binding:'nav.permission',firmware:'nav.firmware',diagnostics:'nav.diagnostics',maintenance:'nav.maintenance'},

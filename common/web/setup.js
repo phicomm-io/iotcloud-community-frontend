@@ -2,7 +2,7 @@
 'use strict';
 const $=id=>document.getElementById(id), model='__MODEL__', {t}=I18N;
 I18N.apply();$('language').value=I18N.preference;$('language').onchange=()=>I18N.set($('language').value);
-document.title=t('setup.title',{m:model});I18N.onChange(()=>{document.title=t('setup.title',{m:model});if(initialized)refresh().catch(()=>{});});
+document.title=model;I18N.onChange(()=>{if(initialized)refresh().catch(()=>{});});
 let caps={};
 let initialized=false,saving=false,stopped=false,resetPending=false,refreshGeneration=0,ticket=null,received=false,importedOriginal=null;
 let lastUptime,resetUptime,resetSawPending=false;
