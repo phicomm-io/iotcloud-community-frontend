@@ -2,13 +2,13 @@
 
 [简体中文](README.md)
 
-Shared WebUI source for TC1 power strips, M1 air quality monitors, A1 air purifiers, DAIKIN air quality monitors and ORVIBO S30-V1B single-outlet plugs. Device pages, the IoTCloud platform, direct LAN management, the hub interface and interactive demos reuse the same device UI, with English and Chinese support on phones and desktops.
+Shared WebUI source for TC1 power strips, M1 air quality monitors, A1 air purifiers, DAIKIN air quality monitors and ORVIBO S30M-V1B single-outlet plugs. Device pages, the IoTCloud platform, direct LAN management, the hub interface and interactive demos reuse the same device UI, with English and Chinese support on phones and desktops.
 
 **[Open IoTCloud](https://phicomm-io.github.io/iotcloud/) · [Direct LAN access](https://phicomm-io.github.io/local/) · [Simulated demos](https://phicomm-io.github.io/en/#demos) · [User guides](https://phicomm-io.github.io/en/#install)**
 
 ## Features and source
 
-- **Device pages:** TC1 sockets, power and schedules; M1 / DAIKIN air readings, display settings and linked devices; A1 fan, filter, lighting and automatic modes; S30-V1B switching, metering, child lock and power-on policy. Controls follow firmware capabilities.
+- **Device pages:** TC1 sockets, power and schedules; M1 / DAIKIN air readings, display settings and linked devices; A1 fan, filter, lighting and automatic modes; S30M-V1B switching, metering, child lock and power-on policy. Controls follow firmware capabilities.
 - **Platform and LAN access:** Manage devices through a platform account or your own MQTT Broker. Direct LAN access uses the device web password without a platform account. See the [connection guide](https://phicomm-io.github.io/guides/en/iotcloud-connect.html).
 - **DAIKIN hub:** A separate build uses local accounts to manage its Broker, upstream MQTT and forwarding, without email registration or GitHub login. The v1.0.0-rc prerelease includes a separate hub build; stable v1 has not been released. See the [DAIKIN guide](https://phicomm-io.github.io/guides/en/daikin-guide.html) for installation and conversion requirements.
 - **Static app and demos:** Host IoTCloud separately and add it to your home screen. Demos use simulated data.

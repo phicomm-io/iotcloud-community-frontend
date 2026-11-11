@@ -6,7 +6,7 @@ import {hubPowerSample} from './hubMeter.js';
 export const requestId = () => Array.from(crypto.getRandomValues(new Uint8Array(16)), b=>b.toString(16).padStart(2,"0")).join("");
 export const userKey = username => "u_" + [...new TextEncoder().encode(username)].map(b => b.toString(16).padStart(2,"0")).join("");
 export const deviceKey = d => d.namespace === "account" ? `account:${d.username}:${d.mqtt_username || d.username}:${d.mac}` : d.mac;
-export const modelName = (model) => model==='daikin'?'DAIKIN G1/G2/G3':String(model).toUpperCase();
+export const modelName = (model) => model==='daikin'?'DAIKIN G1/G2/G3':model==='s30-v1b'?'S30M-V1B':String(model).toUpperCase();
 export function normalizeMAC(value) {
   const s = String(value || "").trim();
   if (

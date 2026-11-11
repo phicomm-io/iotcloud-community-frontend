@@ -33,8 +33,7 @@ function devicePages() {
  })));
  // G3 shares sensor and screen code, but has no G1/G2 indicator or calibration
  // controls. Select this variant using the hardware identity in device status.
- pages['daikin-g3']=pages.daikin.replaceAll('DAIKIN G1/G2','DAIKIN G3')
-  .replaceAll('daikin_BRY88AX151K.ota.bin.signed','daikin_BRY88BBA15G.ota.bin.signed')
+ pages['daikin-g3']=pages.daikin.replaceAll('BRY88AX151K','BRY88BBA15G')
   .replace('</head>','<style>#indicatorSettings,#climateSettings,#co2Settings,section.card:has(#indicator){display:none!important}</style></head>');
  // Device pages share complete scripts and styles. Keep one copy of each
  // fragment in the bundle, then reconstruct the original HTML for srcdoc.

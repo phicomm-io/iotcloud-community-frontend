@@ -770,7 +770,7 @@ async function load(priority){
   if(generation!==fullGeneration)return null;
   const s=UI.acceptStatus(raw,params.view==='live');
   if(mayM1)readMcuVersion().catch(()=>{});
-  $('title').textContent=UI.device.model+' '+(s.name||'');
+  $('title').textContent=s.name||UI.device.model;
   renderChips(s);renderBanners(s,false);
   if(!initialized){for(const p of Object.values(UI.pages))if(p.init)p.init(s);initialized=true;}
   else for(const p of pendingPageInit)if(p.init)p.init(s);
@@ -855,7 +855,7 @@ function mountDevicePages(dev){
  for(const [key,page] of Object.entries(UI.pages))if(!previous.has(key))pendingPageInit.add(page);
 }
 UI.start=async dev=>{
- UI.device=dev;lockHome();
+ UI.device=dev;document.title=dev.model;lockHome();
  const first=dev.groups.flatMap(g=>g[1])[0];
  document.body.prepend(header(dev),
   h('nav',{class:'tabs','aria-label':'Main'},

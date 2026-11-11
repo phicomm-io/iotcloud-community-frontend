@@ -5,7 +5,7 @@ import {pressureReading,meterReading} from './devicePresentation.js';
 test('S30 labels and one-outlet states preserve unknown values',async()=>{
  const {socketStates,deviceType}=await import('./devicePresentation.js');
  const device={model:'s30-v1b'};
- assert.equal(deviceType(device),'ORVIBO S30-V1B');
+ assert.equal(deviceType(device),'S30M-V1B');
  assert.deepEqual(socketStates({socket_states:[true]},1),[true]);
  assert.deepEqual(socketStates({},1),[undefined]);
 });

@@ -1,4 +1,4 @@
-/* S30-V1B: shared socket page with one outlet and HLW8032 metering. */
+/* S30M-V1B: shared socket page with one outlet and HLW8032 metering. */
 (()=>{
 'use strict';
 const {t}=I18N;
@@ -95,7 +95,7 @@ UI.onSubmit($('bootForm'),()=>command('config.set',{section:'device',values:UI.c
 let initialized=false;
 
 UI.start({
- model:'S30-V1B',kindKey:'kind.s30',icon:'plug',mqttHostMax:127,mqttPasswordMax:127,factoryReset:true,
+ model:'S30M-V1B',kindKey:'kind.s30',icon:'plug',mqttHostMax:127,mqttPasswordMax:127,factoryReset:true,
  otaName:'BL2028N_OTA.rbl',haHintKey:'s30.ha_hint',otaHintKey:'s30.ota_hint',buttonHintKey:'s30.button_hint',
  interval:5000,
  groups:[['grp.network',['network','mqtt']],['grp.device',['device']],['grp.auto',['schedule','clock']],['grp.system',['firmware','diagnostics','maintenance']]],
@@ -110,7 +110,6 @@ UI.start({
  healthChecks:s=>Object.hasOwn(s,'free_memory')?[['diag.c_memory',s.free_memory>=8192?'ok':'warn',Math.round(s.free_memory/1024)+' KB']]:[],
  onStatus:s=>{
   renderSockets(s);
-  if(s.name==='S30-V1B')$('title').textContent='S30-V1B';
   if(!initialized){nameInputs.forEach((x,i)=>x.value=(s.socket_names||[])[i]||'');
    $('reportSeconds').value=s.report_seconds;
    $('voltageCoef').value=s.voltage_coefficient;$('currentCoef').value=s.current_coefficient;$('powerCoef').value=s.power_coefficient;

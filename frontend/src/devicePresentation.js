@@ -9,7 +9,7 @@ export function socketStates(s={},count=6){
   return v===true||v===1||v==='1'?true:v===false||v===0||v==='0'?false:undefined;
  });
 }
-export const deviceType=(d,s={})=>({tc1:t('p.1d002acab84e'),m1:t('p.5f519f80aa2f'),a1:t('p.d1d553a7ed95'),daikin:(d.hardware_model||s.hardware_model)==='BRY88BBA15G'?'DAIKIN G3':(d.hardware_model||s.hardware_model)==='BRY88AX151K'?'DAIKIN G1/G2':'DAIKIN','s30-v1b':'ORVIBO S30-V1B'})[d.model]||t('p.e1506406a5bd');
+export const deviceType=(d,s={})=>({tc1:'TC1',m1:'M1',a1:'A1',daikin:(d.hardware_model||s.hardware_model)==='BRY88BBA15G'?'BRY88BBA15G':(d.hardware_model||s.hardware_model)==='BRY88AX151K'?'BRY88AX151K':'DAIKIN','s30-v1b':'S30M-V1B'})[d.model]||t('p.e1506406a5bd');
 export function pressureReading(s={},now=Date.now()){
  const b=s.barometer,elapsed=now-s.sensorAt;
  return b?.ready===true&&b.valid===true&&['BMP388','BMP390'].includes(b.model)&&

@@ -17,4 +17,5 @@ def render_setup(model):
                        'PROVISION': (ROOT / 'provision.js').read_text(),
                        'SETUP': (ROOT / 'setup.js').read_text()}.items():
         text = text.replace('__' + key + '__', value)
-    return text.replace('__MODEL__', model.upper()).encode()
+    label = {'daikin': 'BRY88AX151K', 'daikin-g3': 'BRY88BBA15G', 's30-v1b': 'S30M-V1B'}.get(model, model.upper())
+    return text.replace('__MODEL__', label).encode()
