@@ -36,7 +36,7 @@ test('G3 detail reads live MQTT publications when status receipts are empty, and
   });
  });
  await page.goto('/#/guest');
- await expect(page.locator('.device-heading')).toContainText('DAIKIN G3',{timeout:30000});
+ await expect(page.locator('.device-heading h2')).toHaveText('BRY88BBA15G',{timeout:30000});
  const home=page.frameLocator('iframe.device-home'),pm=home.locator('[data-sensor="pm25"] .num');
  await expect(pm).toHaveText('—');
  const refresh=()=>page.locator('.device-heading button').last().click();

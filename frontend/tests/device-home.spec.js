@@ -43,12 +43,12 @@ for(const transport of ['LAN','MQTT'])for(const hardware of ['BRY88BBA15G','BRY8
   await route.fulfill({contentType:'application/json',body:JSON.stringify({code:'ok',data})});
  });
  await page.goto('/#/guest');
- await expect(page.locator('.device-heading')).toContainText(g3?'DAIKIN G3':'DAIKIN G1/G2',{timeout:30000});
+ await expect(page.locator('.device-heading h2')).toHaveText(hardware,{timeout:30000});
  const home=page.frameLocator('iframe.device-home');
  await expect(home.locator('[data-sensor="pm25"] .num')).toHaveText('0');
  await expect(home.locator('[data-sensor="co2"] .num')).toHaveText('641');
  await expect(home.locator('[data-sensor="tvoc"] .num')).toHaveText('132');
- await expect(home.locator('title')).toHaveJSProperty('textContent',g3?'DAIKIN G3':'DAIKIN G1/G2');
+ await expect(home.locator('title')).toHaveJSProperty('textContent',hardware);
  if(g3)await expect(home.locator('section.card:has(#indicator)')).toBeHidden();
  else await expect(home.locator('section.card:has(#indicator)')).toBeVisible();
  await home.locator('.tabs [data-tab="settings"]').click();
@@ -106,10 +106,10 @@ test('daily list hides protocol details and legacy names can be changed and rest
  await page.reload();await expect(page.locator('.device-select')).toContainText('书房插排');
  await page.getByRole('button',{name:/修改.*的名称/}).click();
  await page.getByRole('button',{name:'恢复默认名称'}).click();
- await expect(page.locator('.device-select')).toContainText('TC1 智能插排');
+ await expect(page.locator('.device-select .rack-head b')).toHaveText('TC1');
  await page.getByRole('button',{name:'设置',exact:true}).click();
  await page.getByRole('navigation',{name:'设置分类'}).getByRole('button',{name:/设备管理/}).click();
- await expect(page.locator('.managed-device')).toContainText('TC1 智能插排');
+ await expect(page.locator('.managed-device .rack-head b')).toHaveText('TC1');
  await page.locator('.device-details summary').click();
  await expect(page.locator('.device-details')).toContainText('Legacy');
 });
