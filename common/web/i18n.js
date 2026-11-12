@@ -6,6 +6,10 @@
 const D={
 "screen.external_push":["External push", "外部推送"],
 "screen.push_help":["Send text, an image, or both. Images are resized and compressed before upload. Up to 16 messages share four image slots. Double-tap the front button to cycle the normal page and the first four notifications.", "可推送文字、图片或图文。浏览器先缩放压缩图片。最多 16 条消息共用 4 张图片缓存。双击前面触摸键，按原页面、通知 1～4 循环；前面的通知消失后，后续消息自动补入。"],
+"screen.push_source":["Push an image or stream URL", "推送图片或视频流地址"],
+"screen.push_source_url":["JPEG / MJPEG URL", "JPEG / MJPEG 地址"],
+"screen.push_source_password":["Source password", "图源密码"],
+"screen.push_source_help":["Use a file or an HTTP(S) image/stream URL. Repeating a queued URL extends its duration. The source must supply the requested resolution; placeholders: {width}, {height}, {fps}. Credentials apply to this notice only.", "文件与 HTTP(S) 图片或视频流地址任选其一。同一地址再次推送会延长显示时间。图源需提供指定分辨率，支持 {width}、{height}、{fps} 占位符。密码仅用于本条通知。"],
 "screen.push_timed":["Disappear after a duration", "定时消失"],
 "screen.push_confirm":["Disappear after confirmation", "确认后消失"],
 "screen.push_mode":["Dismissal", "消失方式"],
