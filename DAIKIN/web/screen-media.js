@@ -12,7 +12,6 @@ const pushClear=input('','checkbox',{id:'screenPushClear'});
 const pushTtl=input('','number',{id:'screenPushTtl',min:0,max:86400,placeholder:'0…86400',disabled:true}),pushOverflow=select([['reject','screen.push_overflow_reject'],['drop_newest','screen.push_overflow_drop_newest'],['drop_oldest','screen.push_overflow_drop_oldest']],'reject');pushOverflow.id='screenPushOverflow';pushOverflow.disabled=true;
 let pushPolicySupported=false;
 pushQueue.addEventListener('change',()=>{if(pushQueue.value)pushId.value=pushQueue.value;});
-let lastPushId=0;
 async function mediaOperation(action,params={}){
  const receipt=await command(action,params),until=Date.now()+10000;
  if(!receipt.request)throw Error(t('screen.media_unconfirmed'));
@@ -50,7 +49,7 @@ async function sendPush(update=false){
   if(imageId||!update&&!url||pushClear.checked)params.image_id=imageId;
   if(url)Object.assign(params,{url,username:pushUser.value,...(pushPassword.value||!update?{password:pushPassword.value}:{}),width:w,height:h,fps:Number(pushFps.value),verify_tls:pushTls.checked});
   const state=await mediaOperation(update?'screen.push.update':'screen.push.send',params);
-  pushPassword.value='';lastPushId=update?id:(state.last_push_id||id);pushId.value=String(lastPushId);pushClear.checked=false;await refreshPush();
+  pushPassword.value='';pushId.value=String(update?id:(state.last_push_id||id));pushClear.checked=false;await refreshPush();
  }catch(error){if(imageId)try{await mediaOperation('screen.media.cancel',{id:imageId});}catch{}throw error;}
  finally{mediaProgress.hidden=true;}
 }
