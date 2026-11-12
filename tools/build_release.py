@@ -41,8 +41,11 @@ def main():
     env = dict(os.environ, VITE_DEMO='1')
     run('npm', '--prefix', 'frontend', 'run', 'build', env=env)
     shutil.copytree(ROOT / 'frontend/dist', out / 'demos/platform')
-    for model, source in [('tc1', 'TC1/http_server/web/index.html'), ('m1', 'M1/web/index.html'), ('a1', 'A1/web/index.html'), ('daikin', 'DAIKIN/web/index.html'), ('s30-v1b', 'S30/web/index.html')]:
-        data = render_page(ROOT / source, minify=True)
+    for model, source in [('tc1', 'TC1/http_server/web/index.html'), ('m1', 'M1/web/index.html'), ('a1', 'A1/web/index.html'), ('daikin', 'DAIKIN/web/index.html'), ('daikin-g3', 'DAIKIN/web/index.html'), ('s30-v1b', 'S30/web/index.html')]:
+        data = render_page(ROOT / source, minify=True, screen=model not in ('tc1', 'm1', 'a1', 'daikin', 's30-v1b'))
+        if model == 'daikin-g3':
+            data = data.replace(b'BRY88AX151K', b'BRY88BBA15G')
+            data = data.replace(b'</head>', b'<style>#indicatorSettings,#climateSettings,#co2Settings,section.card:has(#indicator){display:none!important}</style></head>')
         device = out / 'devices' / model
         device.mkdir(parents=True)
         (device / 'index.html').write_bytes(data)
@@ -57,7 +60,7 @@ def main():
         with gzip.GzipFile(filename='', fileobj=setup_gzip, mode='wb', compresslevel=9, mtime=0) as zipped:
             zipped.write(setup)
         (device / 'setup.html.gz').write_bytes(setup_gzip.getvalue())
-        adapter = (ROOT / 'common/web/demo.js').read_text().replace('__MODEL__', model)
+        adapter = (ROOT / 'DAIKIN/web/screen-layout.js').read_text() + '\n' + (ROOT / 'DAIKIN/web/screen-appearance.js').read_text() + '\n' + (ROOT / 'common/web/demo-screen.js').read_text() + '\n' + (ROOT / 'common/web/demo.js').read_text().replace('__MODEL__', model)
         demo = data.decode().replace('<head>', '<head><script>' + adapter + '</script>', 1)
         dest = out / 'demos' / model
         dest.mkdir(parents=True)
@@ -70,7 +73,7 @@ def main():
         shutil.copyfile(ROOT / name, dest)
     hashes = {str(p.relative_to(out)): hashlib.sha256(p.read_bytes()).hexdigest()
               for p in sorted(out.rglob('*')) if p.is_file()}
-    manifest = dict(schema=1, repository='phicomm-io/iotcloud-community-frontend', commit=commit, features=['bootstrap-ui', 'local-console', 'sensor-providers', 'daikin', 'daikin-hub', 's30-v1b'], files=hashes)
+    manifest = dict(schema=1, repository='phicomm-io/iotcloud-community-frontend', commit=commit, features=['bootstrap-ui', 'local-console', 'sensor-providers', 'daikin', 'daikin-hub', 'daikin-g3', 'screen-scn3', 's30-v1b'], files=hashes)
     (out / 'manifest.json').write_text(json.dumps(manifest, indent=2, sort_keys=True) + '\n')
     archive = ROOT / 'build/frontend.tar.gz'
     # No wall-clock timestamps or machine identities in the archive.

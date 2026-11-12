@@ -5,7 +5,7 @@ from page import _auth_bundle
 ROOT = Path(__file__).resolve().parent
 
 def render_setup(model):
-    if model not in ('tc1', 'a1', 'm1', 'daikin', 's30-v1b'):
+    if model not in ('tc1', 'a1', 'm1', 'daikin', 'daikin-g3', 's30-v1b'):
         raise ValueError('Unknown model')
     # Shared tokens and base components only; exclude settings and product views.
     style = (ROOT / 'style.css').read_text().split('/* Settings layout */')[0]
@@ -17,4 +17,5 @@ def render_setup(model):
                        'PROVISION': (ROOT / 'provision.js').read_text(),
                        'SETUP': (ROOT / 'setup.js').read_text()}.items():
         text = text.replace('__' + key + '__', value)
-    return text.replace('__MODEL__', model.upper()).encode()
+    label = {'daikin': 'BRY88AX151K', 'daikin-g3': 'BRY88BBA15G', 's30-v1b': 'S30M-V1B'}.get(model, model.upper())
+    return text.replace('__MODEL__', label).encode()

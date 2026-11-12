@@ -12,6 +12,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, '..');
 const hubMode=process.env.VITE_HUB==='1';
 const minifyDevice = createRequire(import.meta.url)(resolve(root,'tools/minify_device.cjs'));
+const withoutScreen = createRequire(import.meta.url)(resolve(root,'tools/trim_device_styles.cjs')).withoutScreen;
 const products = {tc1:'TC1/http_server/web/index.html',a1:'A1/web/index.html',m1:'M1/web/index.html',daikin:'DAIKIN/web/index.html','s30-v1b':'S30/web/index.html'};
 function devicePages() {
  return {name:'device-pages', resolveId(id){if(id==='virtual:device-pages')return '\0device-pages';},
@@ -30,6 +31,10 @@ function devicePages() {
   html=html.replace('</head>','<script>'+appearance+'</script></head>');
   return [model,await minifyDevice(html)];
  })));
+ // G3 shares sensor and screen code, but has no G1/G2 indicator or calibration
+ // controls. Select this variant using the hardware identity in device status.
+ pages['daikin-g3']=pages.daikin.replaceAll('BRY88AX151K','BRY88BBA15G')
+  .replace('</head>','<style>#indicatorSettings,#climateSettings,#co2Settings,section.card:has(#indicator){display:none!important}</style></head>');
  // Device pages share complete scripts and styles. Keep one copy of each
  // fragment in the bundle, then reconstruct the original HTML for srcdoc.
  const fragments=[], ids=new Map();
@@ -48,6 +53,8 @@ export default defineConfig({
   base: process.env.VITE_BASE_PATH || './',
   resolve: {alias:hubMode?[{find:/^mqtt$/,replacement:resolve(here,'src/hubMqtt.js')}]:[]},
   esbuild: hubMode?{legalComments:'inline'}:undefined,
+  css: hubMode?{postcss:{plugins:[{postcssPlugin:'hub-product-styles',OnceExit(sheet){const css=withoutScreen(sheet.toString());sheet.removeAll();sheet.append(css);}}]}}:undefined,
+  build: hubMode?{minify:'terser',terserOptions:{compress:{passes:3}}}:undefined,
   plugins: [vue(), ...(hubMode?[
     {...hubDevicePages({sourceRoot:root,appRoot:here}),apply:'build'},
     {...devicePages(),apply:'serve'},

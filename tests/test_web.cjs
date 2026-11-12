@@ -82,7 +82,7 @@ const ACTIONS={M1:['schedules.get','schedules.put','schedules.delete','schedules
   const views=w.UI.caps.status_views;delete w.UI.caps.status_views;
   await w.UI.reload();assert.deepEqual(reads().at(-1).params,{},'legacy firmware uses full');w.UI.caps.status_views=views;
  }
- assert.equal(d.querySelector('#title').textContent,model+' test <img>');
+ assert.equal(d.querySelector('#title').textContent,'test <img>');
  assert.equal(d.querySelector('img'),null,'device-supplied names must not be injected as markup');
  if(model==='A1')assert(d.querySelector('#autoCard').textContent.includes('25.0 °C'),'homepage displays the live M1 mean even when linkage is disabled');
  if(model==='A1'){

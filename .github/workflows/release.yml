@@ -69,8 +69,30 @@ jobs:
           node tests/test_daikin.cjs
           node --test tests/test_ota_conversion.cjs
           node tests/test_m1_pressure.cjs
+      - uses: actions/checkout@v4
+        with:
+          repository: phicomm-io/iotcloud-bry88bba15g-screenmcu
+          ref: 07b78366564ba7f73db765c264e002bd2451c1ea
+          path: build/screen-source
+      - uses: actions/checkout@v4
+        with:
+          repository: DaveGamble/cJSON
+          ref: v1.7.19
+          path: build/cjson
+      - run: cmake -S build/screen-source -B build/screen-codec -DSCREEN_BUILD_PREVIEW=OFF -DCJSON_DIR="$PWD/build/cjson" && cmake --build build/screen-codec -j4
+      - name: Verify screen editor against the pinned MCU codecs
+        env:
+          NODE_PATH: frontend/node_modules
+          SCREEN_SCENE_CODEC: ${{ github.workspace }}/build/screen-codec/scene_codec
+          SCREEN_APPEARANCE_CODEC: ${{ github.workspace }}/build/screen-codec/appearance_codec
+        run: node --test tests/test_screen_editor.cjs tests/test_screen_appearance.cjs tests/test_screen_diagnostics.cjs
       - run: python3 tools/build_release.py
       - run: npx --prefix frontend playwright install --with-deps chromium webkit
+      - name: Test G3 notification and camera controls in the browser
+        env:
+          NODE_PATH: frontend/node_modules
+          SCREEN_SCENE_CODEC: ${{ github.workspace }}/build/screen-codec/scene_codec
+        run: node tests/test_screen_browser.cjs
       - run: NODE_PATH=frontend/node_modules node tests/test_status_reload_browser.cjs
       - run: BROWSER=webkit NODE_PATH=frontend/node_modules node tests/test_status_reload_browser.cjs
       - name: Test M1 display profiles in built platform, local and hub applications
@@ -78,7 +100,7 @@ jobs:
           M1_DISPLAY_BUNDLE_ROOT: ../build/bundle
         run: node tests/m1-display-built.mjs
         working-directory: frontend
-      - run: npx playwright test tests/setup.spec.js tests/lan-connection.spec.js tests/local-connection.spec.js tests/device-home.spec.js tests/device-order.spec.js
+      - run: npx playwright test tests/setup.spec.js tests/lan-connection.spec.js tests/local-connection.spec.js tests/device-home.spec.js tests/mqtt-g3-status.spec.js tests/device-order.spec.js
         working-directory: frontend
       - name: Test local connection entry in WebKit
         env:
@@ -88,6 +110,11 @@ jobs:
       - run: NODE_PATH=frontend/node_modules node tests/test_demos.cjs
       - run: NODE_PATH=frontend/node_modules node tests/test_daikin_indicators_browser.cjs
       - run: NODE_PATH=frontend/node_modules node tests/test_daikin_co2_browser.cjs
+      - name: Test G3 calibration conditions and result reporting
+        env:
+          NODE_PATH: frontend/node_modules
+          SCREEN_SCENE_CODEC: ${{ github.workspace }}/build/screen-codec/scene_codec
+        run: node tests/test_screen_calibration_browser.cjs
       - run: NODE_PATH=frontend/node_modules node tests/test_binding_layout.cjs
       - run: NODE_PATH=frontend/node_modules node tests/test_a1_effect_countdown_browser.cjs
       - run: NODE_PATH=frontend/node_modules node tests/test_interaction_layout.cjs

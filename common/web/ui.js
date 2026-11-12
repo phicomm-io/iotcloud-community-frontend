@@ -260,7 +260,7 @@ function renderBanners(s,lost){
  if(s.save_error)add('bad','alert',t('banner.save_error',{e:s.save_error}));
  if(s.ap_active&&!s.wifi_connected)add('warn','wifi',t('banner.hotspot',{n:s.ap_name}));
 }
-function settingsAvailable(key){return !!UI.pages[key]&&(!UI.caps?.hub_remote||key==='diagnostics'&&UI.caps.actions?.includes('diagnostics.get'));}
+function settingsAvailable(key){return !!UI.pages[key]&&UI.pages[key].available?.()!==false&&(!UI.caps?.hub_remote||key==='diagnostics'&&UI.caps.actions?.includes('diagnostics.get'));}
 function buildNav(dev){
  const side=$('side');side.replaceChildren();
  for(const [groupKey,keys] of dev.groups){
@@ -479,10 +479,11 @@ function firmwarePage(dev){
  const mcu=mayM1&&dev.model==='M1'?mcuVersionPanel():null;
  const comparison=h('a',{id:'otaCompare',class:'btn',target:'_blank',rel:'noopener noreferrer'},h('span',{i18n:'fw.compare'}),icon('external'));
  let identity=null,targetVersion=null;
+ function releaseModel(){return (identity?.hardware_model||UI.caps?.hardware_model)==='BRY88BBA15G'?'bry88bba15g':String(identity?.model||UI.caps?.model||'').toLowerCase();}
  function comparisonLink(){
   const path=I18N.lang==='en'?'guides/en/release-log.html':'guides/release-log.html';
   const link=new URL(path,'https://phicomm-io.github.io/');link.searchParams.set('view','compare');
-  const model=identity?.model||UI.caps?.model,variant=identity?.firmware_variant||UI.caps?.firmware_variant;
+  const model=releaseModel(),variant=identity?.firmware_variant||UI.caps?.firmware_variant;
   if(model&&variant&&identity?.version){
    for(const [key,value] of Object.entries({model,variant,from:identity.version,...(targetVersion?{to:targetVersion}:{})}))link.searchParams.set(key,value);
   }
@@ -522,7 +523,7 @@ function firmwarePage(dev){
     if(!identity?.version||!targetVersion)throw Error();
     await loadReleaseNotes();
     const snapshot=await ReleaseNotesClient.snapshot('https://phicomm-io.github.io');
-    const result=ReleaseNotes.compare(snapshot.manifest,{from:identity.version,to:targetVersion,model:String(identity.model||UI.caps.model).toLowerCase(),variant:identity.firmware_variant||UI.caps.firmware_variant||'full',locale:I18N.lang},snapshot.catalog);
+    const result=ReleaseNotes.compare(snapshot.manifest,{from:identity.version,to:targetVersion,model:releaseModel(),variant:identity.firmware_variant||UI.caps.firmware_variant||'full',locale:I18N.lang},snapshot.catalog);
     if(!result.ok||key!==[identity?.version,targetVersion,I18N.lang].join('/'))throw Error();
     notesText.textContent=[...result.upgrade_notices,...result.changes].map(row=>row.title+'\n'+row.description).join('\n\n')||t('fw.check_up_to_date');comparisonReady=key;return true;
    }catch{comparisonReady='';notesText.textContent=t('fw.notes_unavailable');return false;}
@@ -769,7 +770,7 @@ async function load(priority){
   if(generation!==fullGeneration)return null;
   const s=UI.acceptStatus(raw,params.view==='live');
   if(mayM1)readMcuVersion().catch(()=>{});
-  $('title').textContent=UI.device.model+' '+(s.name||'');
+  $('title').textContent=s.name||UI.device.model;
   renderChips(s);renderBanners(s,false);
   if(!initialized){for(const p of Object.values(UI.pages))if(p.init)p.init(s);initialized=true;}
   else for(const p of pendingPageInit)if(p.init)p.init(s);
@@ -854,7 +855,7 @@ function mountDevicePages(dev){
  for(const [key,page] of Object.entries(UI.pages))if(!previous.has(key))pendingPageInit.add(page);
 }
 UI.start=async dev=>{
- UI.device=dev;lockHome();
+ UI.device=dev;document.title=dev.model;lockHome();
  const first=dev.groups.flatMap(g=>g[1])[0];
  document.body.prepend(header(dev),
   h('nav',{class:'tabs','aria-label':'Main'},

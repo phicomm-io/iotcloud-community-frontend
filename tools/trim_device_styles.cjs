@@ -10,16 +10,20 @@ const owners={
 function trimStyles(css,model){
  if(!Object.hasOwn(owners,model))return css;
  const excluded=new Set(Object.entries(owners).filter(([owner])=>owner!==model).flatMap(([,names])=>names.split(' ')));
+ return prune(css,name=>excluded.has(name));
+}
+function prune(css,excluded){
  const ast=cssTree.parse(css);
  cssTree.walk(ast,{visit:'Rule',enter(rule,item,list){
   if(rule.prelude?.type!=='SelectorList')return;
   rule.prelude.children.forEach((selector,entry,selectors)=>{
    // Only direct selector classes can prove a rule impossible. A class inside
    // :not/:is/:has cannot; retain those expressions unchanged.
-   if(selector.children.some(node=>node.type==='ClassSelector'&&excluded.has(node.name)))selectors.remove(entry);
+   if(selector.children.some(node=>node.type==='ClassSelector'&&excluded(node.name)))selectors.remove(entry);
   });
   if(rule.prelude.children.isEmpty)list.remove(item);
  }});
  return cssTree.generate(ast);
 }
 module.exports=trimStyles;
+module.exports.withoutScreen=css=>prune(css,name=>name.startsWith('screen-'));

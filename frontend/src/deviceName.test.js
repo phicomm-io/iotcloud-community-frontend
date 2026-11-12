@@ -21,7 +21,7 @@ test('rename rejection or unconfirmed timeout remains an error; late reads canno
 });
 test('normal acknowledgements cancel verification, and A1/M1 default names can be verified',()=>{
  const f=fixture();f.requests[0].reply({code:'accepted'});assert.equal(f.timers.size,0);assert.equal(f.results.length,1);
- for(const model of ['a1','m1']){const f=fixture('',model);f.tick();f.requests[1].reply({code:'ok',data:{name:model.toUpperCase()+'-3134'}});assert.equal(f.results[0].code,'ok');}
+ for(const model of ['a1','m1'])for(const suffix of ['','-3134']){const f=fixture('',model),name=model.toUpperCase()+suffix;f.tick();f.requests[1].reply({code:'ok',data:{name}});assert.deepEqual(f.results[0],{code:'ok',data:{name}});}
 });
 
 test('lost verification reads retry without resending the write',()=>{
