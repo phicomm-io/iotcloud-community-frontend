@@ -9,6 +9,8 @@ const pushView=select(Array.from({length:5},(_,i)=>[i,i?'screen.push_view_'+i:'s
 const pushId=input('','number',{id:'screenPushId',min:1,max:4294967295,placeholder:'1…4294967295'});
 const pushQueue=select([],0);pushQueue.id='screenPushQueue';
 const pushClear=input('','checkbox',{id:'screenPushClear'});
+const pushTtl=input('','number',{id:'screenPushTtl',min:0,max:86400,placeholder:'0…86400'}),pushOverflow=select([['reject','screen.push_overflow_reject'],['drop_newest','screen.push_overflow_drop_newest'],['drop_oldest','screen.push_overflow_drop_oldest']],'reject');pushOverflow.id='screenPushOverflow';
+let pushPolicySupported=false;
 pushQueue.addEventListener('change',()=>{if(pushQueue.value)pushId.value=pushQueue.value;});
 let lastPushId=0;
 async function mediaOperation(action,params={}){
@@ -42,7 +44,9 @@ async function sendPush(update=false){
    for(let offset=0;offset<bytes.length;offset+=512){await mediaOperation('screen.media.chunk',{id:imageId,offset,bytes:b64(bytes.slice(offset,offset+512))});mediaProgress.value=Math.min(offset+512,bytes.length);}
    await mediaOperation('screen.media.commit',{id:imageId});
   }
+  if(pushTtl.value!==''&&(!num(Number(pushTtl.value))||Number(pushTtl.value)<0||Number(pushTtl.value)>86400))throw Error(t('screen.invalid'));
   const params={id,title:pushTitle.value,text:pushText.value,mode:pushMode.value,duration_ms:duration,wake:pushWake.checked};
+  if(pushPolicySupported){if(pushTtl.value!=='')params.ttl_ms=Number(pushTtl.value)*1000;if(!update)params.overflow=pushOverflow.value;}
   if(imageId||!update&&!url||pushClear.checked)params.image_id=imageId;
   if(url)Object.assign(params,{url,username:pushUser.value,...(pushPassword.value||!update?{password:pushPassword.value}:{}),width:w,height:h,fps:Number(pushFps.value),verify_tls:pushTls.checked});
   const state=await mediaOperation(update?'screen.push.update':'screen.push.send',params);
@@ -56,6 +60,7 @@ async function refreshPush(){
  pushQueue.replaceChildren(h('option',{value:'',i18n:'screen.push_choose'}),...(state.queue||[]).map(m=>h('option',{value:m.id},m.id+' · '+t('screen.push_state_'+m.state))));
  pushQueue.value=selected;
  document.querySelector('#screenPushUpdate').disabled=state.update_supported!==true;
+ pushPolicySupported=state.policy_supported===true;pushTtl.disabled=pushOverflow.disabled=!pushPolicySupported;
  mediaState.textContent=t('screen.push_capacity',{count:state.queued||0,total:state.queue_capacity||0,images:state.image_capacity||0})+' · '+(state.messages||[]).map(m=>m.id+' · '+t('screen.push_state_'+m.state)).join(' / ');
 }
 const pushSection=section('screen.external_push',h('p',{class:'help',i18n:'screen.push_help'}),
@@ -64,6 +69,7 @@ const pushSection=section('screen.external_push',h('p',{class:'help',i18n:'scree
  fieldRow('screen.push_clear_media',pushClear),
  h('div',{class:'row'},fieldRow('screen.media_width',pushWidth),fieldRow('screen.media_height',pushHeight)),
  fieldRow('screen.push_mode',pushMode),fieldRow('screen.push_seconds',pushSeconds),fieldRow('screen.push_wake',pushWake),
+ fieldRow('screen.push_ttl',pushTtl),h('p',{class:'help',i18n:'screen.push_ttl_help'}),fieldRow('screen.push_overflow',pushOverflow),
  h('div',{class:'row'},button('screen.push',()=>sendPush(false),{id:'screenPushSend'}),
  button('screen.push_update',()=>sendPush(true),{id:'screenPushUpdate',disabled:true}),
  button('screen.refresh',refreshPush,{id:'screenPushRefresh'}),
