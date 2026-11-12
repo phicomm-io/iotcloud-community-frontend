@@ -2,9 +2,14 @@
 const mediaState=h('p',{class:'help',id:'screenPushState',role:'status'}),mediaProgress=h('progress',{max:1,value:0,hidden:true,id:'screenPushProgress'});
 const pushTitle=input('','text',{id:'screenPushTitle',maxLength:64}),pushText=h('textarea',{id:'screenPushText',maxLength:512}),pushFile=input('','file',{id:'screenPushFile',accept:'image/png,image/jpeg,image/webp'});
 const pushWidth=input(320,'number',{id:'screenPushWidth',min:1,max:480}),pushHeight=input(240,'number',{id:'screenPushHeight',min:1,max:854}),pushMode=select([['timed','screen.push_timed'],['confirm','screen.push_confirm']],'timed'),pushSeconds=input(10,'number',{id:'screenPushSeconds',min:1,max:3600}),pushWake=input('','checkbox',{id:'screenPushWake',checked:true});
+pushMode.id='screenPushMode';
 const pushUrl=input('','url',{id:'screenPushUrl',placeholder:'http://camera/image.jpg'}),pushUser=input('','text',{id:'screenPushUser',autocomplete:'off'}),pushPassword=input('','password',{id:'screenPushPassword',autocomplete:'new-password'}),pushFps=input(1,'number',{id:'screenPushFps',min:1,max:10}),pushTls=input('','checkbox',{id:'screenPushTls',checked:true});
 const pushSource=h('details',{id:'screenPushSource'},h('summary',{i18n:'screen.push_source'}),h('p',{class:'help',i18n:'screen.push_source_help'}),fieldRow('screen.push_source_url',pushUrl),fieldRow('screen.camera_user',pushUser),fieldRow('screen.push_source_password',pushPassword),fieldRow('screen.camera_fps',pushFps),fieldRow('screen.camera_tls',pushTls));
 const pushView=select(Array.from({length:5},(_,i)=>[i,i?'screen.push_view_'+i:'screen.push_view_0']),0);pushView.id='screenPushView';
+const pushId=input('','number',{id:'screenPushId',min:1,max:4294967295,placeholder:'1…4294967295'});
+const pushQueue=select([],0);pushQueue.id='screenPushQueue';
+const pushClear=input('','checkbox',{id:'screenPushClear'});
+pushQueue.addEventListener('change',()=>{if(pushQueue.value)pushId.value=pushQueue.value;});
 let lastPushId=0;
 async function mediaOperation(action,params={}){
  const receipt=await command(action,params),until=Date.now()+10000;
@@ -26,25 +31,44 @@ async function preparePushImage(file,w,h){
   throw Error(t('screen.media_too_large'));
  }finally{source.close();}
 }
-async function sendPush(){
- const id=crypto.getRandomValues(new Uint32Array(1))[0]||1,file=pushFile.files?.[0],url=pushUrl.value.trim(),w=Number(pushWidth.value),h=Number(pushHeight.value),duration=Number(pushSeconds.value)*1000;
- if(encoder.encode(pushTitle.value).length>64||encoder.encode(pushText.value).length>512||(!file&&!url&&!pushTitle.value&&!pushText.value)||(file&&url)||(url&&(!num(w)||!num(h)||w<1||w>480||h<1||h>854||!num(Number(pushFps.value))||Number(pushFps.value)<1||Number(pushFps.value)>10))||!num(duration)||duration<1000||duration>3600000)throw Error(t('screen.invalid'));
+async function sendPush(update=false){
+ const entered=pushId.value.trim(),id=entered?Number(entered):(crypto.getRandomValues(new Uint32Array(1))[0]||1),file=pushFile.files?.[0],url=pushUrl.value.trim(),w=Number(pushWidth.value),h=Number(pushHeight.value),duration=Number(pushSeconds.value)*1000;
+ if(!num(id)||id<1||id>4294967295||(update&&!entered)||(pushClear.checked&&(file||url)))throw Error(t('screen.invalid'));
+ if(encoder.encode(pushTitle.value).length>64||encoder.encode(pushText.value).length>512||(!update&&!file&&!url&&!pushTitle.value&&!pushText.value)||(file&&url)||(url&&(!num(w)||!num(h)||w<1||w>480||h<1||h>854||!num(Number(pushFps.value))||Number(pushFps.value)<1||Number(pushFps.value)>10))||!num(duration)||duration<1000||duration>3600000)throw Error(t('screen.invalid'));
  let imageId=0;
  try{
-  if(file){const bytes=await preparePushImage(file,w,h);imageId=id;mediaProgress.hidden=false;mediaProgress.max=bytes.length;
-   await mediaOperation('screen.media.begin',{id,total:bytes.length,crc32:crc(bytes),width:w,height:h});
-   for(let offset=0;offset<bytes.length;offset+=512){await mediaOperation('screen.media.chunk',{id,offset,bytes:b64(bytes.slice(offset,offset+512))});mediaProgress.value=Math.min(offset+512,bytes.length);}
-   await mediaOperation('screen.media.commit',{id});
+  if(file){const bytes=await preparePushImage(file,w,h);imageId=update?(crypto.getRandomValues(new Uint32Array(1))[0]||1):id;mediaProgress.hidden=false;mediaProgress.max=bytes.length;
+   await mediaOperation('screen.media.begin',{id:imageId,total:bytes.length,crc32:crc(bytes),width:w,height:h});
+   for(let offset=0;offset<bytes.length;offset+=512){await mediaOperation('screen.media.chunk',{id:imageId,offset,bytes:b64(bytes.slice(offset,offset+512))});mediaProgress.value=Math.min(offset+512,bytes.length);}
+   await mediaOperation('screen.media.commit',{id:imageId});
   }
-  const params={id,image_id:imageId,title:pushTitle.value,text:pushText.value,mode:pushMode.value,duration_ms:duration,wake:pushWake.checked};
-  if(url)Object.assign(params,{url,username:pushUser.value,password:pushPassword.value,width:w,height:h,fps:Number(pushFps.value),verify_tls:pushTls.checked});
-  const state=await mediaOperation('screen.push.send',params);
-  pushPassword.value='';lastPushId=state.last_push_id||id;await refreshPush();
+  const params={id,title:pushTitle.value,text:pushText.value,mode:pushMode.value,duration_ms:duration,wake:pushWake.checked};
+  if(imageId||!update&&!url||pushClear.checked)params.image_id=imageId;
+  if(url)Object.assign(params,{url,username:pushUser.value,...(pushPassword.value||!update?{password:pushPassword.value}:{}),width:w,height:h,fps:Number(pushFps.value),verify_tls:pushTls.checked});
+  const state=await mediaOperation(update?'screen.push.update':'screen.push.send',params);
+  pushPassword.value='';lastPushId=state.last_push_id||id;pushId.value=String(lastPushId);pushClear.checked=false;await refreshPush();
  }catch(error){if(imageId)try{await mediaOperation('screen.media.cancel',{id:imageId});}catch{}throw error;}
  finally{mediaProgress.hidden=true;}
 }
-async function refreshPush(){const state=await command('screen.push.get');pushView.value=state.view_index||0;mediaState.textContent=t('screen.push_capacity',{count:state.queued||0,total:state.queue_capacity||0,images:state.image_capacity||0})+' · '+(state.messages||[]).map(m=>m.id+' · '+t('screen.push_state_'+m.state)).join(' / ')||t('screen.push_empty');}
-const pushSection=section('screen.external_push',h('p',{class:'help',i18n:'screen.push_help'}),fieldRow('screen.title',pushTitle),fieldRow('screen.text',pushText),fieldRow('screen.file',pushFile),pushSource,h('div',{class:'row'},fieldRow('screen.media_width',pushWidth),fieldRow('screen.media_height',pushHeight)),fieldRow('screen.push_mode',pushMode),fieldRow('screen.push_seconds',pushSeconds),fieldRow('screen.push_wake',pushWake),h('div',{class:'row'},button('screen.push',sendPush,{id:'screenPushSend'}),button('screen.refresh',refreshPush,{id:'screenPushRefresh'}),button('screen.push_dismiss',async()=>{if(lastPushId)await mediaOperation('screen.push.dismiss',{id:lastPushId});await refreshPush();},{id:'screenPushDismiss'})),fieldRow('screen.push_view',pushView),button('screen.push_show',async()=>{await mediaOperation('screen.push.select',{index:Number(pushView.value)});await refreshPush();},{id:'screenPushShow'}),mediaProgress,mediaState);pushSection.id='screenExternalPush';
+async function refreshPush(){
+ const state=await command('screen.push.get');pushView.value=state.view_index||0;
+ const selected=pushId.value;
+ pushQueue.replaceChildren(h('option',{value:'',i18n:'screen.push_choose'}),...(state.queue||[]).map(m=>h('option',{value:m.id},m.id+' · '+t('screen.push_state_'+m.state))));
+ pushQueue.value=selected;
+ document.querySelector('#screenPushUpdate').disabled=state.update_supported!==true;
+ mediaState.textContent=t('screen.push_capacity',{count:state.queued||0,total:state.queue_capacity||0,images:state.image_capacity||0})+' · '+(state.messages||[]).map(m=>m.id+' · '+t('screen.push_state_'+m.state)).join(' / ');
+}
+const pushSection=section('screen.external_push',h('p',{class:'help',i18n:'screen.push_help'}),
+ fieldRow('screen.push_id',pushId),fieldRow('screen.push_queue',pushQueue),h('p',{class:'help',i18n:'screen.push_update_help'}),
+ fieldRow('screen.title',pushTitle),fieldRow('screen.text',pushText),fieldRow('screen.file',pushFile),pushSource,
+ fieldRow('screen.push_clear_media',pushClear),
+ h('div',{class:'row'},fieldRow('screen.media_width',pushWidth),fieldRow('screen.media_height',pushHeight)),
+ fieldRow('screen.push_mode',pushMode),fieldRow('screen.push_seconds',pushSeconds),fieldRow('screen.push_wake',pushWake),
+ h('div',{class:'row'},button('screen.push',()=>sendPush(false),{id:'screenPushSend'}),
+ button('screen.push_update',()=>sendPush(true),{id:'screenPushUpdate',disabled:true}),
+ button('screen.refresh',refreshPush,{id:'screenPushRefresh'}),
+ button('screen.push_dismiss',async()=>{const id=Number(pushId.value);if(!num(id)||id<1||id>4294967295)throw Error(t('screen.invalid'));await mediaOperation('screen.push.dismiss',{id});await refreshPush();},{id:'screenPushDismiss'})),
+ fieldRow('screen.push_view',pushView),button('screen.push_show',async()=>{await mediaOperation('screen.push.select',{index:Number(pushView.value)});await refreshPush();},{id:'screenPushShow'}),mediaProgress,mediaState);pushSection.id='screenExternalPush';
 const cameraUrl=input('','url',{id:'screenCameraUrl',placeholder:'http://camera/mjpeg?width={width}&height={height}'}),cameraUser=input('','text',{id:'screenCameraUser',autocomplete:'off'}),cameraPassword=input('','password',{id:'screenCameraPassword',autocomplete:'new-password'}),cameraWidth=input(320,'number',{id:'screenCameraWidth',min:1,max:480}),cameraHeight=input(240,'number',{id:'screenCameraHeight',min:1,max:854}),cameraFps=input(1,'number',{id:'screenCameraFps',min:1,max:10}),cameraTls=input('','checkbox',{id:'screenCameraTls',checked:true}),cameraState=h('p',{class:'help',id:'screenCameraState',role:'status'});
 async function cameraRefresh(load=false){const d=await command('screen.stream.get');if(load){cameraUrl.value=d.url||'';cameraUser.value=d.username||'';cameraPassword.value='';cameraWidth.value=d.width;cameraHeight.value=d.height;cameraFps.value=d.fps;cameraTls.checked=d.verify_tls;}
  cameraState.textContent=t('screen.camera_status',{state:t('screen.camera_'+d.state),frames:d.frames||0,width:d.actual_width||0,height:d.actual_height||0,fps:((d.actual_millifps||0)/1000).toFixed(1),error:d.error||0});}
