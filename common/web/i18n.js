@@ -24,6 +24,7 @@ const D={
 "screen.push_update_help":["Keep the returned ID to update or dismiss a notice. Update applies the title, text, dismissal and wake settings above; an empty title or text clears it. With no new file/URL the existing media stays. Queue position is kept and duration can only be extended. API clients can patch individual fields.", "保存返回的 ID，可更新或关闭通知。更新会应用表单中的标题、正文、消失方式和亮屏选项，空标题或正文会清除原内容。未选新文件或地址时保留原媒体；队列位置不变，时长只延长。外部接口还支持只改指定字段。"],
 "screen.push_ttl":["Expire after receipt (seconds)", "接收后过期（秒）"],
 "screen.push_file":["Image (JPEG, PNG or WebP)", "图片（JPEG、PNG 或 WebP）"],
+"screen.media_refresh":["Refresh notifications", "刷新通知"],
 "screen.push_ttl_help":["Expiry keeps running while queued, hidden or awaiting confirmation. Blank preserves expiry when updating; 0 disables it. Range: 0–86400 seconds.", "排队、隐藏和等待确认时仍会计时。更新时留空保留原过期时间，0 表示不过期，范围 0～86400 秒。"],
 "screen.push_overflow":["When the queue is full", "队列满时"],
 "screen.push_overflow_reject":["Reject (default)", "拒绝（默认）"],

@@ -72,7 +72,7 @@ const pushSection=section('screen.external_push',h('p',{class:'help',i18n:'scree
  fieldRow('screen.push_ttl',pushTtl),h('p',{class:'help',i18n:'screen.push_ttl_help'}),fieldRow('screen.push_overflow',pushOverflow),
  h('div',{class:'row'},button('screen.push',()=>sendPush(false),{id:'screenPushSend'}),
  button('screen.push_update',()=>sendPush(true),{id:'screenPushUpdate',disabled:true}),
- button('screen.refresh',refreshPush,{id:'screenPushRefresh'}),
+ button('screen.media_refresh',refreshPush,{id:'screenPushRefresh'}),
  button('screen.push_dismiss',async()=>{const id=Number(pushId.value);if(!num(id)||id<1||id>4294967295)throw Error(t('screen.invalid'));await mediaOperation('screen.push.dismiss',{id});await refreshPush();},{id:'screenPushDismiss'})),
  fieldRow('screen.push_view',pushView),button('screen.push_show',async()=>{await mediaOperation('screen.push.select',{index:Number(pushView.value)});await refreshPush();},{id:'screenPushShow'}),mediaProgress,mediaState);pushSection.id='screenExternalPush';
 const cameraUrl=input('','url',{id:'screenCameraUrl',placeholder:'http://camera/mjpeg?width={width}&height={height}'}),cameraUser=input('','text',{id:'screenCameraUser',autocomplete:'off'}),cameraPassword=input('','password',{id:'screenCameraPassword',autocomplete:'new-password'}),cameraWidth=input(320,'number',{id:'screenCameraWidth',min:1,max:480}),cameraHeight=input(240,'number',{id:'screenCameraHeight',min:1,max:854}),cameraFps=input(1,'number',{id:'screenCameraFps',min:1,max:10}),cameraTls=input('','checkbox',{id:'screenCameraTls',checked:true}),cameraState=h('p',{class:'help',id:'screenCameraState',role:'status'});
