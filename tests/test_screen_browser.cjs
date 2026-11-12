@@ -39,7 +39,7 @@ const server=http.createServer(async(req,res)=>{
   if(action==='screen.media.commit'){assert.equal(crc(mediaUpload),mediaMeta.crc32);assert.equal(mediaUpload.readUInt16BE(0),0xffd8);assert.equal(mediaUpload.readUInt16BE(mediaUpload.length-2),0xffd9);const sof=mediaUpload.indexOf(Buffer.from([0xff,0xc0]));assert(sof>0);assert.equal(mediaUpload.readUInt16BE(sof+5),240);assert.equal(mediaUpload.readUInt16BE(sof+7),320);assert.equal(mediaUpload.indexOf(Buffer.from([0xff,0xc2])),-1);}
   if(action==='screen.push.select')media.view_index=params.index;
   if(action==='screen.push.send'){media.last_push_id=params.url?424242:params.id;if(!media.messages.some(m=>m.id===media.last_push_id))media.messages.push({id:media.last_push_id,state:'displayed'});media.queue=media.messages.filter(m=>m.state==='displayed');}
-  if(action==='screen.push.update'){assert(media.queue.some(m=>m.id===params.id));media.last_push_id=params.id;}
+  if(action==='screen.push.update'){assert(media.queue.some(m=>m.id===params.id));media.last_push_id=987654;/* Another send may be newer than the updated notice. */}
   if(action==='screen.push.dismiss')media.messages.find(m=>m.id===params.id).state='dismissed';
   if(action==='screen.stream.set')streamConfig={...streamConfig,...params,password_set:true};
   if(action==='screen.stream.start')streamConfig.enabled=true;
@@ -159,12 +159,13 @@ const server=http.createServer(async(req,res)=>{
   await page.locator('#screenPushUrl').fill('');await page.locator('#screenPushText').fill('Updated body');
   await page.locator('#screenPushUpdate').click();await page.waitForFunction(()=>!document.querySelector('#screenPushUpdate').disabled);
   let updated=writes.filter(w=>w.action==='screen.push.update').at(-1).params;
-  assert.equal(updated.id,424242);assert.equal(updated.text,'Updated body');assert(!('url' in updated)&&!('image_id' in updated),'Keep existing media on a text update');
+  assert.equal(updated.id,424242);assert.equal(updated.text,'Updated body');assert(!('url' in updated)&&!('image_id' in updated),'Keep existing media on a text update');assert.equal(await page.locator('#screenPushId').inputValue(),'424242');
   await page.locator('#screenPushQueue').selectOption('424242');assert.equal(await page.locator('#screenPushId').inputValue(),'424242');
   await page.locator('#screenPushTtl').fill('45');
   await page.locator('#screenPushClear').check();await page.locator('#screenPushUpdate').click();await page.waitForFunction(()=>!document.querySelector('#screenPushUpdate').disabled);
   updated=writes.filter(w=>w.action==='screen.push.update').at(-1).params;assert.equal(updated.ttl_ms,45000);assert.equal(updated.image_id,0);assert.equal(await page.locator('#screenPushClear').isChecked(),false);
   const notificationOut=process.env.SCREEN_BROWSER_ARTIFACTS||'build';fs.mkdirSync(notificationOut,{recursive:true});
+  await page.evaluate(()=>document.querySelector('#toasts')?.replaceChildren());
   await page.locator('#screenExternalPush').screenshot({path:path.join(notificationOut,`notifications-${width}-${lang}.png`)});
   await page.locator('#screenPushDismiss').click();await page.waitForFunction(()=>!document.querySelector('#screenPushDismiss').disabled);assert.equal(writes.filter(w=>w.action==='screen.push.dismiss').at(-1).params.id,424242);
   await page.locator('#screenPushUrl').fill('');

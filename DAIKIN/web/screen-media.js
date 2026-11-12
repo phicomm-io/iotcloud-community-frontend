@@ -50,7 +50,7 @@ async function sendPush(update=false){
   if(imageId||!update&&!url||pushClear.checked)params.image_id=imageId;
   if(url)Object.assign(params,{url,username:pushUser.value,...(pushPassword.value||!update?{password:pushPassword.value}:{}),width:w,height:h,fps:Number(pushFps.value),verify_tls:pushTls.checked});
   const state=await mediaOperation(update?'screen.push.update':'screen.push.send',params);
-  pushPassword.value='';lastPushId=state.last_push_id||id;pushId.value=String(lastPushId);pushClear.checked=false;await refreshPush();
+  pushPassword.value='';lastPushId=update?id:(state.last_push_id||id);pushId.value=String(lastPushId);pushClear.checked=false;await refreshPush();
  }catch(error){if(imageId)try{await mediaOperation('screen.media.cancel',{id:imageId});}catch{}throw error;}
  finally{mediaProgress.hidden=true;}
 }
@@ -65,7 +65,7 @@ async function refreshPush(){
 }
 const pushSection=section('screen.external_push',h('p',{class:'help',i18n:'screen.push_help'}),
  fieldRow('screen.push_id',pushId),fieldRow('screen.push_queue',pushQueue),h('p',{class:'help',i18n:'screen.push_update_help'}),
- fieldRow('screen.title',pushTitle),fieldRow('screen.text',pushText),fieldRow('screen.file',pushFile),pushSource,
+ fieldRow('screen.title',pushTitle),fieldRow('screen.text',pushText),fieldRow('screen.push_file',pushFile),pushSource,
  fieldRow('screen.push_clear_media',pushClear),
  h('div',{class:'row'},fieldRow('screen.media_width',pushWidth),fieldRow('screen.media_height',pushHeight)),
  fieldRow('screen.push_mode',pushMode),fieldRow('screen.push_seconds',pushSeconds),fieldRow('screen.push_wake',pushWake),
