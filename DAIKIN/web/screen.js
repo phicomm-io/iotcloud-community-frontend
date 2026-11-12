@@ -377,7 +377,7 @@ const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 function componentStyle(it){
  const colors=A.widgetColors(appearance,it),p=A.resolve(appearance),image=appearance.wallpaper!=='none'&&(appearance.wallpaper!=='custom'||customPreview?.crc===appearance.custom_crc),hex=colors.background;
  const alpha=A.surface(appearance,it,image)/100,rgb=[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)).join(',');
- return componentBox(it)+';'+Object.entries(colors).map(([k,v])=>`--component-${k}:${v}`).join(';')+`;background:rgba(${rgb},${alpha});border:1px solid ${image?p.line+'66':'transparent'}`;
+ return componentBox(it)+';'+Object.entries(colors).map(([k,v])=>`--component-${k}:${v}`).join(';')+`;background:rgba(${rgb},${alpha});border:1px solid ${image&&it.type!==8?p.line+'66':'transparent'}`;
 }
 function applyAppearancePreview(){
  const p=A.resolve(appearance);for(const [k,v]of Object.entries(p))grid.style.setProperty('--appearance-'+k,v);
