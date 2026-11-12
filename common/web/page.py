@@ -17,10 +17,10 @@ def render_page(path, *, minify=False, screen=True):
     text = path.read_text()
     # The product page lists its own fragments; a name resolves to common/web
     # first and to the product's web directory second.
-    for name in ("style.css", "i18n.js", "service.js", "provision.js", "diagnostics-schema.js", "ui.js", "automation.js", "sensor.js", "display-format.js", "display.js", "display-profile.js", "screen-appearance.js", "screen-layout.js", "screen.js", "page.js"):
+    for name in ("style.css", "i18n.js", "service.js", "provision.js", "diagnostics-schema.js", "ui.js", "automation.js", "sensor.js", "display-format.js", "display.js", "display-profile.js", "screen-appearance.js", "screen-layout.js", "screen.js", "screen-media.js", "page.js"):
         if "@include " + name not in text:
             continue
-        content = '' if not screen and name in ('screen-appearance.js', 'screen-layout.js', 'screen.js') else _source(path, name)
+        content = '' if not screen and name in ('screen-appearance.js', 'screen-layout.js', 'screen.js', 'screen-media.js') else _source(path, name)
         if name=='service.js': content=_auth_bundle()+'\n'+(ROOT/'common/web/auth.js').read_text()+'\n'+content
         for marker in ("/* @include " + name + " */", "<!-- @include " + name + " -->"):
             text = text.replace(marker, content)
