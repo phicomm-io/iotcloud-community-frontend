@@ -41,7 +41,7 @@ function decode(p){
  }return validate(a);
 }
 const resolve=a=>({...palettes[themes.indexOf(a.theme)],...a.colors});
-function surface(a,it,wallpaper){const custom=a.items[it.id]||{};return custom.opacity??(wallpaper?a.cardOpacity:custom.background||(it.type!==0&&it.h<4)?100:0);}
+function surface(a,it,wallpaper){if(it.type===8)return 0;const custom=a.items[it.id]||{};return custom.opacity??(wallpaper?a.cardOpacity:custom.background||(it.type!==0&&it.h<4)?100:0);}
 function widgetColors(a,it){const p=resolve(a),c=a.items[it.id]||{};return Object.fromEntries(widgetRoles.map(k=>[k,c[k]||p[k]]));}
 function crc(p){let c=0xffffffff;for(const b of p){c^=b;for(let i=0;i<8;i++)c=(c>>>1)^((c&1)?0xedb88320:0);}return (c^0xffffffff)>>>0;}
 function parseWallpaper(p){

@@ -72,7 +72,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: phicomm-io/iotcloud-bry88bba15g-screenmcu
-          ref: 45dc408429a4a5f451b68d2d87da558a6eee69aa
+          ref: 07b78366564ba7f73db765c264e002bd2451c1ea
           path: build/screen-source
       - uses: actions/checkout@v4
         with:
@@ -80,7 +80,7 @@ jobs:
           ref: v1.7.19
           path: build/cjson
       - run: cmake -S build/screen-source -B build/screen-codec -DSCREEN_BUILD_PREVIEW=OFF -DCJSON_DIR="$PWD/build/cjson" && cmake --build build/screen-codec -j4
-      - name: Verify screen editor against the released MCU codecs
+      - name: Verify screen editor against the pinned MCU codecs
         env:
           NODE_PATH: frontend/node_modules
           SCREEN_SCENE_CODEC: ${{ github.workspace }}/build/screen-codec/scene_codec
@@ -88,6 +88,11 @@ jobs:
         run: node --test tests/test_screen_editor.cjs tests/test_screen_appearance.cjs tests/test_screen_diagnostics.cjs
       - run: python3 tools/build_release.py
       - run: npx --prefix frontend playwright install --with-deps chromium webkit
+      - name: Test G3 notification and camera controls in the browser
+        env:
+          NODE_PATH: frontend/node_modules
+          SCREEN_SCENE_CODEC: ${{ github.workspace }}/build/screen-codec/scene_codec
+        run: node tests/test_screen_browser.cjs
       - run: NODE_PATH=frontend/node_modules node tests/test_status_reload_browser.cjs
       - run: BROWSER=webkit NODE_PATH=frontend/node_modules node tests/test_status_reload_browser.cjs
       - name: Test M1 display profiles in built platform, local and hub applications
