@@ -9,7 +9,7 @@ const pushView=select(Array.from({length:5},(_,i)=>[i,i?'screen.push_view_'+i:'s
 const pushId=input('','number',{id:'screenPushId',min:1,max:4294967295,placeholder:'1…4294967295'});
 const pushQueue=select([],0);pushQueue.id='screenPushQueue';
 const pushClear=input('','checkbox',{id:'screenPushClear'});
-const pushTtl=input('','number',{id:'screenPushTtl',min:0,max:86400,placeholder:'0…86400'}),pushOverflow=select([['reject','screen.push_overflow_reject'],['drop_newest','screen.push_overflow_drop_newest'],['drop_oldest','screen.push_overflow_drop_oldest']],'reject');pushOverflow.id='screenPushOverflow';
+const pushTtl=input('','number',{id:'screenPushTtl',min:0,max:86400,placeholder:'0…86400',disabled:true}),pushOverflow=select([['reject','screen.push_overflow_reject'],['drop_newest','screen.push_overflow_drop_newest'],['drop_oldest','screen.push_overflow_drop_oldest']],'reject');pushOverflow.id='screenPushOverflow';pushOverflow.disabled=true;
 let pushPolicySupported=false;
 pushQueue.addEventListener('change',()=>{if(pushQueue.value)pushId.value=pushQueue.value;});
 let lastPushId=0;
